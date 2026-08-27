@@ -1,0 +1,89 @@
+import { prisma } from '../config/db.js';
+import { generatePin, verifyPin } from '../services/pin.service.js';
+import { costoPara } from '../services/tariff.service.js';
+
+// Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
+// ya no se piden en el formulario: salen del usuario autenticado, así que
+// no pueden falsificarse escribiendo el nombre de otro residente.
+export async function createPrealert(req, res) {
+  const { proveedor, guia, esContraEntregaProveedor, valorProductoProveedor } = req.body;
+  if (!proveedor) return res.status(400).json({ error: 'El proveedor es requerido' });
+
+  const pkg = await prisma.package.create({
+    data: {
+      residenteId: req.user.sub,
+      proveedor,
+      guia: guia || 'Sin Guía',
+      esContraEntregaProveedor: !!esContraEntregaProveedor,
+      valorProductoProveedor: Number(valorProductoProveedor) || 0,
+      pin: generatePin(),
+    },
+  });
+  res.status(201).json(pkg);
+}
+
+// Residente: solo ve sus propios paquetes (nunca los de otros) — e
+// incluye siempre su PIN, porque lo necesita cada vez que abre la puerta.
+export async function listMine(req, res) {
+  const packages = await prisma.package.findMany({
+    where: { residenteId: req.user.sub },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(packages);
+}
+
+// Operador: ve todos los paquetes, pero el PIN nunca viaja hacia esta vista.
+export async function listAll(req, res) {
+  const packages = await prisma.package.findMany({
+    include: { residente: { select: { nombre: true, telefono: true, torre: true, apto: true } } },
+    orderBy: { createdAt: 'desc' },
+  });
+  res.json(packages.map(({ pin, ...p }) => p));
+}
+
+// Residente: programa su propia franja de entrega — se verifica dueño.
+export async function schedule(req, res) {
+  const { franjaHoraria, metodoPagoServicio } = req.body;
+  const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
+  if (!pkg || pkg.residenteId !== req.user.sub) {
+    return res.status(404).json({ error: 'Paquete no encontrado' });
+  }
+
+  const updated = await prisma.package.update({
+    where: { id: pkg.id },
+    data: { franjaHoraria, metodoPagoServicio, estado: 'PROGRAMADO' },
+  });
+  res.json(updated);
+}
+
+export async function checkin(req, res) {
+  const { categoriaPeso, fotoUrl } = req.body;
+  const pkg = await prisma.package.update({
+    where: { id: req.params.id },
+    data: {
+      categoriaPeso,
+      costoServicio: costoPara(categoriaPeso),
+      fotoUrl,
+      estado: 'EN_RECEPCION',
+    },
+  });
+  res.json({ ...pkg, pin: undefined });
+}
+
+// El operador envía un intento; el servidor compara y responde sí/no.
+// El valor correcto del PIN nunca aparece en esta respuesta.
+export async function confirmDelivery(req, res) {
+  const { pin } = req.body;
+  const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
+  if (!pkg) return res.status(404).json({ error: 'Paquete no encontrado' });
+
+  if (!verifyPin(pin, pkg.pin)) {
+    return res.status(400).json({ error: 'PIN incorrecto' });
+  }
+
+  const updated = await prisma.package.update({
+    where: { id: pkg.id },
+    data: { estado: 'ENTREGADO', fechaEntrega: new Date() },
+  });
+  res.json({ ...updated, pin: undefined });
+}

@@ -1,0 +1,26 @@
+{
+  "id": "PK-1024",
+  "residente": {
+    "nombre": "Nombre Residente",
+    "telefono": "3001234567",
+    "torre": "Torre 2",
+    "apto": "504"
+  },
+  "paquete": {
+    "proveedor": "Mercado Libre",
+    "guia": "ML-8921345",
+    "categoria_peso": "ESTANDAR",
+    "costo_servicio": 4500,
+    "foto_url": "data:image/jpeg;base64,...",
+    "es_contra_entrega_proveedor": false,
+    "valor_producto_proveedor": 0
+  },
+  "entrega": {
+    "estado": "EN_RECEPCION",
+    "franja_horaria": "12:00 m - 1:30 pm",
+    "metodo_pago_servicio": "Contra entrega en puerta (Efectivo / Nequi)",
+    "pin_seguridad": "4892",
+    "fecha_ingreso": "2026-08-26T11:30:00.000Z",
+    "fecha_entrega": null
+  }
+}

@@ -1,0 +1,62 @@
+// Esquema inicial — mapea el modelo de datos del prototipo (index.html.html)
+// a una base de datos compartida, con el PIN y el rol movidos al servidor.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Verificado localmente con provider="sqlite" (cero setup); ahora que
+// vamos a Railway, apunta al Postgres real que provisiona Railway.
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// String en vez de enum: así el esquema sigue funcionando igual si algún
+// día se vuelve a probar en SQLite (que no soporta enums nativos).
+// Valores válidos:
+// Role: "RESIDENT" | "OPERATOR"
+// EstadoPaquete: "PREALERTADO" | "EN_RECEPCION" | "PROGRAMADO" | "ENTREGADO"
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         String
+  nombre       String
+  telefono     String
+  torre        String?
+  apto         String?
+  createdAt    DateTime @default(now())
+
+  packages Package[]
+}
+
+model Package {
+  id        String @id @default(cuid())
+  residente User   @relation(fields: [residenteId], references: [id])
+  residenteId String
+
+  // datos del paquete
+  proveedor                 String
+  guia                      String  @default("Sin Guía")
+  categoriaPeso             String  @default("ESTANDAR")
+  costoServicio             Int     @default(4500)
+  fotoUrl                   String?
+  esContraEntregaProveedor  Boolean @default(false)
+  valorProductoProveedor    Int     @default(0)
+
+  // datos de entrega
+  estado              String @default("PREALERTADO")
+  franjaHoraria        String?
+  metodoPagoServicio   String?
+  // Texto plano intencional (ver comentario en pin.service.js): la
+  // protección real es que solo /packages/mine (dueño) y la creación
+  // devuelven este campo; /packages (operador) lo excluye siempre.
+  pin                  String
+  fechaIngreso         DateTime      @default(now())
+  fechaEntrega         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

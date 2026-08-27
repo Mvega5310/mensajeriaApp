@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EntregaVecina - Prototipo Residencial</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans">
+
+  <!-- TOP APP BAR / SELECTOR DE ROL -->
+  <header class="bg-white shadow-sm sticky top-0 z-50">
+    <div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="w-9 h-9 bg-brand-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-brand-500/30">
+          <i data-lucide="package" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-slate-900 leading-tight">EntregaVecina</h1>
+          <p class="text-[11px] text-slate-500">Gestión Residencial</p>
+        </div>
+      </div>
+
+      <!-- Selector de Rol para pruebas -->
+      <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-medium">
+        <button id="btn-role-client" onclick="setRole('client')" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 bg-white text-brand-700 shadow-sm font-semibold">
+          <i data-lucide="user" class="w-3.5 h-3.5"></i>
+          <span>Residente</span>
+        </button>
+        <button id="btn-role-admin" onclick="setRole('admin')" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 text-slate-600 hover:text-slate-900">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+          <span>Operador</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL -->
+  <main class="max-w-md w-full mx-auto flex-1 p-4 pb-24">
+
+    <!-- ========================================== -->
+    <!-- 1. VISTA RESIDENTE (CLIENTE) -->
+    <!-- ========================================== -->
+    <div id="view-client" class="space-y-4">
+      
+      <!-- Sub-Tabs Residente -->
+      <div class="flex bg-white rounded-2xl p-1 shadow-sm border border-slate-200 text-xs font-semibold">
+        <button id="subtab-my-packages" onclick="setClientTab('list')" class="flex-1 py-2 rounded-xl text-center transition-all bg-brand-50 text-brand-700 font-bold">
+          Mis Paquetes (<span id="client-pkg-count">0</span>)
+        </button>
+        <button id="subtab-new-prealert" onclick="setClientTab('form')" class="flex-1 py-2 rounded-xl text-center transition-all text-slate-500 hover:text-slate-800">
+          + Notificar Paquete
+        </button>
+      </div>
+
+      <!-- Subvista: Formulario Pre-alerta -->
+      <div id="client-form-container" class="hidden bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div class="border-b border-slate-100 pb-3">
+          <h2 class="text-base font-bold text-slate-900">Notificar Paquete en Camino</h2>
+          <p class="text-xs text-slate-500">Regístralo antes de que llegue para agilizar la recepción</p>
+        </div>
+
+        <form id="prealert-form" onsubmit="handleCreatePrealert(event)" class="space-y-3.5 text-sm">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Torre / Bloque</label>
+              <select id="c-torre" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none text-xs">
+                <option value="Torre 1">Torre 1</option>
+                <option value="Torre 2">Torre 2</option>
+                <option value="Torre 3">Torre 3</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Apartamento</label>
+              <input type="text" id="c-apto" placeholder="Ej. 402" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none text-xs">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nombre del Residente</label>
+            <input type="text" id="c-nombre" placeholder="Nombre y Apellido" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none text-xs">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Teléfono (WhatsApp)</label>
+            <input type="tel" id="c-telefono" placeholder="3001234567" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none text-xs">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Tienda / Proveedor</label>
+              <input type="text" id="c-proveedor" placeholder="Ej. Mercado Libre" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none text-xs">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">No. Guía (Opcional)</label>
+              <input type="text" id="c-guia" placeholder="Ej. 98421034" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none text-xs">
+            </div>
+          </div>
+
+          <!-- Switch Cobro Contra Entrega Producto -->
+          <div class="p-3 bg-amber-50 rounded-xl border border-amber-200/80 space-y-2">
+            <div class="flex items-center justify-between">
+              <label for="c-is-cod" class="text-xs font-semibold text-amber-900 cursor-pointer flex items-center gap-1.5">
+                <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600"></i>
+                ¿Cobro contra entrega del producto?
+              </label>
+              <input type="checkbox" id="c-is-cod" onchange="toggleCodInput(this.checked)" class="w-4 h-4 text-brand-600 rounded border-amber-300 focus:ring-brand-500">
+            </div>
+            <div id="cod-amount-container" class="hidden pt-1">
+              <label class="block text-[11px] font-semibold text-amber-800 mb-1">Monto a pagar al transportista ($ COP)</label>
+              <input type="number" id="c-cod-amount" placeholder="Ej. 45000" class="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none">
+              <p class="text-[10px] text-amber-700 mt-1 leading-tight">⚠️ Deberás transferir este monto al operador cuando la transportadora esté en recepción.</p>
+            </div>
+          </div>
+
+          <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl shadow-md shadow-brand-600/30 transition flex items-center justify-center gap-2">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            Guardar Pre-alerta
+          </button>
+        </form>
+      </div>
+
+      <!-- Subvista: Lista de Paquetes Residente -->
+      <div id="client-list-container" class="space-y-3">
+        <div id="client-empty-state" class="hidden text-center py-10 bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
+            <i data-lucide="package-search" class="w-6 h-6"></i>
+          </div>
+          <h3 class="font-bold text-slate-800 text-sm">No tienes paquetes registrados</h3>
+          <p class="text-xs text-slate-500 mt-1 mb-4">Notifica tus compras en camino para recibir seguimiento en tiempo real.</p>
+          <button onclick="setClientTab('form')" class="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-600 text-white text-xs font-semibold rounded-xl shadow-sm hover:bg-brand-700">
+            + Notificar nuevo paquete
+          </button>
+        </div>
+
+        <div id="client-packages-list" class="space-y-3">
+          <!-- Inyectado dinámicamente -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 2. VISTA OPERADOR (Solopreneur / Admin) -->
+    <!-- ========================================== -->
+    <div id="view-admin" class="hidden space-y-4">
+      
+      <!-- Resumen Operativo -->
+      <div class="grid grid-cols-3 gap-2 text-center text-xs">
+        <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+          <span class="block text-[11px] text-slate-500 font-medium">En Recepción</span>
+          <span id="stat-reception" class="text-base font-bold text-blue-600">0</span>
+        </div>
+        <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+          <span class="block text-[11px] text-slate-500 font-medium">Para Reparto</span>
+          <span id="stat-scheduled" class="text-base font-bold text-amber-600">0</span>
+        </div>
+        <div class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+          <span class="block text-[11px] text-slate-500 font-medium">Entregados Hoy</span>
+          <span id="stat-delivered" class="text-base font-bold text-brand-600">0</span>
+        </div>
+      </div>
+
+      <!-- Tabs Operador -->
+      <div class="flex bg-white rounded-2xl p-1 shadow-sm border border-slate-200 text-xs font-semibold">
+        <button id="adm-tab-reception" onclick="setAdminTab('reception')" class="flex-1 py-2 rounded-xl text-center bg-brand-50 text-brand-700 font-bold">
+          📥 Recepción / Ingreso
+        </button>
+        <button id="adm-tab-delivery" onclick="setAdminTab('delivery')" class="flex-1 py-2 rounded-xl text-center text-slate-500 hover:text-slate-800 font-semibold">
+          🚪 Ronda de Reparto
+        </button>
+      </div>
+
+      <!-- Subvista: Recepción -->
+      <div id="adm-sec-reception" class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Paquetes por Procesar</h2>
+        </div>
+        <div id="admin-packages-list" class="space-y-3"></div>
+      </div>
+
+      <!-- Subvista: Reparto -->
+      <div id="adm-sec-delivery" class="hidden space-y-3">
+        <div class="bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
+          <i data-lucide="navigation" class="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0"></i>
+          <div>
+            <span class="font-bold">Modo Reparto:</span>
+            Ordenado por Torre y Piso. Solicita el PIN de 4 dígitos al residente para finalizar cada entrega.
+          </div>
+        </div>
+        <div id="admin-delivery-list" class="space-y-3"></div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- MODAL: REGISTRO / CHECK-IN OPERADOR -->
+  <!-- ========================================== -->
+  <div id="modal-checkin" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b pb-3">
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">Registrar Entrada en Recepción</h3>
+          <p class="text-xs text-slate-500" id="checkin-pkg-id">ID: PK-0000</p>
+        </div>
+        <button onclick="closeModal('modal-checkin')" class="text-slate-400 hover:text-slate-700 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-checkin" onsubmit="handleProcessCheckin(event)" class="space-y-3.5 text-xs">
+        <!-- Foto de custodia -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1.5">Foto de Custodia (Evidencia de estado)</label>
+          <div class="relative border-2 border-dashed border-slate-300 rounded-xl p-3 text-center bg-slate-50 hover:bg-slate-100 transition">
+            <input type="file" id="pkg-photo-input" accept="image/*" onchange="handlePhotoSelect(event)" class="hidden">
+            <div id="photo-placeholder" onclick="document.getElementById('pkg-photo-input').click()" class="cursor-pointer py-3 space-y-1">
+              <i data-lucide="camera" class="w-7 h-7 mx-auto text-brand-600"></i>
+              <p class="font-semibold text-slate-700">Tomar foto o subir imagen</p>
+              <p class="text-[10px] text-slate-400">Garantiza el estado físico de llegada</p>
+            </div>
+            <div id="photo-preview-box" class="hidden relative">
+              <img id="photo-preview-img" class="w-full h-36 object-cover rounded-lg shadow-sm">
+              <button type="button" onclick="clearPhoto()" class="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 shadow">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Categoría de Peso y Costo Automático -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1.5">Categoría de Peso / Tamaño</label>
+          <select id="pkg-weight-tier" onchange="updateCalculatedTariff()" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 font-medium text-slate-800 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+            <option value="MANO" data-cost="3000">1. Artículo de Mano (Hasta 1 kg) - $3.000</option>
+            <option value="ESTANDAR" data-cost="4500" selected>2. Paquete Estándar (1 a 5 kg) - $4.500</option>
+            <option value="VOLUMEN" data-cost="7000">3. Paquete Voluminoso (5 a 15 kg) - $7.000</option>
+            <option value="PESADO" data-cost="12000">4. Carga Especial (> 15 kg / Carretilla) - $12.000</option>
+          </select>
+        </div>
+
+        <!-- Tarifa Calculada -->
+        <div class="p-3 bg-brand-50 rounded-xl border border-brand-200 flex items-center justify-between">
+          <div>
+            <span class="block text-[10px] text-brand-800 font-semibold uppercase">Tarifa de Entrega</span>
+            <span id="calculated-tariff" class="text-base font-extrabold text-brand-700">$4.500 COP</span>
+          </div>
+          <div class="text-right">
+            <span class="text-[10px] text-slate-500 block">Cobro</span>
+            <span class="text-xs font-bold text-slate-700" id="checkin-payment-type">Por definir</span>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-600/30 transition flex items-center justify-center gap-2 text-sm">
+          <i data-lucide="check-circle" class="w-4 h-4"></i>
+          Confirmar Recepción
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: PROGRAMACIÓN (RESIDENTE) -->
+  <!-- ========================================== -->
+  <div id="modal-schedule" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b pb-3">
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">Programar Entrega en Puerta</h3>
+          <p class="text-xs text-slate-500" id="schedule-pkg-title">Paquete</p>
+        </div>
+        <button onclick="closeModal('modal-schedule')" class="text-slate-400 hover:text-slate-700 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="form-schedule" onsubmit="handleProcessSchedule(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Selecciona Franja de Reparto</label>
+          <div class="space-y-2">
+            <label class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer hover:border-brand-500 transition">
+              <div class="flex items-center gap-2">
+                <input type="radio" name="slot" value="12:00 m - 1:30 pm (Mediodía)" checked class="text-brand-600 focus:ring-brand-500">
+                <span class="font-semibold text-slate-800">Franja Mediodía</span>
+              </div>
+              <span class="text-[11px] text-slate-500">12:00 m - 1:30 pm</span>
+            </label>
+            <label class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer hover:border-brand-500 transition">
+              <div class="flex items-center gap-2">
+                <input type="radio" name="slot" value="6:00 pm - 7:30 pm (Tarde/Noche)" class="text-brand-600 focus:ring-brand-500">
+                <span class="font-semibold text-slate-800">Franja Tarde/Noche</span>
+              </div>
+              <span class="text-[11px] text-slate-500">6:00 pm - 7:30 pm</span>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">Método de Pago del Servicio</label>
+          <select id="schedule-payment-method" class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs font-medium focus:ring-2 focus:ring-brand-500">
+            <option value="Contra entrega en puerta (Efectivo / Nequi)">💵 Contra entrega en puerta (Efectivo / Nequi)</option>
+            <option value="Transferencia digital previa">📱 Transferencia digital previa</option>
+          </select>
+        </div>
+
+        <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl shadow-md transition flex items-center justify-center gap-2 text-sm mt-2">
+          <i data-lucide="calendar-check" class="w-4 h-4"></i>
+          Confirmar Horario
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: VALIDACIÓN DE PIN (EN PUERTA) -->
+  <!-- ========================================== -->
+  <div id="modal-pin" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b pb-3">
+        <div>
+          <h3 class="font-bold text-slate-900 text-sm">Validar Entrega en Puerta</h3>
+          <p class="text-xs text-slate-500" id="pin-target-resident">Torre 1 - Apto 402</p>
+        </div>
+        <button onclick="closeModal('modal-pin')" class="text-slate-400 hover:text-slate-700 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="text-center space-y-2 py-2">
+        <p class="text-xs text-slate-600">Pide al residente el <b>PIN de 4 dígitos</b> que aparece en su pantalla:</p>
+        <div class="flex justify-center gap-2">
+          <input type="text" maxlength="4" id="input-verify-pin" placeholder="••••" class="w-36 text-center tracking-[0.4em] text-2xl font-black bg-slate-100 border-2 border-brand-500 rounded-2xl py-2 focus:outline-none focus:ring-4 focus:ring-brand-500/20">
+        </div>
+        <p id="pin-error-msg" class="text-xs text-red-600 font-semibold hidden">PIN incorrecto. Verifica con el residente.</p>
+      </div>
+
+      <!-- Resumen de cobro en puerta -->
+      <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs space-y-1">
+        <div class="flex justify-between">
+          <span class="text-slate-500">Cobro por entrega:</span>
+          <span id="pin-modal-service-cost" class="font-bold text-slate-800">$4.500</span>
+        </div>
+        <div id="pin-modal-cod-row" class="flex justify-between text-amber-700 font-medium hidden">
+          <span>Recaudo transportista:</span>
+          <span id="pin-modal-cod-val">$0</span>
+        </div>
+      </div>
+
+      <button onclick="handleConfirmDeliveryWithPin()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-sm">
+        <i data-lucide="shield-check" class="w-4 h-4"></i>
+        Confirmar y Finalizar Entrega
+      </button>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    const STORAGE_KEY = 'entrega_vecina_db_v1';
+
+    const INITIAL_PACKAGES = [
+      {
+        id: 'PK-1024',
+        residente: {
+          nombre: 'Yirjanis Salgado',
+          telefono: '3001234567',
+          torre: 'Torre 2',
+          apto: '504'
+        },
+        paquete: {
+          proveedor: 'Mercado Libre',
+          guia: 'ML-8921345',
+          categoria_peso: 'ESTANDAR',
+          costo_servicio: 4500,
+          foto_url: 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&auto=format&fit=crop&q=60',
+          es_contra_entrega_proveedor: false,
+          valor_producto_proveedor: 0
+        },
+        entrega: {
+          estado: 'EN_RECEPCION',
+          franja_horaria: null,
+          metodo_pago_servicio: 'Contra entrega en puerta (Efectivo / Nequi)',
+          pin_seguridad: '4892',
+          fecha_ingreso: new Date(Date.now() - 3600000).toISOString(),
+          fecha_entrega: null
+        }
+      },
+      {
+        id: 'PK-1025',
+        residente: {
+          nombre: 'Andrés Mendoza',
+          telefono: '3109876543',
+          torre: 'Torre 1',
+          apto: '201'
+        },
+        paquete: {
+          proveedor: 'Amazon',
+          guia: 'AMZ-441092',
+          categoria_peso: 'MANO',
+          costo_servicio: 3000,
+          foto_url: null,
+          es_contra_entrega_proveedor: true,
+          valor_producto_proveedor: 35000
+        },
+        entrega: {
+          estado: 'PREALERTADO',
+          franja_horaria: null,
+          metodo_pago_servicio: 'Transferencia digital previa',
+          pin_seguridad: '7130',
+          fecha_ingreso: new Date().toISOString(),
+          fecha_entrega: null
+        }
+      }
+    ];
+
+    let state = {
+      role: 'client',
+      clientTab: 'list',
+      adminTab: 'reception',
+      packages: [],
+      currentActionPkgId: null,
+      tempPhotoUrl: null
+    };
+
+    function loadState() {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          state.packages = JSON.parse(saved);
+        } catch (e) {
+          state.packages = INITIAL_PACKAGES;
+        }
+      } else {
+        state.packages = INITIAL_PACKAGES;
+        saveState();
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.packages));
+      renderAll();
+    }
+
+    function setRole(role) {
+      state.role = role;
+      const btnClient = document.getElementById('btn-role-client');
+      const btnAdmin = document.getElementById('btn-role-admin');
+      const viewClient = document.getElementById('view-client');
+      const viewAdmin = document.getElementById('view-admin');
+
+      if (role === 'client') {
+        btnClient.className = "px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 bg-white text-brand-700 shadow-sm font-semibold";
+        btnAdmin.className = "px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 text-slate-600 hover:text-slate-900";
+        viewClient.classList.remove('hidden');
+        viewAdmin.classList.add('hidden');
+      } else {
+        btnAdmin.className = "px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 bg-white text-brand-700 shadow-sm font-semibold";
+        btnClient.className = "px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1 text-slate-600 hover:text-slate-900";
+        viewAdmin.classList.remove('hidden');
+        viewClient.classList.add('hidden');
+      }
+      renderAll();
+    }
+
+    function setClientTab(tab) {
+      state.clientTab = tab;
+      const btnList = document.getElementById('subtab-my-packages');
+      const btnForm = document.getElementById('subtab-new-prealert');
+      const containerList = document.getElementById('client-list-container');
+      const containerForm = document.getElementById('client-form-container');
+
+      if (tab === 'list') {
+        btnList.className = "flex-1 py-2 rounded-xl text-center bg-brand-50 text-brand-700 font-bold";
+        btnForm.className = "flex-1 py-2 rounded-xl text-center text-slate-500 hover:text-slate-800 font-semibold";
+        containerList.classList.remove('hidden');
+        containerForm.classList.add('hidden');
+      } else {
+        btnForm.className = "flex-1 py-2 rounded-xl text-center bg-brand-50 text-brand-700 font-bold";
+        btnList.className = "flex-1 py-2 rounded-xl text-center text-slate-500 hover:text-slate-800 font-semibold";
+        containerForm.classList.remove('hidden');
+        containerList.classList.add('hidden');
+      }
+    }
+
+    function setAdminTab(tab) {
+      state.adminTab = tab;
+      const btnRec = document.getElementById('adm-tab-reception');
+      const btnDel = document.getElementById('adm-tab-delivery');
+      const secRec = document.getElementById('adm-sec-reception');
+      const secDel = document.getElementById('adm-sec-delivery');
+
+      if (tab === 'reception') {
+        btnRec.className = "flex-1 py-2 rounded-xl text-center bg-brand-50 text-brand-700 font-bold";
+        btnDel.className = "flex-1 py-2 rounded-xl text-center text-slate-500 hover:text-slate-800 font-semibold";
+        secRec.classList.remove('hidden');
+        secDel.classList.add('hidden');
+      } else {
+        btnDel.className = "flex-1 py-2 rounded-xl text-center bg-brand-50 text-brand-700 font-bold";
+        btnRec.className = "flex-1 py-2 rounded-xl text-center text-slate-500 hover:text-slate-800 font-semibold";
+        secDel.classList.remove('hidden');
+        secRec.classList.add('hidden');
+      }
+    }
+
+    function toggleCodInput(checked) {
+      const container = document.getElementById('cod-amount-container');
+      if (checked) container.classList.remove('hidden');
+      else container.classList.add('hidden');
+    }
+
+    function handleCreatePrealert(e) {
+      e.preventDefault();
+      const torre = document.getElementById('c-torre').value;
+      const apto = document.getElementById('c-apto').value.trim();
+      const nombre = document.getElementById('c-nombre').value.trim();
+      const telefono = document.getElementById('c-telefono').value.trim();
+      const proveedor = document.getElementById('c-proveedor').value.trim();
+      const guia = document.getElementById('c-guia').value.trim() || 'Sin Guía';
+      const isCod = document.getElementById('c-is-cod').checked;
+      const codVal = isCod ? parseFloat(document.getElementById('c-cod-amount').value) || 0 : 0;
+
+      const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
+      const newId = 'PK-' + Math.floor(1000 + Math.random() * 9000);
+
+      const newPkg = {
+        id: newId,
+        residente: { nombre, telefono, torre, apto },
+        paquete: {
+          proveedor,
+          guia,
+          categoria_peso: 'ESTANDAR',
+          costo_servicio: 4500,
+          foto_url: null,
+          es_contra_entrega_proveedor: isCod,
+          valor_producto_proveedor: codVal
+        },
+        entrega: {
+          estado: 'PREALERTADO',
+          franja_horaria: null,
+          metodo_pago_servicio: 'Contra entrega en puerta (Efectivo / Nequi)',
+          pin_seguridad: randomPin,
+          fecha_ingreso: new Date().toISOString(),
+          fecha_entrega: null
+        }
+      };
+
+      state.packages.unshift(newPkg);
+      saveState();
+      document.getElementById('prealert-form').reset();
+      toggleCodInput(false);
+      setClientTab('list');
+    }
+
+    function renderAll() {
+      renderClientView();
+      renderAdminView();
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function renderClientView() {
+      const container = document.getElementById('client-packages-list');
+      const emptyState = document.getElementById('client-empty-state');
+      const countSpan = document.getElementById('client-pkg-count');
+
+      countSpan.innerText = state.packages.length;
+
+      if (state.packages.length === 0) {
+        emptyState.classList.remove('hidden');
+        container.innerHTML = '';
+        return;
+      }
+      emptyState.classList.add('hidden');
+
+      container.innerHTML = state.packages.map(pkg => {
+        const estadoBadges = {
+          'PREALERTADO': '<span class="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-[11px] font-bold">🟡 Pre-alertado</span>',
+          'EN_RECEPCION': '<span class="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-lg text-[11px] font-bold">📦 En Recepción</span>',
+          'PROGRAMADO': '<span class="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg text-[11px] font-bold">🕒 Programado</span>',
+          'ENTREGADO': '<span class="px-2.5 py-1 bg-green-100 text-green-800 rounded-lg text-[11px] font-bold">✅ Entregado</span>'
+        };
+
+        const isReadyForSchedule = pkg.entrega.estado === 'EN_RECEPCION';
+
+        return `
+          <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex items-start justify-between">
+              <div>
+                <span class="text-[11px] font-bold text-slate-400 tracking-wider">${pkg.id}</span>
+                <h3 class="font-bold text-slate-900 text-sm">${pkg.paquete.proveedor}</h3>
+                <p class="text-xs text-slate-500 font-medium">Guía: ${pkg.paquete.guia}</p>
+              </div>
+              <div>${estadoBadges[pkg.entrega.estado] || ''}</div>
+            </div>
+
+            ${pkg.paquete.foto_url ? `
+              <div class="relative rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                <img src="${pkg.paquete.foto_url}" class="w-full h-32 object-cover" alt="Evidencia de recepción">
+                <div class="absolute bottom-1 right-1 bg-black/60 backdrop-blur-sm text-white px-2 py-0.5 rounded text-[10px] flex items-center gap-1">
+                  <i data-lucide="camera" class="w-3 h-3"></i> Foto en recepción
+                </div>
+              </div>
+            ` : ''}
+
+            ${pkg.paquete.es_contra_entrega_proveedor ? `
+              <div class="p-2.5 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between text-xs text-amber-900">
+                <span class="font-semibold flex items-center gap-1">
+                  <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-amber-600"></i>
+                  Cobro transportista:
+                </span>
+                <span class="font-black text-amber-800">$${pkg.paquete.valor_producto_proveedor.toLocaleString('es-CO')}</span>
+              </div>
+            ` : ''}
+
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-xs">
+              <div class="bg-slate-50 p-2.5 rounded-xl">
+                <span class="block text-[10px] text-slate-500">Tarifa Servicio</span>
+                <span class="font-bold text-slate-800">$${pkg.paquete.costo_servicio.toLocaleString('es-CO')} COP</span>
+              </div>
+              <div class="bg-brand-50 p-2.5 rounded-xl text-center border border-brand-200/60">
+                <span class="block text-[10px] text-brand-800 font-semibold uppercase">PIN de Entrega</span>
+                <span class="font-black text-brand-700 text-base tracking-widest">${pkg.entrega.pin_seguridad}</span>
+              </div>
+            </div>
+
+            <div class="pt-1">
+              ${isReadyForSchedule ? `
+                <button onclick="openScheduleModal('${pkg.id}')" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm">
+                  <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                  Programar Horario de Entrega
+                </button>
+              ` : ''}
+              
+              ${pkg.entrega.franja_horaria ? `
+                <div class="w-full bg-slate-100 text-slate-700 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-between">
+                  <span>🕒 ${pkg.entrega.franja_horaria}</span>
+                  <span class="text-[10px] text-slate-500 font-normal">Programado</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAdminView() {
+      const inRec = state.packages.filter(p => p.entrega.estado === 'EN_RECEPCION').length;
+      const inSched = state.packages.filter(p => p.entrega.estado === 'PROGRAMADO').length;
+      const inDel = state.packages.filter(p => p.entrega.estado === 'ENTREGADO').length;
+
+      document.getElementById('stat-reception').innerText = inRec;
+      document.getElementById('stat-scheduled').innerText = inSched;
+      document.getElementById('stat-delivered').innerText = inDel;
+
+      const recList = document.getElementById('admin-packages-list');
+      recList.innerHTML = state.packages.map(pkg => {
+        const isPrealert = pkg.entrega.estado === 'PREALERTADO';
+        return `
+          <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+            <div class="flex items-start justify-between">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-black text-slate-900 bg-slate-100 px-2 py-0.5 rounded">${pkg.residente.torre} - ${pkg.residente.apto}</span>
+                  <span class="text-xs font-semibold text-slate-600">${pkg.residente.nombre}</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-1 font-medium">${pkg.paquete.proveedor} • Guía: ${pkg.paquete.guia}</p>
+              </div>
+              <span class="text-[11px] font-bold ${pkg.entrega.estado === 'ENTREGADO' ? 'text-green-600' : 'text-brand-700'}">${pkg.entrega.estado}</span>
+            </div>
+
+            <div class="flex items-center gap-2 pt-1 border-t border-slate-100">
+              ${isPrealert ? `
+                <button onclick="openCheckinModal('${pkg.id}')" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm">
+                  <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                  Recibir y Fotografiar
+                </button>
+              ` : `
+                <button onclick="openCheckinModal('${pkg.id}')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs flex items-center gap-1">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i> Editar
+                </button>
+              `}
+
+              <a href="https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.paquete.proveedor} ya está en recepción.`)}" target="_blank" class="px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-semibold flex items-center gap-1 hover:bg-emerald-100">
+                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp
+              </a>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      const delList = document.getElementById('admin-delivery-list');
+      const activeDeliveries = state.packages.filter(p => p.entrega.estado === 'PROGRAMADO' || p.entrega.estado === 'EN_RECEPCION');
+
+      if (activeDeliveries.length === 0) {
+        delList.innerHTML = `
+          <div class="text-center py-8 bg-white rounded-2xl border border-slate-200 p-4">
+            <p class="text-xs text-slate-500 font-medium">No hay entregas pendientes para reparto en este momento.</p>
+          </div>
+        `;
+      } else {
+        delList.innerHTML = activeDeliveries.map(pkg => `
+          <div class="bg-white rounded-2xl p-4 shadow-sm border-l-4 border-brand-500 border border-slate-200 space-y-2">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="text-xs font-black text-slate-900 bg-brand-50 text-brand-800 px-2 py-0.5 rounded border border-brand-200">${pkg.residente.torre} - Apto ${pkg.residente.apto}</span>
+                <h4 class="text-xs font-bold text-slate-800 mt-1">${pkg.residente.nombre}</h4>
+                <p class="text-[11px] text-slate-500">${pkg.paquete.proveedor} • Tarifa: $${pkg.paquete.costo_servicio.toLocaleString('es-CO')}</p>
+              </div>
+              <div class="text-right">
+                <span class="text-[10px] text-slate-500 block">Horario</span>
+                <span class="text-xs font-bold text-amber-700">${pkg.entrega.franja_horaria || 'Inmediata'}</span>
+              </div>
+            </div>
+
+            <button onclick="openPinModal('${pkg.id}')" class="w-full mt-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-brand-600/20">
+              <i data-lucide="key" class="w-3.5 h-3.5"></i>
+              Validar PIN en Puerta
+            </button>
+          </div>
+        `).join('');
+      }
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function openCheckinModal(pkgId) {
+      state.currentActionPkgId = pkgId;
+      const pkg = state.packages.find(p => p.id === pkgId);
+      document.getElementById('checkin-pkg-id').innerText = `${pkg.id} - ${pkg.residente.torre} Apto ${pkg.residente.apto}`;
+      document.getElementById('checkin-payment-type').innerText = pkg.entrega.metodo_pago_servicio;
+      
+      if (pkg.paquete.foto_url) {
+        document.getElementById('photo-preview-img').src = pkg.paquete.foto_url;
+        document.getElementById('photo-placeholder').classList.add('hidden');
+        document.getElementById('photo-preview-box').classList.remove('hidden');
+        state.tempPhotoUrl = pkg.paquete.foto_url;
+      } else {
+        clearPhoto();
+      }
+      openModal('modal-checkin');
+    }
+
+    function handlePhotoSelect(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          state.tempPhotoUrl = e.target.result;
+          document.getElementById('photo-preview-img').src = state.tempPhotoUrl;
+          document.getElementById('photo-placeholder').classList.add('hidden');
+          document.getElementById('photo-preview-box').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function clearPhoto() {
+      state.tempPhotoUrl = null;
+      document.getElementById('pkg-photo-input').value = '';
+      document.getElementById('photo-placeholder').classList.remove('hidden');
+      document.getElementById('photo-preview-box').classList.add('hidden');
+    }
+
+    function updateCalculatedTariff() {
+      const select = document.getElementById('pkg-weight-tier');
+      const cost = select.options[select.selectedIndex].getAttribute('data-cost');
+      document.getElementById('calculated-tariff').innerText = `$${parseInt(cost).toLocaleString('es-CO')} COP`;
+    }
+
+    function handleProcessCheckin(e) {
+      e.preventDefault();
+      const pkg = state.packages.find(p => p.id === state.currentActionPkgId);
+      const select = document.getElementById('pkg-weight-tier');
+      const cost = parseInt(select.options[select.selectedIndex].getAttribute('data-cost'));
+      const tier = select.value;
+
+      pkg.paquete.categoria_peso = tier;
+      pkg.paquete.costo_servicio = cost;
+      pkg.paquete.foto_url = state.tempPhotoUrl || 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=500&auto=format&fit=crop&q=60';
+      pkg.entrega.estado = 'EN_RECEPCION';
+
+      saveState();
+      closeModal('modal-checkin');
+    }
+
+    function openScheduleModal(pkgId) {
+      state.currentActionPkgId = pkgId;
+      const pkg = state.packages.find(p => p.id === pkgId);
+      document.getElementById('schedule-pkg-title').innerText = `${pkg.paquete.proveedor} (${pkg.id})`;
+      openModal('modal-schedule');
+    }
+
+    function handleProcessSchedule(e) {
+      e.preventDefault();
+      const pkg = state.packages.find(p => p.id === state.currentActionPkgId);
+      const selectedSlot = document.querySelector('input[name="slot"]:checked').value;
+      const paymentMethod = document.getElementById('schedule-payment-method').value;
+
+      pkg.entrega.franja_horaria = selectedSlot;
+      pkg.entrega.metodo_pago_servicio = paymentMethod;
+      pkg.entrega.estado = 'PROGRAMADO';
+
+      saveState();
+      closeModal('modal-schedule');
+    }
+
+    function openPinModal(pkgId) {
+      state.currentActionPkgId = pkgId;
+      const pkg = state.packages.find(p => p.id === pkgId);
+      document.getElementById('pin-target-resident').innerText = `${pkg.residente.torre} - Apto ${pkg.residente.apto} (${pkg.residente.nombre})`;
+      document.getElementById('pin-modal-service-cost').innerText = `$${pkg.paquete.costo_servicio.toLocaleString('es-CO')} COP`;
+      
+      const codRow = document.getElementById('pin-modal-cod-row');
+      if (pkg.paquete.es_contra_entrega_proveedor) {
+        document.getElementById('pin-modal-cod-val').innerText = `$${pkg.paquete.valor_producto_proveedor.toLocaleString('es-CO')} COP`;
+        codRow.classList.remove('hidden');
+      } else {
+        codRow.classList.add('hidden');
+      }
+
+      document.getElementById('input-verify-pin').value = '';
+      document.getElementById('pin-error-msg').classList.add('hidden');
+      openModal('modal-pin');
+    }
+
+    function handleConfirmDeliveryWithPin() {
+      const enteredPin = document.getElementById('input-verify-pin').value.trim();
+      const pkg = state.packages.find(p => p.id === state.currentActionPkgId);
+
+      if (enteredPin !== pkg.entrega.pin_seguridad) {
+        document.getElementById('pin-error-msg').classList.remove('hidden');
+        return;
+      }
+
+      pkg.entrega.estado = 'ENTREGADO';
+      pkg.entrega.fecha_entrega = new Date().toISOString();
+      saveState();
+      closeModal('modal-pin');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadState();
+      renderAll();
+    });
+  </script>
+</body>
+</html>
