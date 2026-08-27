@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
+import { compressImage } from '../utils/image.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
 export default function OperatorView() {
@@ -12,6 +13,9 @@ export default function OperatorView() {
   const [checkinPkg, setCheckinPkg] = useState(null);
   const [tier, setTier] = useState('ESTANDAR');
   const [photo, setPhoto] = useState(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [checkinError, setCheckinError] = useState('');
+  const [checkinSaving, setCheckinSaving] = useState(false);
 
   const [pinPkg, setPinPkg] = useState(null);
   const [pinInput, setPinInput] = useState('');
@@ -34,19 +38,27 @@ export default function OperatorView() {
     setCheckinPkg(pkg);
     setTier(pkg.categoriaPeso || 'ESTANDAR');
     setPhoto(pkg.fotoUrl || null);
+    setCheckinError('');
   }
 
-  function handlePhotoSelect(e) {
+  async function handlePhotoSelect(e) {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setPhoto(ev.target.result);
-    reader.readAsDataURL(file);
+    setPhotoBusy(true);
+    setCheckinError('');
+    try {
+      setPhoto(await compressImage(file));
+    } catch {
+      setCheckinError('No se pudo procesar la foto. Intenta con otra.');
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   async function handleCheckinSubmit(e) {
     e.preventDefault();
-    setError('');
+    setCheckinError('');
+    setCheckinSaving(true);
     try {
       await api(`/packages/${checkinPkg.id}/checkin`, {
         method: 'PATCH',
@@ -55,7 +67,9 @@ export default function OperatorView() {
       setCheckinPkg(null);
       await refresh();
     } catch (err) {
-      setError(err.message);
+      setCheckinError(err.message);
+    } finally {
+      setCheckinSaving(false);
     }
   }
 
@@ -150,8 +164,10 @@ export default function OperatorView() {
                   )}
                 </label>
                 <input id="pkg-photo-input" type="file" accept="image/*" capture="environment"
-                  onChange={handlePhotoSelect} className="sr-only" />
-                <p className="field-hint">En el celular abre la cámara directo; en computador deja elegir un archivo.</p>
+                  onChange={handlePhotoSelect} className="sr-only" disabled={photoBusy} />
+                <p className="field-hint">
+                  {photoBusy ? 'Procesando foto…' : 'En el celular abre la cámara directo; en computador deja elegir un archivo.'}
+                </p>
               </div>
               <div className="field">
                 <label>Categoría de Peso / Tamaño</label>
@@ -163,7 +179,12 @@ export default function OperatorView() {
                 <div className="l">Tarifa calculada</div>
                 <div className="v">{formatCOP(TIERS.find((t) => t.value === tier)?.costo)} COP</div>
               </div>
-              <button className="btn btn-primary" type="submit">✔ Confirmar Recepción</button>
+
+              {checkinError && <p className="error-text" style={{ marginBottom: 10 }}>{checkinError}</p>}
+
+              <button className="btn btn-primary" type="submit" disabled={photoBusy || checkinSaving}>
+                {checkinSaving ? 'Guardando…' : '✔ Confirmar Recepción'}
+              </button>
             </form>
           </div>
         </div>
