@@ -24,6 +24,7 @@ async function main() {
       role: 'OPERATOR',
       nombre: process.env.OPERATOR_NOMBRE || 'Operador',
       telefono: process.env.OPERATOR_TELEFONO || '',
+      termsAcceptedAt: new Date(),
     },
   });
 

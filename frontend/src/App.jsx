@@ -4,6 +4,7 @@ import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
+import Terms from './pages/Terms.jsx';
 import ResidentView from './pages/ResidentView.jsx';
 import OperatorView from './pages/OperatorView.jsx';
 import { getRole, isAuthenticated, logout } from './services/auth.js';
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/registro" element={<Register />} />
         <Route path="/recuperar" element={<ForgotPassword />} />
         <Route path="/restablecer" element={<ResetPassword />} />
+        <Route path="/terminos" element={<Terms />} />
         <Route path="/" element={<Protected><Home /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { register } from '../services/auth.js';
 import PasswordField from '../components/PasswordField.jsx';
 
-const initial = { email: '', password: '', nombre: '', telefono: '', torre: 'Torre 1', apto: '' };
+const initial = { email: '', password: '', nombre: '', telefono: '', torre: 'Torre 1', apto: '', acceptedTerms: false };
 
 export default function Register() {
   const [fields, setFields] = useState(initial);
@@ -71,9 +71,17 @@ export default function Register() {
               </div>
             </div>
 
+            <label className="terms-check">
+              <input type="checkbox" required checked={fields.acceptedTerms}
+                onChange={(e) => update('acceptedTerms', e.target.checked)} />
+              <span>
+                Acepto los <Link to="/terminos" target="_blank" rel="noreferrer">Términos y Condiciones y el Aviso de Tratamiento de Datos</Link>.
+              </span>
+            </label>
+
             {error && <p className="error-text">{error}</p>}
 
-            <button className="btn btn-primary" type="submit" disabled={loading}>
+            <button className="btn btn-primary" type="submit" disabled={loading || !fields.acceptedTerms}>
               {loading ? 'Creando…' : 'Crear cuenta'}
             </button>
           </form>

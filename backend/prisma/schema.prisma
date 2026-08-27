@@ -27,6 +27,9 @@ model User {
   telefono     String
   torre        String?
   apto         String?
+  // Constancia real de aceptación (fecha), no solo un checkbox de UI que
+  // se puede saltar pegando directo contra la API — ver register().
+  termsAcceptedAt DateTime
   createdAt    DateTime @default(now())
 
   packages     Package[]

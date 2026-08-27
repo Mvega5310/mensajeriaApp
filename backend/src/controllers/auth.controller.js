@@ -16,12 +16,18 @@ const PASSWORD_POLICY = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 // body de la petición. La cuenta de operador se crea aparte (ver
 // prisma/seed.js), para que nadie pueda auto-asignarse ese rol.
 export async function register(req, res) {
-  const { email, password, nombre, telefono, torre, apto } = req.body;
+  const { email, password, nombre, telefono, torre, apto, acceptedTerms } = req.body;
   if (!email || !password || !nombre || !telefono) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
   if (!PASSWORD_POLICY.test(password)) {
     return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres, con al menos una letra y un número' });
+  }
+  // No basta con que el checkbox exista en el formulario: si alguien pega
+  // directo contra la API sin aceptar, no hay cuenta. La fecha exacta
+  // queda en termsAcceptedAt como constancia de la aceptación.
+  if (acceptedTerms !== true) {
+    return res.status(400).json({ error: 'Debes aceptar los Términos y el Aviso de Privacidad' });
   }
 
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -29,7 +35,7 @@ export async function register(req, res) {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { email, passwordHash, role: 'RESIDENT', nombre, telefono, torre, apto },
+    data: { email, passwordHash, role: 'RESIDENT', nombre, telefono, torre, apto, termsAcceptedAt: new Date() },
   });
 
   res.status(201).json({ id: user.id, email: user.email, role: user.role });
