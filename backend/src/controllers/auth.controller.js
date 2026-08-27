@@ -82,17 +82,7 @@ export async function forgotPassword(req, res) {
   });
 
   const resetUrl = `${process.env.FRONTEND_URL}/restablecer?token=${rawToken}`;
-  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.startsWith('re_xxx')) {
-    // Sin API key configurada (dev local): no hay a quién enviarle nada,
-    // así que el enlace queda en el log para poder probar el flujo igual.
-    console.log(`[dev] Enlace de restablecimiento para ${user.email}: ${resetUrl}`);
-  } else {
-    try {
-      await sendPasswordResetEmail(user.email, resetUrl);
-    } catch (err) {
-      console.error('Error enviando correo de recuperación:', err);
-    }
-  }
+  await sendPasswordResetEmail(user.email, resetUrl);
 
   res.json(GENERIC_RESET_RESPONSE);
 }

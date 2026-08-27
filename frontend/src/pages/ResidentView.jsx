@@ -3,18 +3,29 @@ import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
+import { TIME_SLOTS, PAYMENT_METHODS } from '../utils/schedule.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
-const emptyForm = { proveedor: '', guia: '', categoriaPeso: 'ESTANDAR', esContraEntregaProveedor: false, valorProductoProveedor: '', valorDeclarado: '' };
+const emptyForm = {
+  proveedor: '', guia: '', categoriaPeso: 'ESTANDAR',
+  esContraEntregaProveedor: false, valorProductoProveedor: '', valorDeclarado: '',
+  franjaHoraria: TIME_SLOTS[0], metodoPagoServicio: PAYMENT_METHODS[0].value,
+};
 
 export default function ResidentView() {
   const [packages, setPackages] = useState([]);
   const [tab, setTab] = useState('list');
   const [form, setForm] = useState(emptyForm);
   const [scheduling, setScheduling] = useState(null); // paquete a programar
-  const [slot, setSlot] = useState('12:00 m - 1:30 pm (Mediodía)');
-  const [paymentMethod, setPaymentMethod] = useState('Contra entrega en puerta (Efectivo / Nequi)');
+  const [slot, setSlot] = useState(TIME_SLOTS[0]);
+  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].value);
   const [error, setError] = useState('');
+
+  function openSchedule(pkg) {
+    setScheduling(pkg);
+    setSlot(pkg.franjaHoraria || TIME_SLOTS[0]);
+    setPaymentMethod(pkg.metodoPagoServicio || PAYMENT_METHODS[0].value);
+  }
 
   async function refresh() {
     setPackages(await api('/packages/mine'));
@@ -37,6 +48,8 @@ export default function ResidentView() {
           esContraEntregaProveedor: form.esContraEntregaProveedor,
           valorProductoProveedor: form.esContraEntregaProveedor ? Number(form.valorProductoProveedor) || 0 : 0,
           valorDeclarado: Number(form.valorDeclarado) || 0,
+          franjaHoraria: form.franjaHoraria,
+          metodoPagoServicio: form.metodoPagoServicio,
         },
       });
       setForm(emptyForm);
@@ -64,6 +77,11 @@ export default function ResidentView() {
 
   return (
     <div className="shell">
+      <div className="how-it-works">
+        <strong>Así funciona:</strong> notifica tu paquete apenas lo compres → te avisamos cuando llega a
+        recepción → programas la franja en que estarás en tu apartamento → lo recibes en la puerta con tu PIN.
+      </div>
+
       <div className="tabs">
         <button className={`tab ${tab === 'list' ? 'active' : ''}`} onClick={() => setTab('list')}>
           Mis Paquetes ({packages.length})
@@ -111,6 +129,23 @@ export default function ResidentView() {
               Es el monto máximo que reconocemos si el paquete se pierde o daña en custodia — ver{' '}
               <Link to="/terminos" target="_blank" rel="noreferrer">Términos, sección 4</Link>. Si lo dejas vacío, no hay valor de referencia.
             </p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="franjaHoraria">Franja en la que sueles estar en tu apartamento</label>
+            <select id="franjaHoraria" value={form.franjaHoraria}
+              onChange={(e) => setForm({ ...form, franjaHoraria: e.target.value })}>
+              {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+            <p className="field-hint">La confirmas de nuevo cuando el paquete llegue a recepción, por si cambia.</p>
+          </div>
+
+          <div className="field">
+            <label htmlFor="metodoPagoServicio">Método de pago del servicio de entrega</label>
+            <select id="metodoPagoServicio" value={form.metodoPagoServicio}
+              onChange={(e) => setForm({ ...form, metodoPagoServicio: e.target.value })}>
+              {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            </select>
           </div>
 
           <div className="cod-box" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
@@ -183,14 +218,14 @@ export default function ResidentView() {
 
               {pkg.estado === 'EN_RECEPCION' && (
                 <button className="btn btn-primary" style={{ marginTop: 12 }}
-                  onClick={() => setScheduling(pkg)}>
+                  onClick={() => openSchedule(pkg)}>
                   🕒 Programar Horario de Entrega
                 </button>
               )}
               {pkg.franjaHoraria && (
                 <div className="cod-box" style={{ marginTop: 12, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#334155' }}>
                   <span>🕒 {pkg.franjaHoraria}</span>
-                  <span style={{ fontWeight: 400 }}>Programado</span>
+                  <span style={{ fontWeight: 400 }}>{pkg.estado === 'PROGRAMADO' ? 'Programado' : 'Preferencia'}</span>
                 </div>
               )}
             </div>
@@ -209,15 +244,13 @@ export default function ResidentView() {
               <div className="field">
                 <label>Franja de reparto</label>
                 <select value={slot} onChange={(e) => setSlot(e.target.value)}>
-                  <option value="12:00 m - 1:30 pm (Mediodía)">Mediodía · 12:00 m - 1:30 pm</option>
-                  <option value="6:00 pm - 7:30 pm (Tarde/Noche)">Tarde/Noche · 6:00 pm - 7:30 pm</option>
+                  {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="field">
                 <label>Método de pago del servicio</label>
                 <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                  <option value="Contra entrega en puerta (Efectivo / Nequi)">💵 Contra entrega en puerta</option>
-                  <option value="Transferencia digital previa">📱 Transferencia digital previa</option>
+                  {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
               <button className="btn btn-primary" type="submit">Confirmar Horario</button>

@@ -131,6 +131,7 @@ export default function OperatorView() {
             <div>
               <div className="card-title">{pkg.residente.torre} - {pkg.residente.apto} · {pkg.residente.nombre}</div>
               <div className="card-sub">{pkg.proveedor} · Guía: {pkg.guia}</div>
+              {pkg.franjaHoraria && <div className="card-sub">🕒 Prefiere: {pkg.franjaHoraria}</div>}
             </div>
             <StatusBadge estado={pkg.estado} />
           </div>

@@ -1,6 +1,7 @@
 import { prisma } from '../config/db.js';
 import { generatePin, verifyPin } from '../services/pin.service.js';
 import { costoPara } from '../services/tariff.service.js';
+import { sendNewPackageOperatorEmail, sendPrealertConfirmationEmail } from '../services/email.service.js';
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
@@ -10,9 +11,15 @@ import { costoPara } from '../services/tariff.service.js';
 // conoce el tamaño del paquete todavía) y solo sirve para mostrarle una
 // tarifa de referencia. El precio que realmente se cobra lo fija el
 // operador en checkin(), con el paquete físico en mano — este endpoint
-// nunca es la fuente final de verdad del cobro.
+// nunca es la fuente final de verdad del cobro. La franja/método de pago
+// tampoco son definitivos: son la preferencia inicial del residente, que
+// se confirma de nuevo (y puede cambiar) cuando el paquete llega — ver
+// schedule().
 export async function createPrealert(req, res) {
-  const { proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor, valorDeclarado } = req.body;
+  const {
+    proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
+    valorDeclarado, franjaHoraria, metodoPagoServicio,
+  } = req.body;
   if (!proveedor) return res.status(400).json({ error: 'El proveedor es requerido' });
 
   let costoServicio;
@@ -32,9 +39,19 @@ export async function createPrealert(req, res) {
       esContraEntregaProveedor: !!esContraEntregaProveedor,
       valorProductoProveedor: Number(valorProductoProveedor) || 0,
       valorDeclarado: Number(valorDeclarado) || 0,
+      franjaHoraria: franjaHoraria || null,
+      metodoPagoServicio: metodoPagoServicio || null,
       pin: generatePin(),
     },
   });
+
+  // Aviso automático — no bloquea la respuesta si falla el envío (ver
+  // sendEmail en email.service.js, que ya se traga sus propios errores).
+  const residente = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  const operador = await prisma.user.findFirst({ where: { role: 'OPERATOR' } });
+  if (operador) sendNewPackageOperatorEmail(operador.email, pkg, residente);
+  sendPrealertConfirmationEmail(residente.email, pkg);
+
   res.status(201).json(pkg);
 }
 
