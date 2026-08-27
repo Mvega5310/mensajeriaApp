@@ -27,7 +27,7 @@ export default function Login() {
   return (
     <div className="auth-shell">
       <div className="auth-card">
-        <h1>EntregaVecina</h1>
+        <h1>puertaya</h1>
         <p className="sub">Ingresa a tu cuenta de residente u operador.</p>
 
         <form onSubmit={handleSubmit}>

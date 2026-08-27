@@ -1,4 +1,4 @@
-# EntregaVecina
+# puertaya
 
 Gestión y entrega residencial puerta a puerta. Este proyecto se reorganizó en
 `backend/` y `frontend/` a partir de una auditoría de seguridad y contractual
@@ -8,7 +8,7 @@ el PIN de entrega no tenían ningún respaldo del lado servidor.
 ## Estructura
 
 ```
-entrega-vecina/
+puertaya/
 ├── backend/     # API Express + Prisma/PostgreSQL — auth, roles y PIN reales
 ├── frontend/    # SPA Vite + React — consume la API, sin lógica de negocio propia
 └── docs/        # Prototipo original y modelo de datos, como referencia

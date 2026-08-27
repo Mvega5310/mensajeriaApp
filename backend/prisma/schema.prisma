@@ -62,6 +62,11 @@ model Package {
   fotoUrl                   String?
   esContraEntregaProveedor  Boolean @default(false)
   valorProductoProveedor    Int     @default(0)
+  // Distinto de valorProductoProveedor (eso es lo que se le paga al
+  // transportista en un COD). Este es el valor que el residente declara
+  // para efectos del tope de responsabilidad por custodia (ver Terms.jsx,
+  // sección 4) — aplica exista o no cobro contra entrega.
+  valorDeclarado            Int     @default(0)
 
   // datos de entrega
   estado              String @default("PREALERTADO")

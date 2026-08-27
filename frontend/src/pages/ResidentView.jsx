@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
-const emptyForm = { proveedor: '', guia: '', categoriaPeso: 'ESTANDAR', esContraEntregaProveedor: false, valorProductoProveedor: '' };
+const emptyForm = { proveedor: '', guia: '', categoriaPeso: 'ESTANDAR', esContraEntregaProveedor: false, valorProductoProveedor: '', valorDeclarado: '' };
 
 export default function ResidentView() {
   const [packages, setPackages] = useState([]);
@@ -35,6 +36,7 @@ export default function ResidentView() {
           categoriaPeso: form.categoriaPeso,
           esContraEntregaProveedor: form.esContraEntregaProveedor,
           valorProductoProveedor: form.esContraEntregaProveedor ? Number(form.valorProductoProveedor) || 0 : 0,
+          valorDeclarado: Number(form.valorDeclarado) || 0,
         },
       });
       setForm(emptyForm);
@@ -101,6 +103,16 @@ export default function ResidentView() {
             <div className="v">{formatCOP(TIERS.find((t) => t.value === form.categoriaPeso)?.costo)} COP</div>
           </div>
 
+          <div className="field">
+            <label htmlFor="valorDeclarado">Valor declarado del producto (opcional)</label>
+            <input id="valorDeclarado" type="number" min="0" placeholder="Ej. 150000"
+              value={form.valorDeclarado} onChange={(e) => setForm({ ...form, valorDeclarado: e.target.value })} />
+            <p className="field-hint">
+              Es el monto máximo que reconocemos si el paquete se pierde o daña en custodia — ver{' '}
+              <Link to="/terminos" target="_blank" rel="noreferrer">Términos, sección 4</Link>. Si lo dejas vacío, no hay valor de referencia.
+            </p>
+          </div>
+
           <div className="cod-box" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 600 }}>
               ⚠️ ¿Cobro contra entrega del producto?
@@ -148,6 +160,13 @@ export default function ResidentView() {
                 <div className="cod-box">
                   <span>Cobro transportista:</span>
                   <strong>{formatCOP(pkg.valorProductoProveedor)}</strong>
+                </div>
+              )}
+
+              {pkg.valorDeclarado > 0 && (
+                <div className="cod-box" style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#334155' }}>
+                  <span>Valor declarado:</span>
+                  <strong>{formatCOP(pkg.valorDeclarado)}</strong>
                 </div>
               )}
 

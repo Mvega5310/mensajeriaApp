@@ -5,7 +5,7 @@ export default function Terms() {
     <div className="legal-shell">
       <Link to="/registro" className="legal-back">← Volver al registro</Link>
       <h1>Términos y Condiciones y Aviso de Tratamiento de Datos Personales</h1>
-      <p className="updated">Última actualización: agosto de 2026 · EntregaVecina</p>
+      <p className="updated">Última actualización: agosto de 2026 · puertaya</p>
 
       <div className="callout">
         Este documento es un borrador de referencia, no una asesoría legal completa.
@@ -15,11 +15,9 @@ export default function Terms() {
 
       <h2>1. Quién presta el servicio</h2>
       <p>
-        EntregaVecina es operado de forma independiente por{' '}
-        <strong>[Nombre completo o razón social del operador]</strong>, identificado con{' '}
-        <strong>[C.C. / NIT]</strong>, domiciliado en <strong>[dirección o conjunto residencial]</strong>,
-        contacto <strong>[correo / teléfono de contacto]</strong>. Estos datos deben completarse antes
-        de publicar este documento a residentes reales.
+        Puertaya es operado de forma independiente por <strong>Francisco Caro Yanse</strong>,
+        identificado con C.C. <strong>1128060641</strong>, domiciliado en{' '}
+        <strong>Ipanema Torre 1, Ap. 302</strong>, contacto <strong>3006248072</strong>.
       </p>
 
       <h2>2. Qué hace el servicio</h2>
@@ -43,7 +41,7 @@ export default function Terms() {
       <p>
         <strong>Tus derechos:</strong> puedes solicitar en cualquier momento acceder a tus datos,
         corregirlos, o pedir que se eliminen (derechos de acceso, rectificación, cancelación y
-        oposición), escribiendo a <strong>[correo de contacto del operador]</strong>. Si eliminas tu
+        oposición), escribiendo al <strong>3006248072 (WhatsApp)</strong>. Si eliminas tu
         cuenta, tus datos se conservan solo el tiempo necesario para resolver disputas de paquetes
         en curso y luego se eliminan.
       </p>
@@ -62,9 +60,10 @@ export default function Terms() {
         El operador <strong>no es responsable por el contenido</strong> de paquetes que no fueron
         declarados como de alto valor al momento de la pre-alerta, ni por daños o defectos de fábrica
         anteriores a la recepción. La responsabilidad del operador por pérdida o daño comprobado
-        durante la custodia se limita a <strong>[definir un tope, ej: el valor declarado o un monto
-        fijo en COP]</strong>. Si vas a recibir un artículo de alto valor, decláralo o coordina su
-        recepción de forma personal.
+        durante la custodia se limita <strong>al valor del producto que hayas declarado al crear la
+        pre-alerta</strong>. Si no declaraste ningún valor, no hay base para reclamar un monto
+        específico. Si vas a recibir un artículo de alto valor, decláralo o coordina su recepción de
+        forma personal.
       </p>
 
       <h2>5. Cobro contra entrega y manejo de dinero de terceros</h2>
@@ -73,7 +72,7 @@ export default function Terms() {
         directamente al operador (o a quien la transportadora indique) cuando esta se presenta —
         el operador nunca adelanta dinero propio. Si no transfieres a tiempo mientras la
         transportadora espera, el paquete queda pendiente para una nueva ronda de reparto, con el
-        riesgo de que sea devuelto al remitente según las políticas de esa transportadora, ajenas a EntregaVecina.
+        riesgo de que sea devuelto al remitente según las políticas de esa transportadora, ajenas a puertaya.
       </p>
       <p>
         La tarifa del servicio de entrega es independiente de ese cobro contra entrega, y se paga
@@ -103,7 +102,7 @@ export default function Terms() {
 
       <h2>9. Contacto</h2>
       <p>
-        Preguntas, quejas o solicitudes sobre tus datos personales: <strong>[correo / WhatsApp de contacto del operador]</strong>.
+        Preguntas, quejas o solicitudes sobre tus datos personales: <strong>3006248072 (WhatsApp)</strong>.
       </p>
     </div>
   );

@@ -12,7 +12,7 @@ import { costoPara } from '../services/tariff.service.js';
 // operador en checkin(), con el paquete físico en mano — este endpoint
 // nunca es la fuente final de verdad del cobro.
 export async function createPrealert(req, res) {
-  const { proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor } = req.body;
+  const { proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor, valorDeclarado } = req.body;
   if (!proveedor) return res.status(400).json({ error: 'El proveedor es requerido' });
 
   let costoServicio;
@@ -31,6 +31,7 @@ export async function createPrealert(req, res) {
       costoServicio,
       esContraEntregaProveedor: !!esContraEntregaProveedor,
       valorProductoProveedor: Number(valorProductoProveedor) || 0,
+      valorDeclarado: Number(valorDeclarado) || 0,
       pin: generatePin(),
     },
   });

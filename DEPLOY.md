@@ -1,4 +1,4 @@
-# Desplegar EntregaVecina — Railway (backend + Postgres) + Vercel (frontend)
+# Desplegar puertaya — Railway (backend + Postgres) + Vercel (frontend)
 
 Requiere: cuenta de GitHub, cuenta de Railway, cuenta de Vercel. Ninguna de las
 tres la puedo crear por ti — son pasos que haces tú en su dashboard/CLI.
@@ -56,7 +56,7 @@ este remoto (`git remote add origin ...` y `git push -u origin main`).
    railway run npm run seed
    ```
 7. Copia la URL pública que Railway asigna al backend (Settings → Networking →
-   Generate Domain), algo como `https://entrega-vecina-backend.up.railway.app`.
+   Generate Domain), algo como `https://puertaya-backend.up.railway.app`.
 
 ## 2. Frontend en Vercel
 
@@ -64,7 +64,7 @@ este remoto (`git remote add origin ...` y `git push -u origin main`).
 2. **Root Directory** → `frontend`. Framework preset: Vite (Vercel lo detecta solo).
 3. Variable de entorno: `VITE_API_URL` = `https://<tu-backend>.up.railway.app/api`
    (la URL del paso 1.7, con `/api` al final).
-4. Deploy. Copia la URL que asigna Vercel, algo como `https://entrega-vecina.vercel.app`.
+4. Deploy. Copia la URL que asigna Vercel, algo como `https://puertaya.vercel.app`.
 
 ## 3. Cerrar el círculo: CORS
 

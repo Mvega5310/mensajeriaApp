@@ -1,4 +1,4 @@
-# 📦 EntregaVecina - Gestión y Entrega Residencial Puerta a Puerta
+# 📦 puertaya - Gestión y Entrega Residencial Puerta a Puerta
 
 > Solución integral para la recepción, custodia, programación y entrega de paquetería en conjuntos y edificios residenciales, optimizada para **operadores independientes (Solopreneurs)**.
 
@@ -6,7 +6,7 @@
 
 ## 📋 Descripción del Proyecto
 
-**EntregaVecina** es una aplicación web progresiva diseñada para resolver la congestión de paquetes en recepciones de conjuntos residenciales y edificios. Bajo el modelo de **"vecino de confianza"**, permite a un único operador multifuncional (recepcionista, domiciliario y administrador) gestionar la cadena de custodia de extremo a extremo:
+**puertaya** es una aplicación web progresiva diseñada para resolver la congestión de paquetes en recepciones de conjuntos residenciales y edificios. Bajo el modelo de **"vecino de confianza"**, permite a un único operador multifuncional (recepcionista, domiciliario y administrador) gestionar la cadena de custodia de extremo a extremo:
 
 1. **Pre-alerta:** El residente notifica la llegada de su compra desde su interfaz.
 2. **Recepción con Evidencia:** El operador recibe el paquete, toma una foto de estado y asigna la categoría de peso.
