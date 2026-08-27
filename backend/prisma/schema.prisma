@@ -29,7 +29,21 @@ model User {
   apto         String?
   createdAt    DateTime @default(now())
 
-  packages Package[]
+  packages     Package[]
+  resetTokens  PasswordResetToken[]
+}
+
+// El token crudo (alta entropía, de un solo uso) solo existe en el correo
+// que se envía una vez; aquí se guarda su hash — si la tabla se filtra,
+// no sirve para tomar la cuenta de nadie.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 }
 
 model Package {

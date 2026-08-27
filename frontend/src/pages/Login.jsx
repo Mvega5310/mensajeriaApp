@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { login } from '../services/auth.js';
+import PasswordField from '../components/PasswordField.jsx';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -34,10 +35,7 @@ export default function Login() {
             <label htmlFor="email">Correo</label>
             <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div className="field">
-            <label htmlFor="password">Contraseña</label>
-            <input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
+          <PasswordField id="password" value={password} onChange={(e) => setPassword(e.target.value)} />
 
           {error && <p className="error-text">{error}</p>}
 
@@ -46,6 +44,9 @@ export default function Login() {
           </button>
         </form>
 
+        <p className="auth-switch">
+          <Link to="/recuperar">¿Olvidaste tu contraseña?</Link>
+        </p>
         <p className="auth-switch">
           ¿Eres residente nuevo? <Link to="/registro">Crea tu cuenta</Link>
         </p>

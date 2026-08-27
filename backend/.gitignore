@@ -2,3 +2,9 @@ node_modules/
 .env
 dist/
 *.log
+
+# Artefactos de probar local con SQLite (ver README) — el esquema
+# comiteado siempre apunta a postgresql; estos nunca deben subirse.
+prisma/*.db
+prisma/*.db-journal
+prisma/migrations/

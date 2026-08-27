@@ -10,6 +10,14 @@ export async function register(fields) {
   return api('/auth/register', { method: 'POST', body: fields });
 }
 
+export async function requestPasswordReset(email) {
+  return api('/auth/forgot-password', { method: 'POST', body: { email } });
+}
+
+export async function confirmPasswordReset(token, password) {
+  return api('/auth/reset-password', { method: 'POST', body: { token, password } });
+}
+
 export function logout() {
   localStorage.removeItem('token');
 }

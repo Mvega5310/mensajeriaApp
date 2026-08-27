@@ -142,9 +142,16 @@ export default function OperatorView() {
             <form onSubmit={handleCheckinSubmit}>
               <div className="field">
                 <label>Foto de Custodia (Evidencia de estado)</label>
-                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} />
+                <label htmlFor="pkg-photo-input" className="photo-picker">
+                  {photo ? (
+                    <img src={photo} alt="Vista previa" />
+                  ) : (
+                    <span className="photo-picker-empty">📷 Tomar foto o subir imagen</span>
+                  )}
+                </label>
+                <input id="pkg-photo-input" type="file" accept="image/*" capture="environment"
+                  onChange={handlePhotoSelect} className="sr-only" />
                 <p className="field-hint">En el celular abre la cámara directo; en computador deja elegir un archivo.</p>
-                {photo && <img src={photo} alt="Vista previa" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
               </div>
               <div className="field">
                 <label>Categoría de Peso / Tamaño</label>

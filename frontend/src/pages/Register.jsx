@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { register } from '../services/auth.js';
+import PasswordField from '../components/PasswordField.jsx';
 
 const initial = { email: '', password: '', nombre: '', telefono: '', torre: 'Torre 1', apto: '' };
 
@@ -48,10 +49,9 @@ export default function Register() {
               <label htmlFor="email">Correo</label>
               <input id="email" type="email" required value={fields.email} onChange={(e) => update('email', e.target.value)} />
             </div>
-            <div className="field">
-              <label htmlFor="password">Contraseña</label>
-              <input id="password" type="password" required minLength={8} value={fields.password} onChange={(e) => update('password', e.target.value)} />
-            </div>
+            <PasswordField id="password" value={fields.password} onChange={(e) => update('password', e.target.value)}
+              minLength={8} pattern="(?=.*[A-Za-z])(?=.*\d).{8,}"
+              hint="Mínimo 8 caracteres, con al menos una letra y un número." />
             <div className="field">
               <label htmlFor="telefono">Teléfono (WhatsApp)</label>
               <input id="telefono" type="tel" required pattern="[0-9]{10}" title="10 dígitos" value={fields.telefono} onChange={(e) => update('telefono', e.target.value)} />
