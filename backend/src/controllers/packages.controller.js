@@ -5,15 +5,30 @@ import { costoPara } from '../services/tariff.service.js';
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
 // no pueden falsificarse escribiendo el nombre de otro residente.
+//
+// La categoría de peso que manda aquí es una ESTIMACIÓN suya (nadie más
+// conoce el tamaño del paquete todavía) y solo sirve para mostrarle una
+// tarifa de referencia. El precio que realmente se cobra lo fija el
+// operador en checkin(), con el paquete físico en mano — este endpoint
+// nunca es la fuente final de verdad del cobro.
 export async function createPrealert(req, res) {
-  const { proveedor, guia, esContraEntregaProveedor, valorProductoProveedor } = req.body;
+  const { proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor } = req.body;
   if (!proveedor) return res.status(400).json({ error: 'El proveedor es requerido' });
+
+  let costoServicio;
+  try {
+    costoServicio = costoPara(categoriaPeso || 'ESTANDAR');
+  } catch {
+    return res.status(400).json({ error: 'Categoría de peso inválida' });
+  }
 
   const pkg = await prisma.package.create({
     data: {
       residenteId: req.user.sub,
       proveedor,
       guia: guia || 'Sin Guía',
+      categoriaPeso: categoriaPeso || 'ESTANDAR',
+      costoServicio,
       esContraEntregaProveedor: !!esContraEntregaProveedor,
       valorProductoProveedor: Number(valorProductoProveedor) || 0,
       pin: generatePin(),

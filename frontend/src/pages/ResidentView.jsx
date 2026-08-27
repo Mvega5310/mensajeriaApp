@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
+import { TIERS } from '../utils/tiers.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
-const emptyForm = { proveedor: '', guia: '', esContraEntregaProveedor: false, valorProductoProveedor: '' };
+const emptyForm = { proveedor: '', guia: '', categoriaPeso: 'ESTANDAR', esContraEntregaProveedor: false, valorProductoProveedor: '' };
 
 export default function ResidentView() {
   const [packages, setPackages] = useState([]);
@@ -31,6 +32,7 @@ export default function ResidentView() {
         body: {
           proveedor: form.proveedor,
           guia: form.guia,
+          categoriaPeso: form.categoriaPeso,
           esContraEntregaProveedor: form.esContraEntregaProveedor,
           valorProductoProveedor: form.esContraEntregaProveedor ? Number(form.valorProductoProveedor) || 0 : 0,
         },
@@ -84,6 +86,21 @@ export default function ResidentView() {
               onChange={(e) => setForm({ ...form, guia: e.target.value })} />
           </div>
 
+          <div className="field">
+            <label htmlFor="categoriaPeso">Tamaño / Peso aproximado</label>
+            <select id="categoriaPeso" value={form.categoriaPeso}
+              onChange={(e) => setForm({ ...form, categoriaPeso: e.target.value })}>
+              {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <p className="field-hint">
+              Es tu estimado — el operador confirma el tamaño real al recibirlo y ahí queda la tarifa definitiva.
+            </p>
+          </div>
+          <div className="tariff-box" style={{ marginBottom: 12 }}>
+            <div className="l">Tarifa estimada</div>
+            <div className="v">{formatCOP(TIERS.find((t) => t.value === form.categoriaPeso)?.costo)} COP</div>
+          </div>
+
           <div className="cod-box" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: 600 }}>
               ⚠️ ¿Cobro contra entrega del producto?
@@ -121,7 +138,10 @@ export default function ResidentView() {
               </div>
 
               {pkg.fotoUrl && (
-                <img src={pkg.fotoUrl} alt="Evidencia de recepción" style={{ width: '100%', height: 128, objectFit: 'cover', borderRadius: 12, marginTop: 10 }} />
+                <details className="photo-toggle">
+                  <summary>📷 Ver foto de evidencia</summary>
+                  <img src={pkg.fotoUrl} alt="Evidencia de recepción" />
+                </details>
               )}
 
               {pkg.esContraEntregaProveedor && (
@@ -133,7 +153,7 @@ export default function ResidentView() {
 
               <div className="grid-2">
                 <div className="tariff-box">
-                  <div className="l">Tarifa Servicio</div>
+                  <div className="l">{pkg.estado === 'PREALERTADO' ? 'Tarifa Estimada' : 'Tarifa Servicio'}</div>
                   <div className="v">{formatCOP(pkg.costoServicio)} COP</div>
                 </div>
                 <div className="pin-box">

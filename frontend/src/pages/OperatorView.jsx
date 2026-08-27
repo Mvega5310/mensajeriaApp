@@ -1,14 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
+import { TIERS } from '../utils/tiers.js';
 import StatusBadge from '../components/StatusBadge.jsx';
-
-const TIERS = [
-  { value: 'MANO', label: '1. Artículo de Mano (Hasta 1 kg)', costo: 3000 },
-  { value: 'ESTANDAR', label: '2. Paquete Estándar (1 a 5 kg)', costo: 4500 },
-  { value: 'VOLUMEN', label: '3. Paquete Voluminoso (5 a 15 kg)', costo: 7000 },
-  { value: 'PESADO', label: '4. Carga Especial (> 15 kg)', costo: 12000 },
-];
 
 export default function OperatorView() {
   const [packages, setPackages] = useState([]);
@@ -148,7 +142,8 @@ export default function OperatorView() {
             <form onSubmit={handleCheckinSubmit}>
               <div className="field">
                 <label>Foto de Custodia (Evidencia de estado)</label>
-                <input type="file" accept="image/*" onChange={handlePhotoSelect} />
+                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} />
+                <p className="field-hint">En el celular abre la cámara directo; en computador deja elegir un archivo.</p>
                 {photo && <img src={photo} alt="Vista previa" style={{ width: '100%', height: 140, objectFit: 'cover', borderRadius: 12, marginTop: 8 }} />}
               </div>
               <div className="field">
