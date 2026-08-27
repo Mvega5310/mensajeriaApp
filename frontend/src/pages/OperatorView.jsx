@@ -21,6 +21,8 @@ export default function OperatorView() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
+  const [logSearch, setLogSearch] = useState('');
+
   async function refresh() {
     setPackages(await api('/packages'));
   }
@@ -33,6 +35,23 @@ export default function OperatorView() {
   const programado = packages.filter((p) => p.estado === 'PROGRAMADO').length;
   const entregado = packages.filter((p) => p.estado === 'ENTREGADO').length;
   const activeDeliveries = packages.filter((p) => p.estado === 'PROGRAMADO' || p.estado === 'EN_RECEPCION');
+
+  const logEntries = [...packages]
+    .sort((a, b) => new Date(b.fechaIngreso) - new Date(a.fechaIngreso))
+    .filter((p) => {
+      const q = logSearch.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        p.residente.nombre.toLowerCase().includes(q) ||
+        p.residente.apto.toLowerCase().includes(q) ||
+        p.residente.torre.toLowerCase().includes(q) ||
+        p.proveedor.toLowerCase().includes(q)
+      );
+    });
+
+  function formatFecha(iso) {
+    return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
 
   function openCheckin(pkg) {
     setCheckinPkg(pkg);
@@ -101,6 +120,7 @@ export default function OperatorView() {
       <div className="tabs">
         <button className={`tab ${tab === 'reception' ? 'active' : ''}`} onClick={() => setTab('reception')}>📥 Recepción</button>
         <button className={`tab ${tab === 'delivery' ? 'active' : ''}`} onClick={() => setTab('delivery')}>🚪 Ronda de Reparto</button>
+        <button className={`tab ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>🗂️ Bitácora</button>
       </div>
 
       {error && <p className="error-text">{error}</p>}
@@ -144,6 +164,41 @@ export default function OperatorView() {
             </div>
           ))
         )
+      )}
+
+      {tab === 'log' && (
+        <>
+          <div className="field">
+            <input placeholder="Buscar por residente, torre, apto o proveedor…"
+              value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
+          </div>
+
+          {logEntries.length === 0 ? (
+            <div className="empty">No hay paquetes que coincidan con la búsqueda.</div>
+          ) : (
+            logEntries.map((pkg) => (
+              <div className="card" key={pkg.id}>
+                <div className="card-head">
+                  <div>
+                    <div className="card-title">{pkg.residente.torre} - Apto {pkg.residente.apto} · {pkg.residente.nombre}</div>
+                    <div className="card-sub">{pkg.proveedor} · Guía: {pkg.guia}</div>
+                    <div className="card-sub">Recibido: {formatFecha(pkg.fechaIngreso)}{pkg.fechaEntrega && ` · Entregado: ${formatFecha(pkg.fechaEntrega)}`}</div>
+                  </div>
+                  <StatusBadge estado={pkg.estado} />
+                </div>
+
+                {pkg.fotoUrl ? (
+                  <details className="photo-toggle">
+                    <summary>📷 Ver foto de evidencia</summary>
+                    <img src={pkg.fotoUrl} alt="Evidencia de recepción" />
+                  </details>
+                ) : (
+                  <p className="field-hint" style={{ marginTop: 8 }}>Sin foto de evidencia todavía.</p>
+                )}
+              </div>
+            ))
+          )}
+        </>
       )}
 
       {checkinPkg && (
