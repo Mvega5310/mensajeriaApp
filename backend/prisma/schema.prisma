@@ -5,8 +5,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Verificado localmente con provider="sqlite" (cero setup); ahora que
-// vamos a Railway, apunta al Postgres real que provisiona Railway.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")

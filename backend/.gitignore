@@ -3,8 +3,8 @@ node_modules/
 dist/
 *.log
 
-# Artefactos de probar local con SQLite (ver README) — el esquema
-# comiteado siempre apunta a postgresql; estos nunca deben subirse.
+# Artefactos de probar local con SQLite (ver README).
 prisma/*.db
 prisma/*.db-journal
-prisma/migrations/
+# prisma/migrations/ SÍ se comitea: es la migración real de Postgres,
+# generada contra la base de Railway (ver DEPLOY.md).
