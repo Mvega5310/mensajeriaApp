@@ -66,23 +66,27 @@ para residentes de Conjunto Ipanema.
 - Recuperación de contraseña por correo (enlace de un solo uso, vence en 1h).
 - Pre-alerta de paquete: categoría de peso estimada (con tarifa de
   referencia), valor declarado (tope de responsabilidad por custodia),
-  franja horaria preferida y método de pago del servicio.
-- Seguimiento del paquete con su PIN de entrega, foto de evidencia
-  colapsable, y reprogramación de franja una vez el paquete llega.
-- Buzón de comentarios/inquietudes hacia el operador.
+  franja horaria preferida, método de pago del servicio, y una nota libre
+  para el operador (ej. "pago con billete de $100.000, llevar vueltos").
+- Seguimiento del paquete con su PIN de entrega, galería de hasta 3 fotos
+  de evidencia colapsable, y reprogramación de franja una vez el paquete llega.
+- Buzón de comentarios/inquietudes generales hacia el operador.
 - Notificación automática por correo al crear una pre-alerta.
+- Modo oscuro/claro (botón en pantalla, recuerda la preferencia).
 
 **Operador**
-- Recepción: fotografía (comprimida en el navegador antes de subir) y
-  categoría real del paquete — la tarifa final se recalcula server-side.
+- Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
+  de subir) y categoría real — la tarifa final se recalcula server-side.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
+- Nota del residente visible en Recepción, Reparto y al validar el PIN.
 - Validación de PIN en puerta para cerrar la entrega.
 - Bitácora: historial completo con fotos de evidencia, buscable por
-  residente/torre/apto.
+  residente/torre/apto, exportable a CSV (sin PIN ni fotos) para llevar
+  cuentas o compartir con un contador.
 - Buzón: lee los comentarios de todos los residentes, con acceso directo a
   WhatsApp de cada uno.
 - Generador de QR (código apunta a `/registro`) para distribuir e invitar
-  residentes a crear su cuenta.
+  residentes a crear su cuenta, descargable como PNG.
 - Notificación automática por correo cuando entra una pre-alerta nueva.
 
 **Backend / seguridad** (ver auditoría original para el detalle completo)
