@@ -9,7 +9,7 @@ import StatusBadge from '../components/StatusBadge.jsx';
 const emptyForm = {
   proveedor: '', guia: '', categoriaPeso: 'ESTANDAR',
   esContraEntregaProveedor: false, valorProductoProveedor: '', valorDeclarado: '',
-  franjaHoraria: TIME_SLOTS[0], metodoPagoServicio: PAYMENT_METHODS[0].value,
+  franjaHoraria: TIME_SLOTS[0], metodoPagoServicio: PAYMENT_METHODS[0].value, notas: '',
 };
 
 export default function ResidentView() {
@@ -74,6 +74,7 @@ export default function ResidentView() {
           valorDeclarado: Number(form.valorDeclarado) || 0,
           franjaHoraria: form.franjaHoraria,
           metodoPagoServicio: form.metodoPagoServicio,
+          notas: form.notas,
         },
       });
       setForm(emptyForm);
@@ -188,6 +189,16 @@ export default function ResidentView() {
             )}
           </div>
 
+          <div className="field">
+            <label htmlFor="notas">Comentario para el operador (opcional)</label>
+            <textarea id="notas" rows={3} maxLength={500} value={form.notas}
+              onChange={(e) => setForm({ ...form, notas: e.target.value })}
+              placeholder="Ej. Pago en efectivo con billete de $100.000, por favor llevar vueltos." />
+            <p className="field-hint">
+              Para algo puntual de este paquete. Si es un tema general, usa la pestaña Comentarios.
+            </p>
+          </div>
+
           <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>Guardar Pre-alerta</button>
         </form>
       )}
@@ -230,6 +241,10 @@ export default function ResidentView() {
                   <span>Valor declarado:</span>
                   <strong>{formatCOP(pkg.valorDeclarado)}</strong>
                 </div>
+              )}
+
+              {pkg.notas && (
+                <p className="field-hint" style={{ marginTop: 8 }}>📝 Tu nota: {pkg.notas}</p>
               )}
 
               <div className="grid-2">

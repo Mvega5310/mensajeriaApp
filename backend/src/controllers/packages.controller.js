@@ -18,9 +18,12 @@ import { sendNewPackageOperatorEmail, sendPrealertConfirmationEmail } from '../s
 export async function createPrealert(req, res) {
   const {
     proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
-    valorDeclarado, franjaHoraria, metodoPagoServicio,
+    valorDeclarado, franjaHoraria, metodoPagoServicio, notas,
   } = req.body;
   if (!proveedor) return res.status(400).json({ error: 'El proveedor es requerido' });
+  if (notas && notas.length > 500) {
+    return res.status(400).json({ error: 'La nota no puede pasar de 500 caracteres' });
+  }
 
   let costoServicio;
   try {
@@ -41,6 +44,7 @@ export async function createPrealert(req, res) {
       valorDeclarado: Number(valorDeclarado) || 0,
       franjaHoraria: franjaHoraria || null,
       metodoPagoServicio: metodoPagoServicio || null,
+      notas: notas || null,
       pin: generatePin(),
     },
   });

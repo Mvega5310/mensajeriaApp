@@ -44,6 +44,7 @@ export async function sendNewPackageOperatorEmail(operatorEmail, pkg, residente)
       ${pkg.esContraEntregaProveedor
         ? `<p>⚠️ Cobro contra entrega: $${pkg.valorProductoProveedor.toLocaleString('es-CO')}</p>`
         : ''}
+      ${pkg.notas ? `<p>📝 Nota del residente: <strong>${pkg.notas}</strong></p>` : ''}
     `,
   });
 }

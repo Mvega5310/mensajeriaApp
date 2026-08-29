@@ -49,6 +49,29 @@ export default function OperatorView() {
     QRCode.toDataURL(inviteUrl, { width: 320, margin: 2 }).then(setQrDataUrl);
   }
 
+  // Un <a href={dataUrl} download> simple no dispara descarga real en
+  // Safari/iOS (ignora `download` para URIs data:) — ahí solo abre o
+  // navega a la imagen. Pasar por un Blob + URL de objeto es lo que sí
+  // funciona en la mayoría de navegadores; igual queda el enlace "abrir
+  // en pestaña nueva" como respaldo para long-press → guardar imagen.
+  async function handleDownloadQr() {
+    if (!qrDataUrl) return;
+    try {
+      const res = await fetch(qrDataUrl);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = 'puertaya-ipanema-qr.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(qrDataUrl, '_blank');
+    }
+  }
+
   const enRecepcion = packages.filter((p) => p.estado === 'EN_RECEPCION').length;
   const programado = packages.filter((p) => p.estado === 'PROGRAMADO').length;
   const entregado = packages.filter((p) => p.estado === 'ENTREGADO').length;
@@ -169,6 +192,9 @@ export default function OperatorView() {
             </div>
             <StatusBadge estado={pkg.estado} />
           </div>
+          {pkg.notas && (
+            <div className="cod-box"><span>📝 {pkg.notas}</span></div>
+          )}
           <div className="grid-2">
             {pkg.estado === 'PREALERTADO' ? (
               <button className="btn btn-primary" onClick={() => openCheckin(pkg)}>📷 Recibir y Fotografiar</button>
@@ -195,6 +221,9 @@ export default function OperatorView() {
                 </div>
                 <span className="card-sub">{pkg.franjaHoraria || 'Inmediata'}</span>
               </div>
+              {pkg.notas && (
+                <div className="cod-box" style={{ marginTop: 10 }}><span>📝 {pkg.notas}</span></div>
+              )}
               <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={() => openPinModal(pkg)}>🔑 Validar PIN en Puerta</button>
             </div>
           ))
@@ -278,9 +307,17 @@ export default function OperatorView() {
             )}
             <p className="field-hint" style={{ textAlign: 'center', margin: '10px 0 14px' }}>{inviteUrl}</p>
             {qrDataUrl && (
-              <a className="btn btn-primary" href={qrDataUrl} download="puertaya-ipanema-qr.png">
-                ⬇️ Descargar QR
-              </a>
+              <>
+                <button className="btn btn-primary" type="button" onClick={handleDownloadQr}>
+                  ⬇️ Descargar QR
+                </button>
+                <a className="btn btn-secondary" style={{ marginTop: 8 }} href={qrDataUrl} target="_blank" rel="noreferrer">
+                  Abrir imagen en pestaña nueva
+                </a>
+                <p className="field-hint" style={{ textAlign: 'center', marginTop: 8 }}>
+                  Si el botón no descarga, abre la imagen y mantén presionado para guardarla.
+                </p>
+              </>
             )}
           </div>
         </div>
@@ -351,6 +388,9 @@ export default function OperatorView() {
                 <span>Recaudo transportista:</span>
                 <strong>{formatCOP(pinPkg.valorProductoProveedor)}</strong>
               </div>
+            )}
+            {pinPkg.notas && (
+              <div className="cod-box" style={{ marginBottom: 14 }}><span>📝 {pinPkg.notas}</span></div>
             )}
 
             <button className="btn btn-primary" onClick={handleConfirmDelivery}>🛡 Confirmar y Finalizar Entrega</button>

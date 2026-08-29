@@ -81,6 +81,10 @@ model Package {
   estado              String @default("PREALERTADO")
   franjaHoraria        String?
   metodoPagoServicio   String?
+  // Nota puntual de este paquete (ej. "pago con billete de $100.000,
+  // llevar vueltos") — distinto del Comentario general, que no está
+  // ligado a un paquete específico.
+  notas                String?
   // Texto plano intencional (ver comentario en pin.service.js): la
   // protección real es que solo /packages/mine (dueño) y la creación
   // devuelven este campo; /packages (operador) lo excluye siempre.
