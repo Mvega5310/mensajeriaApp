@@ -54,10 +54,11 @@ export default function OperatorView() {
   }
 
   // Un <a href={dataUrl} download> simple no dispara descarga real en
-  // Safari/iOS (ignora `download` para URIs data:) — ahí solo abre o
-  // navega a la imagen. Pasar por un Blob + URL de objeto es lo que sí
-  // funciona en la mayoría de navegadores; igual queda el enlace "abrir
-  // en pestaña nueva" como respaldo para long-press → guardar imagen.
+  // Safari/iOS (ignora `download` para URIs data:) — pasar por un Blob +
+  // URL de objeto es lo que sí funciona de forma consistente. (Nota: NO
+  // uses window.open(dataUrl) como respaldo — los navegadores modernos
+  // bloquean navegar a un data: URI en una pestaña nueva por seguridad,
+  // así que ese "plan B" nunca funciona.)
   async function handleDownloadQr() {
     if (!qrDataUrl) return;
     try {
@@ -72,7 +73,7 @@ export default function OperatorView() {
       document.body.removeChild(link);
       URL.revokeObjectURL(blobUrl);
     } catch {
-      window.open(qrDataUrl, '_blank');
+      setError('No se pudo descargar el QR. Intenta de nuevo.');
     }
   }
 
@@ -327,17 +328,9 @@ export default function OperatorView() {
             )}
             <p className="field-hint" style={{ textAlign: 'center', margin: '10px 0 14px' }}>{inviteUrl}</p>
             {qrDataUrl && (
-              <>
-                <button className="btn btn-primary" type="button" onClick={handleDownloadQr}>
-                  ⬇️ Descargar QR
-                </button>
-                <a className="btn btn-secondary" style={{ marginTop: 8 }} href={qrDataUrl} target="_blank" rel="noreferrer">
-                  Abrir imagen en pestaña nueva
-                </a>
-                <p className="field-hint" style={{ textAlign: 'center', marginTop: 8 }}>
-                  Si el botón no descarga, abre la imagen y mantén presionado para guardarla.
-                </p>
-              </>
+              <button className="btn btn-primary" type="button" onClick={handleDownloadQr}>
+                ⬇️ Descargar QR
+              </button>
             )}
           </div>
         </div>

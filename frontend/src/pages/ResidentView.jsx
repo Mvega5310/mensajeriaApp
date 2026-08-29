@@ -233,7 +233,7 @@ export default function ResidentView() {
               )}
 
               {pkg.valorDeclarado > 0 && (
-                <div className="cod-box" style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#334155' }}>
+                <div className="cod-box-muted">
                   <span>Valor declarado:</span>
                   <strong>{formatCOP(pkg.valorDeclarado)}</strong>
                 </div>
@@ -261,7 +261,7 @@ export default function ResidentView() {
                 </button>
               )}
               {pkg.franjaHoraria && (
-                <div className="cod-box" style={{ marginTop: 12, background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#334155' }}>
+                <div className="cod-box-muted" style={{ marginTop: 12 }}>
                   <span>🕒 {pkg.franjaHoraria}</span>
                   <span style={{ fontWeight: 400 }}>{pkg.estado === 'PROGRAMADO' ? 'Programado' : 'Preferencia'}</span>
                 </div>
