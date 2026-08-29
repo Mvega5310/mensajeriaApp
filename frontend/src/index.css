@@ -122,6 +122,17 @@ button, input, select { font: inherit; }
 .photo-picker-empty{ font-size:13px; font-weight:600; color: var(--ink-soft); padding:16px; }
 .photo-picker img{ width:100%; height:160px; object-fit:cover; display:block; }
 
+.photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.photo-slot{ position:relative; border-radius:12px; overflow:hidden; aspect-ratio:1; }
+.photo-slot img{ width:100%; height:100%; object-fit:cover; display:block; }
+.photo-slot-empty{ min-height:0; height:100%; border-radius:12px; }
+.photo-slot-empty .photo-picker-empty{ font-size:11px; padding:6px; }
+.photo-remove{
+  position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:50%;
+  background:rgba(15,23,42,.65); color:#fff; border:none; font-size:12px; line-height:1;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+}
+
 .photo-toggle{ margin-top:10px; }
 .photo-toggle summary{
   cursor:pointer; list-style:none; user-select:none;

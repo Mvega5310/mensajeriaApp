@@ -4,7 +4,11 @@ import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
+import { parseFotos } from '../utils/fotos.js';
 import StatusBadge from '../components/StatusBadge.jsx';
+import PhotoGallery from '../components/PhotoGallery.jsx';
+
+const MAX_FOTOS = 3;
 
 export default function OperatorView() {
   const [packages, setPackages] = useState([]);
@@ -13,7 +17,7 @@ export default function OperatorView() {
 
   const [checkinPkg, setCheckinPkg] = useState(null);
   const [tier, setTier] = useState('ESTANDAR');
-  const [photo, setPhoto] = useState(null);
+  const [photos, setPhotos] = useState([]);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [checkinError, setCheckinError] = useState('');
   const [checkinSaving, setCheckinSaving] = useState(false);
@@ -108,22 +112,28 @@ export default function OperatorView() {
   function openCheckin(pkg) {
     setCheckinPkg(pkg);
     setTier(pkg.categoriaPeso || 'ESTANDAR');
-    setPhoto(pkg.fotoUrl || null);
+    setPhotos(parseFotos(pkg.fotoUrl));
     setCheckinError('');
   }
 
   async function handlePhotoSelect(e) {
     const file = e.target.files[0];
-    if (!file) return;
+    e.target.value = ''; // permite volver a elegir el mismo archivo si se quita y se repite
+    if (!file || photos.length >= MAX_FOTOS) return;
     setPhotoBusy(true);
     setCheckinError('');
     try {
-      setPhoto(await compressImage(file));
+      const compressed = await compressImage(file);
+      setPhotos((prev) => [...prev, compressed]);
     } catch {
       setCheckinError('No se pudo procesar la foto. Intenta con otra.');
     } finally {
       setPhotoBusy(false);
     }
+  }
+
+  function removePhoto(index) {
+    setPhotos((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleCheckinSubmit(e) {
@@ -133,7 +143,7 @@ export default function OperatorView() {
     try {
       await api(`/packages/${checkinPkg.id}/checkin`, {
         method: 'PATCH',
-        body: { categoriaPeso: tier, fotoUrl: photo },
+        body: { categoriaPeso: tier, fotos: photos },
       });
       setCheckinPkg(null);
       await refresh();
@@ -252,10 +262,7 @@ export default function OperatorView() {
                 </div>
 
                 {pkg.fotoUrl ? (
-                  <details className="photo-toggle">
-                    <summary>📷 Ver foto de evidencia</summary>
-                    <img src={pkg.fotoUrl} alt="Evidencia de recepción" />
-                  </details>
+                  <PhotoGallery fotoUrl={pkg.fotoUrl} />
                 ) : (
                   <p className="field-hint" style={{ marginTop: 8 }}>Sin foto de evidencia todavía.</p>
                 )}
@@ -332,16 +339,22 @@ export default function OperatorView() {
             </div>
             <form onSubmit={handleCheckinSubmit}>
               <div className="field">
-                <label>Foto de Custodia (Evidencia de estado)</label>
-                <label htmlFor="pkg-photo-input" className="photo-picker">
-                  {photo ? (
-                    <img src={photo} alt="Vista previa" />
-                  ) : (
-                    <span className="photo-picker-empty">📷 Tomar foto o subir imagen</span>
+                <label>Fotos de Custodia (hasta {MAX_FOTOS}, ej. distintos lados del paquete)</label>
+                <div className="photo-grid">
+                  {photos.map((src, i) => (
+                    <div className="photo-slot" key={i}>
+                      <img src={src} alt={`Foto ${i + 1}`} />
+                      <button type="button" className="photo-remove" onClick={() => removePhoto(i)} aria-label="Quitar foto">✕</button>
+                    </div>
+                  ))}
+                  {photos.length < MAX_FOTOS && (
+                    <label htmlFor="pkg-photo-input" className="photo-picker photo-slot photo-slot-empty">
+                      <span className="photo-picker-empty">📷 {photos.length === 0 ? 'Tomar foto' : 'Agregar'}</span>
+                    </label>
                   )}
-                </label>
+                </div>
                 <input id="pkg-photo-input" type="file" accept="image/*" capture="environment"
-                  onChange={handlePhotoSelect} className="sr-only" disabled={photoBusy} />
+                  onChange={handlePhotoSelect} className="sr-only" disabled={photoBusy || photos.length >= MAX_FOTOS} />
                 <p className="field-hint">
                   {photoBusy ? 'Procesando foto…' : 'En el celular abre la cámara directo; en computador deja elegir un archivo.'}
                 </p>

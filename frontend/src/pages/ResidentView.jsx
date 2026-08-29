@@ -5,6 +5,7 @@ import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import { TIME_SLOTS, PAYMENT_METHODS } from '../utils/schedule.js';
 import StatusBadge from '../components/StatusBadge.jsx';
+import PhotoGallery from '../components/PhotoGallery.jsx';
 
 const emptyForm = {
   proveedor: '', guia: '', categoriaPeso: 'ESTANDAR',
@@ -222,12 +223,7 @@ export default function ResidentView() {
                 <StatusBadge estado={pkg.estado} />
               </div>
 
-              {pkg.fotoUrl && (
-                <details className="photo-toggle">
-                  <summary>📷 Ver foto de evidencia</summary>
-                  <img src={pkg.fotoUrl} alt="Evidencia de recepción" />
-                </details>
-              )}
+              <PhotoGallery fotoUrl={pkg.fotoUrl} />
 
               {pkg.esContraEntregaProveedor && (
                 <div className="cod-box">

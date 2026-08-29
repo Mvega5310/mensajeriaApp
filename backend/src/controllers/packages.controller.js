@@ -93,14 +93,21 @@ export async function schedule(req, res) {
   res.json(updated);
 }
 
+// Hasta 3 fotos, guardadas como JSON en la misma columna fotoUrl — evita
+// una migración de esquema para algo que sigue siendo, en esencia, "la
+// evidencia visual de este paquete".
 export async function checkin(req, res) {
-  const { categoriaPeso, fotoUrl } = req.body;
+  const { categoriaPeso, fotos } = req.body;
+  if (fotos && (!Array.isArray(fotos) || fotos.length > 3)) {
+    return res.status(400).json({ error: 'Máximo 3 fotos' });
+  }
+
   const pkg = await prisma.package.update({
     where: { id: req.params.id },
     data: {
       categoriaPeso,
       costoServicio: costoPara(categoriaPeso),
-      fotoUrl,
+      fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
       estado: 'EN_RECEPCION',
     },
   });
