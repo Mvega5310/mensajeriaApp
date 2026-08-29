@@ -1,13 +1,8 @@
-// Franjas de 2 horas — más específicas que las 2 originales, para que el
-// operador pueda organizar rondas de reparto por zona/hora con un solo
-// operador cubriendo ~400 apartamentos.
+// Dos sesiones fijas al día — una sola persona hace toda la operación,
+// así que reparte en bloques concentrados en vez de todo el día corrido.
 export const TIME_SLOTS = [
-  '8:00 a.m. - 10:00 a.m.',
-  '10:00 a.m. - 12:00 m.',
-  '12:00 m. - 2:00 p.m.',
-  '2:00 p.m. - 4:00 p.m.',
-  '4:00 p.m. - 6:00 p.m.',
-  '6:00 p.m. - 8:00 p.m.',
+  '9:00 a.m. - 12:00 m.',
+  '6:00 p.m. - 9:00 p.m.',
 ];
 
 export const PAYMENT_METHODS = [

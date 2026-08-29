@@ -26,7 +26,7 @@ function Home() {
     <>
       <header className="topbar">
         <div>
-          <strong>puertaya</strong>
+          <strong>Puertaya Ipanema</strong>
           {me && <span className="topbar-user"> — {me.nombre} ({role === 'OPERATOR' ? 'Operador' : 'Residente'})</span>}
         </div>
         <button className="btn-link" onClick={() => { logout(); window.location.href = '/login'; }}>Salir</button>

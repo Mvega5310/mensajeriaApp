@@ -1,6 +1,6 @@
 import { Resend } from 'resend';
 
-const FROM = process.env.EMAIL_FROM || 'puertaya <onboarding@resend.dev>';
+const FROM = process.env.EMAIL_FROM || 'Puertaya Ipanema <onboarding@resend.dev>';
 
 // Centraliza el fallback de desarrollo y el manejo de errores: ningún
 // llamador necesita su propio try/catch ni chequear si hay API key.
@@ -23,9 +23,9 @@ async function sendEmail({ to, subject, html }) {
 export async function sendPasswordResetEmail(to, resetUrl) {
   await sendEmail({
     to,
-    subject: 'Restablece tu contraseña — puertaya',
+    subject: 'Restablece tu contraseña — Puertaya Ipanema',
     html: `
-      <p>Recibimos una solicitud para restablecer tu contraseña en puertaya.</p>
+      <p>Recibimos una solicitud para restablecer tu contraseña en Puertaya Ipanema.</p>
       <p><a href="${resetUrl}">Haz clic aquí para crear una nueva contraseña</a></p>
       <p>Este enlace vence en 1 hora. Si no fuiste tú, ignora este correo.</p>
     `,

@@ -5,7 +5,7 @@ export default function Terms() {
     <div className="legal-shell">
       <Link to="/registro" className="legal-back">← Volver al registro</Link>
       <h1>Términos y Condiciones y Aviso de Tratamiento de Datos Personales</h1>
-      <p className="updated">Última actualización: agosto de 2026 · puertaya</p>
+      <p className="updated">Última actualización: agosto de 2026 · Puertaya Ipanema</p>
 
       <div className="callout">
         Este documento es un borrador de referencia, no una asesoría legal completa.
@@ -15,9 +15,9 @@ export default function Terms() {
 
       <h2>1. Quién presta el servicio</h2>
       <p>
-        Puertaya es operado de forma independiente por <strong>Francisco Caro Yanse</strong>,
+        Puertaya Ipanema es operado de forma independiente por <strong>Francisco Caro Yances</strong>,
         identificado con C.C. <strong>1128060641</strong>, domiciliado en{' '}
-        <strong>Ipanema Torre 1, Ap. 302</strong>, contacto <strong>3006248072</strong>.
+        <strong>Ipanema Torre 1, Ap. 302</strong>, contacto <strong>3006248062</strong>.
       </p>
 
       <h2>2. Qué hace el servicio</h2>
@@ -26,6 +26,11 @@ export default function Terms() {
         registrados, los custodia temporalmente, y coordina su entrega en la puerta del apartamento
         en la franja horaria que el residente programe. El servicio tiene un costo por entrega según
         el tamaño/peso del paquete, visible en la aplicación antes de confirmar la recepción.
+      </p>
+      <p>
+        Este servicio opera exclusivamente para residentes del <strong>Conjunto Residencial Ipanema</strong>.
+        Toda pre-alerta, recepción y entrega registrada en esta aplicación corresponde a paquetes de ese
+        conjunto — no se reciben ni entregan paquetes de otras direcciones.
       </p>
 
       <h2>3. Datos personales que recogemos y para qué (Ley 1581 de 2012)</h2>
@@ -41,7 +46,7 @@ export default function Terms() {
       <p>
         <strong>Tus derechos:</strong> puedes solicitar en cualquier momento acceder a tus datos,
         corregirlos, o pedir que se eliminen (derechos de acceso, rectificación, cancelación y
-        oposición), escribiendo al <strong>3006248072 (WhatsApp)</strong>. Si eliminas tu
+        oposición), escribiendo al <strong>3006248062 (WhatsApp)</strong>. Si eliminas tu
         cuenta, tus datos se conservan solo el tiempo necesario para resolver disputas de paquetes
         en curso y luego se eliminan.
       </p>
@@ -72,7 +77,7 @@ export default function Terms() {
         directamente al operador (o a quien la transportadora indique) cuando esta se presenta —
         el operador nunca adelanta dinero propio. Si no transfieres a tiempo mientras la
         transportadora espera, el paquete queda pendiente para una nueva ronda de reparto, con el
-        riesgo de que sea devuelto al remitente según las políticas de esa transportadora, ajenas a puertaya.
+        riesgo de que sea devuelto al remitente según las políticas de esa transportadora, ajenas a Puertaya Ipanema.
       </p>
       <p>
         La tarifa del servicio de entrega es independiente de ese cobro contra entrega, y se paga
@@ -102,7 +107,7 @@ export default function Terms() {
 
       <h2>9. Contacto</h2>
       <p>
-        Preguntas, quejas o solicitudes sobre tus datos personales: <strong>3006248072 (WhatsApp)</strong>.
+        Preguntas, quejas o solicitudes sobre tus datos personales: <strong>3006248062 (WhatsApp)</strong>.
       </p>
     </div>
   );

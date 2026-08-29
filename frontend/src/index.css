@@ -94,11 +94,12 @@ button, input, select { font: inherit; }
 
 .field{ margin-bottom:12px; }
 .field label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; }
-.field input, .field select{
+.field input, .field select, .field textarea{
   width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:10px;
-  background:#f8fafc;
+  background:#f8fafc; font-family:inherit;
 }
-.field input:focus, .field select:focus{ outline:2px solid var(--brand); outline-offset:1px; }
+.field textarea{ resize:vertical; }
+.field input:focus, .field select:focus, .field textarea:focus{ outline:2px solid var(--brand); outline-offset:1px; }
 .field-hint{ font-size:11px; color:var(--ink-soft); margin:4px 0 0; }
 
 .password-wrap{ position:relative; }

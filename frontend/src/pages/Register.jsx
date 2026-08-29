@@ -35,7 +35,9 @@ export default function Register() {
     <div className="auth-shell">
       <div className="auth-card">
         <h1>Crear cuenta de residente</h1>
-        <p className="sub">Solo residentes se registran aquí. La cuenta de operador se crea aparte.</p>
+        <p className="sub">
+          Exclusivo para residentes de <strong>Conjunto Ipanema</strong>. La cuenta de operador se crea aparte.
+        </p>
 
         {done ? (
           <p>Cuenta creada. Redirigiendo a iniciar sesión…</p>

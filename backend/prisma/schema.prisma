@@ -32,6 +32,17 @@ model User {
 
   packages     Package[]
   resetTokens  PasswordResetToken[]
+  comentarios  Comentario[]
+}
+
+// Buzón de comentarios/inquietudes del residente hacia el operador —
+// no está ligado a un paquete específico.
+model Comentario {
+  id          String   @id @default(cuid())
+  residente   User     @relation(fields: [residenteId], references: [id])
+  residenteId String
+  mensaje     String
+  createdAt   DateTime @default(now())
 }
 
 // El token crudo (alta entropía, de un solo uso) solo existe en el correo

@@ -21,6 +21,10 @@ export default function ResidentView() {
   const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].value);
   const [error, setError] = useState('');
 
+  const [comentarios, setComentarios] = useState([]);
+  const [mensaje, setMensaje] = useState('');
+  const [enviandoComentario, setEnviandoComentario] = useState(false);
+
   function openSchedule(pkg) {
     setScheduling(pkg);
     setSlot(pkg.franjaHoraria || TIME_SLOTS[0]);
@@ -31,9 +35,29 @@ export default function ResidentView() {
     setPackages(await api('/packages/mine'));
   }
 
+  async function refreshComentarios() {
+    setComentarios(await api('/comments/mine'));
+  }
+
   useEffect(() => {
     refresh().catch((err) => setError(err.message));
+    refreshComentarios().catch((err) => setError(err.message));
   }, []);
+
+  async function handleEnviarComentario(e) {
+    e.preventDefault();
+    setError('');
+    setEnviandoComentario(true);
+    try {
+      await api('/comments', { method: 'POST', body: { mensaje } });
+      setMensaje('');
+      await refreshComentarios();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEnviandoComentario(false);
+    }
+  }
 
   async function handleCreatePrealert(e) {
     e.preventDefault();
@@ -88,6 +112,9 @@ export default function ResidentView() {
         </button>
         <button className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>
           + Notificar Paquete
+        </button>
+        <button className={`tab ${tab === 'comentarios' ? 'active' : ''}`} onClick={() => setTab('comentarios')}>
+          💬 Comentarios
         </button>
       </div>
 
@@ -231,6 +258,35 @@ export default function ResidentView() {
             </div>
           ))
         )
+      )}
+
+      {tab === 'comentarios' && (
+        <>
+          <form className="card" onSubmit={handleEnviarComentario}>
+            <div className="field">
+              <label htmlFor="mensaje">Cuéntanos tu comentario o inquietud</label>
+              <textarea id="mensaje" rows={4} required maxLength={1000} value={mensaje}
+                onChange={(e) => setMensaje(e.target.value)}
+                placeholder="Ej. Preferiría una franja más temprano, o una pregunta sobre mi último paquete..." />
+            </div>
+            <button className="btn btn-primary" type="submit" disabled={enviandoComentario}>
+              {enviandoComentario ? 'Enviando…' : 'Enviar comentario'}
+            </button>
+          </form>
+
+          {comentarios.length === 0 ? (
+            <div className="empty">Todavía no has enviado comentarios.</div>
+          ) : (
+            comentarios.map((c) => (
+              <div className="card" key={c.id}>
+                <p style={{ fontSize: 13.5, margin: 0 }}>{c.mensaje}</p>
+                <p className="card-sub" style={{ marginTop: 8 }}>
+                  {new Date(c.createdAt).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            ))
+          )}
+        </>
       )}
 
       {scheduling && (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
@@ -23,13 +24,30 @@ export default function OperatorView() {
 
   const [logSearch, setLogSearch] = useState('');
 
+  const [comentarios, setComentarios] = useState([]);
+  const [comentariosSearch, setComentariosSearch] = useState('');
+
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const inviteUrl = `${window.location.origin}/registro`;
+
   async function refresh() {
     setPackages(await api('/packages'));
   }
 
+  async function refreshComentarios() {
+    setComentarios(await api('/comments'));
+  }
+
   useEffect(() => {
     refresh().catch((err) => setError(err.message));
+    refreshComentarios().catch((err) => setError(err.message));
   }, []);
+
+  function openQr() {
+    setQrOpen(true);
+    QRCode.toDataURL(inviteUrl, { width: 320, margin: 2 }).then(setQrDataUrl);
+  }
 
   const enRecepcion = packages.filter((p) => p.estado === 'EN_RECEPCION').length;
   const programado = packages.filter((p) => p.estado === 'PROGRAMADO').length;
@@ -48,6 +66,17 @@ export default function OperatorView() {
         p.proveedor.toLowerCase().includes(q)
       );
     });
+
+  const comentariosFiltrados = comentarios.filter((c) => {
+    const q = comentariosSearch.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.residente.nombre.toLowerCase().includes(q) ||
+      c.residente.apto.toLowerCase().includes(q) ||
+      c.residente.torre.toLowerCase().includes(q) ||
+      c.mensaje.toLowerCase().includes(q)
+    );
+  });
 
   function formatFecha(iso) {
     return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -117,10 +146,15 @@ export default function OperatorView() {
         <div className="stat"><div className="n">{entregado}</div><div className="l">Entregados Hoy</div></div>
       </div>
 
+      <button className="btn btn-secondary" style={{ marginBottom: 14 }} onClick={openQr}>
+        🔗 Invitar residentes (QR de registro)
+      </button>
+
       <div className="tabs">
         <button className={`tab ${tab === 'reception' ? 'active' : ''}`} onClick={() => setTab('reception')}>📥 Recepción</button>
-        <button className={`tab ${tab === 'delivery' ? 'active' : ''}`} onClick={() => setTab('delivery')}>🚪 Ronda de Reparto</button>
+        <button className={`tab ${tab === 'delivery' ? 'active' : ''}`} onClick={() => setTab('delivery')}>🚪 Reparto</button>
         <button className={`tab ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>🗂️ Bitácora</button>
+        <button className={`tab ${tab === 'comentarios' ? 'active' : ''}`} onClick={() => setTab('comentarios')}>💬 Buzón</button>
       </div>
 
       {error && <p className="error-text">{error}</p>}
@@ -200,6 +234,56 @@ export default function OperatorView() {
             ))
           )}
         </>
+      )}
+
+      {tab === 'comentarios' && (
+        <>
+          <div className="field">
+            <input placeholder="Buscar por residente, torre, apto o texto…"
+              value={comentariosSearch} onChange={(e) => setComentariosSearch(e.target.value)} />
+          </div>
+
+          {comentariosFiltrados.length === 0 ? (
+            <div className="empty">No hay comentarios que coincidan con la búsqueda.</div>
+          ) : (
+            comentariosFiltrados.map((c) => (
+              <div className="card" key={c.id}>
+                <div className="card-head">
+                  <div>
+                    <div className="card-title">{c.residente.torre} - Apto {c.residente.apto} · {c.residente.nombre}</div>
+                    <div className="card-sub">{formatFecha(c.createdAt)}</div>
+                  </div>
+                  <a className="btn btn-whatsapp" style={{ width: 'auto', padding: '6px 12px' }}
+                    href={`https://wa.me/57${c.residente.telefono}`} target="_blank" rel="noreferrer">💬</a>
+                </div>
+                <p style={{ fontSize: 13.5, margin: '10px 0 0' }}>{c.mensaje}</p>
+              </div>
+            ))
+          )}
+        </>
+      )}
+
+      {qrOpen && (
+        <div className="modal-overlay" onClick={() => setQrOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>Invitar residentes</h3>
+              <button className="modal-close" onClick={() => setQrOpen(false)}>✕</button>
+            </div>
+            <p className="card-sub" style={{ marginBottom: 12 }}>
+              Comparte este código en carteleras o zonas comunes de Conjunto Ipanema para que los residentes se registren.
+            </p>
+            {qrDataUrl && (
+              <img src={qrDataUrl} alt="Código QR de registro" style={{ width: '100%', borderRadius: 12, border: '1px solid var(--line)' }} />
+            )}
+            <p className="field-hint" style={{ textAlign: 'center', margin: '10px 0 14px' }}>{inviteUrl}</p>
+            {qrDataUrl && (
+              <a className="btn btn-primary" href={qrDataUrl} download="puertaya-ipanema-qr.png">
+                ⬇️ Descargar QR
+              </a>
+            )}
+          </div>
+        </div>
       )}
 
       {checkinPkg && (
