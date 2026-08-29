@@ -114,6 +114,51 @@ export async function checkin(req, res) {
   res.json({ ...pkg, pin: undefined });
 }
 
+function csvEscape(value) {
+  const str = value === null || value === undefined ? '' : String(value);
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+const CSV_HEADERS = [
+  'ID', 'Fecha Ingreso', 'Torre', 'Apto', 'Residente', 'Teléfono', 'Proveedor', 'Guía',
+  'Categoría', 'Costo Servicio', 'Estado', 'Franja Horaria', 'Método Pago',
+  'Cobro Contra Entrega', 'Valor Contra Entrega', 'Valor Declarado', 'Notas', 'Fecha Entrega',
+];
+
+// Solo el operador — historial completo para llevar cuentas o compartir
+// con un contador. Nunca incluye el PIN ni las fotos (serían un bloque
+// enorme de base64 sin ninguna utilidad dentro de un CSV).
+export async function exportCsv(req, res) {
+  const { desde, hasta } = req.query;
+  const where = {};
+  if (desde || hasta) {
+    where.fechaIngreso = {};
+    if (desde) where.fechaIngreso.gte = new Date(desde);
+    if (hasta) where.fechaIngreso.lte = new Date(`${hasta}T23:59:59`);
+  }
+
+  const packages = await prisma.package.findMany({
+    where,
+    include: { residente: { select: { nombre: true, telefono: true, torre: true, apto: true } } },
+    orderBy: { fechaIngreso: 'desc' },
+  });
+
+  const rows = packages.map((p) => [
+    p.id, p.fechaIngreso.toISOString(), p.residente.torre, p.residente.apto, p.residente.nombre,
+    p.residente.telefono, p.proveedor, p.guia, p.categoriaPeso, p.costoServicio, p.estado,
+    p.franjaHoraria || '', p.metodoPagoServicio || '',
+    p.esContraEntregaProveedor ? 'SI' : 'NO', p.valorProductoProveedor, p.valorDeclarado,
+    p.notas || '', p.fechaEntrega ? p.fechaEntrega.toISOString() : '',
+  ]);
+
+  const csv = [CSV_HEADERS, ...rows].map((row) => row.map(csvEscape).join(',')).join('\r\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="puertaya-ipanema-paquetes.csv"');
+  const BOM = '﻿'; // sin esto Excel adivina mal la codificación y daña tildes/ñ
+  res.send(BOM + csv);
+}
+
 // El operador envía un intento; el servidor compara y responde sí/no.
 // El valor correcto del PIN nunca aparece en esta respuesta.
 export async function confirmDelivery(req, res) {

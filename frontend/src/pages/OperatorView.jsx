@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { api } from '../services/api.js';
+import { api, downloadFile } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
@@ -107,6 +107,16 @@ export default function OperatorView() {
 
   function formatFecha(iso) {
     return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
+  async function handleExportCsv() {
+    setError('');
+    try {
+      const hoy = new Date().toISOString().slice(0, 10);
+      await downloadFile('/packages/export', `puertaya-ipanema-paquetes-${hoy}.csv`);
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   function openCheckin(pkg) {
@@ -242,6 +252,9 @@ export default function OperatorView() {
 
       {tab === 'log' && (
         <>
+          <button className="btn btn-secondary" style={{ marginBottom: 12 }} onClick={handleExportCsv}>
+            ⬇️ Exportar historial (CSV)
+          </button>
           <div className="field">
             <input placeholder="Buscar por residente, torre, apto o proveedor…"
               value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />

@@ -7,6 +7,7 @@ import {
   schedule,
   checkin,
   confirmDelivery,
+  exportCsv,
 } from '../controllers/packages.controller.js';
 
 const router = Router();
@@ -18,6 +19,7 @@ router.get('/mine', requireRole('RESIDENT'), listMine);
 router.patch('/:id/schedule', requireRole('RESIDENT'), schedule);
 
 router.get('/', requireRole('OPERATOR'), listAll);
+router.get('/export', requireRole('OPERATOR'), exportCsv);
 router.patch('/:id/checkin', requireRole('OPERATOR'), checkin);
 router.post('/:id/confirm-delivery', requireRole('OPERATOR'), confirmDelivery);
 
