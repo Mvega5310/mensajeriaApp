@@ -73,6 +73,10 @@ para residentes de Conjunto Ipanema.
 - Buzón de comentarios/inquietudes generales hacia el operador.
 - Notificación automática por correo al crear una pre-alerta.
 - Modo oscuro/claro (botón en pantalla, recuerda la preferencia).
+- **Instalable como app** (PWA): en Android, Chrome ofrece "Instalar app"
+  solo; en iPhone, Compartir → "Agregar a inicio". Queda con ícono propio
+  y sin la barra del navegador — no es necesario pasar por App
+  Store/Google Play para tenerla como app en el celular.
 
 **Operador**
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
@@ -112,3 +116,10 @@ para residentes de Conjunto Ipanema.
   "tenant" que separe los datos entre conjuntos.
 - **Cédula personal en Términos**: `Terms.jsx` expone la C.C. del operador
   públicamente — considerar usar NIT si se formaliza el negocio.
+- **App Store / Google Play**: la PWA (arriba) cubre "instalable" hoy. Para
+  estar en las tiendas de verdad, el paso siguiente es envolver este mismo
+  código con Capacitor — no es una reescritura, pero suma cuenta de Apple
+  Developer (USD 99/año) y de Google Play (USD 25 única vez).
+- **Colores de marca**: el logo (`docs/logo-fuente.jpeg`) es navy/dorado,
+  pero la interfaz sigue en verde (`--brand` en `index.css`) — no se ha
+  unificado la paleta con el logo nuevo todavía.
