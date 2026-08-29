@@ -1,8 +1,12 @@
 :root{
-  --brand: #16a34a;
-  --brand-dark: #15803d;
-  --brand-bg: #f0fdf4;
-  --brand-line: #bbf7d0;
+  --brand: #1c2f52;
+  --brand-dark: #0f1b30;
+  --brand-hover: #0f1b30;
+  --brand-bg: #eef1f6;
+  --brand-line: #c7d0de;
+  --gold: #c2852c;
+  --gold-bg: #fbf1e2;
+  --gold-line: #f0dcb0;
   --ink: #1e293b;
   --ink-soft: #64748b;
   --line: #e2e8f0;
@@ -31,10 +35,14 @@
    guardada (ver ThemeToggle) — el atributo data-theme la representa. */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --brand: #16a34a;
-    --brand-dark: #4ade80;
-    --brand-bg: #0f2b20;
-    --brand-line: #1f4a38;
+    --brand: #1c2f52;
+    --brand-dark: #8fabdb;
+    --brand-hover: #2a4270;
+    --brand-bg: #16233a;
+    --brand-line: #2a3b57;
+    --gold: #d9a54a;
+    --gold-bg: #2e2412;
+    --gold-line: #4a3a1c;
     --ink: #e8ede9;
     --ink-soft: #93a39a;
     --line: #253029;
@@ -60,10 +68,14 @@
   }
 }
 :root[data-theme="dark"]{
-  --brand: #16a34a;
-  --brand-dark: #4ade80;
-  --brand-bg: #0f2b20;
-  --brand-line: #1f4a38;
+  --brand: #1c2f52;
+  --brand-dark: #8fabdb;
+  --brand-hover: #2a4270;
+  --brand-bg: #16233a;
+  --brand-line: #2a3b57;
+  --gold: #d9a54a;
+  --gold-bg: #2e2412;
+  --gold-line: #4a3a1c;
   --ink: #e8ede9;
   --ink-soft: #93a39a;
   --line: #253029;
@@ -162,9 +174,9 @@ button, input, select { font: inherit; }
 .stat .l{ font-size:10.5px; color: var(--ink-soft); }
 
 .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
-.pin-box{ background: var(--brand-bg); border:1px solid var(--brand-line); border-radius:12px; padding:10px; text-align:center; }
-.pin-box .l{ font-size:10px; font-weight:700; color: var(--brand-dark); text-transform:uppercase; }
-.pin-box .v{ font-size:20px; font-weight:800; color: var(--brand-dark); letter-spacing:.3em; }
+.pin-box{ background: var(--gold-bg); border:1px solid var(--gold-line); border-radius:12px; padding:10px; text-align:center; }
+.pin-box .l{ font-size:10px; font-weight:700; color: var(--gold); text-transform:uppercase; }
+.pin-box .v{ font-size:20px; font-weight:800; color: var(--gold); letter-spacing:.3em; }
 .tariff-box{ background:var(--surface-2); border-radius:12px; padding:10px; }
 .tariff-box .l{ font-size:10px; color:var(--ink-soft); }
 .tariff-box .v{ font-size:14px; font-weight:700; }
@@ -240,7 +252,7 @@ button, input, select { font: inherit; }
   cursor:pointer; width:100%; display:flex; align-items:center; justify-content:center; gap:6px;
 }
 .btn-primary{ background: var(--brand); color:#fff; }
-.btn-primary:hover{ background: var(--brand-dark); }
+.btn-primary:hover{ background: var(--brand-hover); }
 .btn-secondary{ background:var(--surface-2); color:var(--ink); border:1px solid var(--line); }
 .btn-whatsapp{ background:var(--whatsapp-bg); color:var(--whatsapp-fg); border:1px solid var(--whatsapp-line); text-decoration:none; }
 

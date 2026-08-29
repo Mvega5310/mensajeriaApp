@@ -12,7 +12,7 @@ export default defineConfig({
         name: 'Puertaya Ipanema',
         short_name: 'Puertaya',
         description: 'Recepción, custodia y entrega de paquetes — Conjunto Ipanema',
-        theme_color: '#17284A',
+        theme_color: '#1c2f52',
         background_color: '#F4F3F1',
         display: 'standalone',
         start_url: '/',

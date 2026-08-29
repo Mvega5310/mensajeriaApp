@@ -77,6 +77,8 @@ para residentes de Conjunto Ipanema.
   solo; en iPhone, Compartir → "Agregar a inicio". Queda con ícono propio
   y sin la barra del navegador — no es necesario pasar por App
   Store/Google Play para tenerla como app en el celular.
+- Identidad de marca navy/dorado (logo en `docs/logo-fuente.jpeg`),
+  consistente entre la interfaz, el ícono de la app y el manifest de PWA.
 
 **Operador**
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
@@ -120,6 +122,3 @@ para residentes de Conjunto Ipanema.
   estar en las tiendas de verdad, el paso siguiente es envolver este mismo
   código con Capacitor — no es una reescritura, pero suma cuenta de Apple
   Developer (USD 99/año) y de Google Play (USD 25 única vez).
-- **Colores de marca**: el logo (`docs/logo-fuente.jpeg`) es navy/dorado,
-  pero la interfaz sigue en verde (`--brand` en `index.css`) — no se ha
-  unificado la paleta con el logo nuevo todavía.
