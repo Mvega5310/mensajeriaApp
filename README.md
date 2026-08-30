@@ -66,12 +66,18 @@ para residentes de Conjunto Ipanema.
 - Recuperación de contraseña por correo (enlace de un solo uso, vence en 1h).
 - Pre-alerta de paquete: categoría de peso estimada (con tarifa de
   referencia), valor declarado (tope de responsabilidad por custodia),
-  franja horaria preferida, método de pago del servicio, y una nota libre
-  para el operador (ej. "pago con billete de $100.000, llevar vueltos").
+  franja horaria preferida, método de pago del servicio, una nota libre
+  para el operador (ej. "pago con billete de $100.000, llevar vueltos"),
+  y el PIN que algunas plataformas (ej. Mercado Libre) generan para su
+  propio mensajero — el operador lo necesita a mano en recepción.
 - Seguimiento del paquete con su PIN de entrega, galería de hasta 3 fotos
   de evidencia colapsable, y reprogramación de franja una vez el paquete llega.
+- El estado se refresca solo (cada 20s mientras la pestaña está visible,
+  y de una vez al volver a ella) — no hay que recargar a mano para ver
+  cuándo el operador confirma la entrega.
 - Buzón de comentarios/inquietudes generales hacia el operador.
-- Notificación automática por correo al crear una pre-alerta.
+- Notificación automática por correo al crear una pre-alerta, y de nuevo
+  (con agradecimiento) cuando el operador confirma la entrega.
 - Modo oscuro/claro (botón en pantalla, recuerda la preferencia).
 - **Instalable como app** (PWA): en Android, Chrome ofrece "Instalar app"
   solo; en iPhone, Compartir → "Agregar a inicio". Queda con ícono propio
@@ -86,9 +92,10 @@ para residentes de Conjunto Ipanema.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
 - Nota del residente visible en Recepción, Reparto y al validar el PIN.
 - Validación de PIN en puerta para cerrar la entrega.
-- Bitácora: historial completo con fotos de evidencia, buscable por
-  residente/torre/apto, exportable a CSV (sin PIN ni fotos) para llevar
-  cuentas o compartir con un contador.
+- Bitácora: historial completo, buscable por residente/torre/apto,
+  exportable a CSV (sin PIN ni fotos) para llevar cuentas o compartir con
+  un contador. Cada registro se toca para abrir un modal con el detalle
+  completo (fotos más grandes, nota, PIN del proveedor, fechas, cobros).
 - Buzón: lee los comentarios de todos los residentes, con acceso directo a
   WhatsApp de cada uno.
 - Generador de QR (código apunta a `/registro`) para distribuir e invitar

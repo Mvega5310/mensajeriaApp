@@ -7,11 +7,11 @@ export default function Terms() {
       <h1>Términos y Condiciones y Aviso de Tratamiento de Datos Personales</h1>
       <p className="updated">Última actualización: agosto de 2026 · Puertaya Ipanema</p>
 
-      <div className="callout">
+    { /* <div className="callout">
         Este documento es un borrador de referencia, no una asesoría legal completa.
         Antes de operar con vecinos reales y dinero de terceros, se recomienda que un
         abogado lo revise y lo ajuste a la identidad legal y las condiciones reales del operador.
-      </div>
+      </div>*/}
 
       <h2>1. Quién presta el servicio</h2>
       <p>

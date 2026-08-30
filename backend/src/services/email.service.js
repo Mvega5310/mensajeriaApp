@@ -60,3 +60,14 @@ export async function sendPrealertConfirmationEmail(residenteEmail, pkg) {
     `,
   });
 }
+
+export async function sendDeliveryThanksEmail(residenteEmail, pkg) {
+  await sendEmail({
+    to: residenteEmail,
+    subject: `✅ Entregado — ${pkg.proveedor}`,
+    html: `
+      <p>Tu paquete de <strong>${pkg.proveedor}</strong> ya fue entregado en la puerta de tu apartamento.</p>
+      <p>¡Gracias por confiar en Puertaya Ipanema!</p>
+    `,
+  });
+}

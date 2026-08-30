@@ -66,6 +66,11 @@ model Package {
   // datos del paquete
   proveedor                 String
   guia                      String  @default("Sin Guía")
+  // Código que algunas plataformas (ej. Mercado Libre) generan para que
+  // SU transportadora confirme la entrega — lo declara el residente para
+  // que el operador lo tenga a mano cuando ese mensajero llegue a recepción.
+  // No tiene relación con el pin (ese es el nuestro, para la entrega en puerta).
+  pinProveedor               String?
   categoriaPeso             String  @default("ESTANDAR")
   costoServicio             Int     @default(4500)
   fotoUrl                   String?

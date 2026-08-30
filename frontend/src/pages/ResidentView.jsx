@@ -11,7 +11,12 @@ const emptyForm = {
   proveedor: '', guia: '', categoriaPeso: 'ESTANDAR',
   esContraEntregaProveedor: false, valorProductoProveedor: '', valorDeclarado: '',
   franjaHoraria: TIME_SLOTS[0], metodoPagoServicio: PAYMENT_METHODS[0].value, notas: '',
+  pinProveedor: '',
 };
+
+// Cada cuánto se revisa si algo cambió (ej. el operador confirmó la
+// entrega) mientras el residente tiene la pestaña abierta y visible.
+const POLL_MS = 20000;
 
 export default function ResidentView() {
   const [packages, setPackages] = useState([]);
@@ -43,6 +48,23 @@ export default function ResidentView() {
   useEffect(() => {
     refresh().catch((err) => setError(err.message));
     refreshComentarios().catch((err) => setError(err.message));
+
+    // El estado (ej. "Entregado") lo cambia el operador desde su propio
+    // celular — sin esto, el residente solo lo vería al recargar la
+    // página a mano. Revisamos seguido mientras la pestaña está visible,
+    // y de una vez apenas vuelve a estar visible (se pausa en segundo
+    // plano para no gastar batería/datos sin necesidad).
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') refresh().catch(() => {});
+    }, POLL_MS);
+    function onVisible() {
+      if (document.visibilityState === 'visible') refresh().catch(() => {});
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   async function handleEnviarComentario(e) {
@@ -76,6 +98,7 @@ export default function ResidentView() {
           franjaHoraria: form.franjaHoraria,
           metodoPagoServicio: form.metodoPagoServicio,
           notas: form.notas,
+          pinProveedor: form.pinProveedor,
         },
       });
       setForm(emptyForm);
@@ -133,6 +156,17 @@ export default function ResidentView() {
             <label htmlFor="guia">No. Guía (opcional)</label>
             <input id="guia" placeholder="Ej. 98421034" value={form.guia}
               onChange={(e) => setForm({ ...form, guia: e.target.value })} />
+          </div>
+
+          <div className="field">
+            <label htmlFor="pinProveedor">PIN del proveedor (opcional)</label>
+            <input id="pinProveedor" placeholder="Ej. 4821" value={form.pinProveedor}
+              onChange={(e) => setForm({ ...form, pinProveedor: e.target.value })} />
+            <p className="field-hint">
+              Algunas plataformas (ej. Mercado Libre) generan su propio código para que su
+              mensajero confirme la entrega. Si lo tienes, el operador lo necesita a mano
+              cuando ese mensajero llegue a recepción — no es tu PIN de Puertaya.
+            </p>
           </div>
 
           <div className="field">
@@ -219,6 +253,7 @@ export default function ResidentView() {
                   <div className="card-id">{pkg.id.slice(0, 8).toUpperCase()}</div>
                   <div className="card-title">{pkg.proveedor}</div>
                   <div className="card-sub">Guía: {pkg.guia}</div>
+                  {pkg.pinProveedor && <div className="card-sub">PIN proveedor: {pkg.pinProveedor}</div>}
                 </div>
                 <StatusBadge estado={pkg.estado} />
               </div>

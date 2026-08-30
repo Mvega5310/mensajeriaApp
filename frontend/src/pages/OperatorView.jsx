@@ -6,7 +6,6 @@ import { TIERS } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
 import { parseFotos } from '../utils/fotos.js';
 import StatusBadge from '../components/StatusBadge.jsx';
-import PhotoGallery from '../components/PhotoGallery.jsx';
 
 const MAX_FOTOS = 3;
 
@@ -27,6 +26,7 @@ export default function OperatorView() {
   const [pinError, setPinError] = useState('');
 
   const [logSearch, setLogSearch] = useState('');
+  const [detailPkg, setDetailPkg] = useState(null);
 
   const [comentarios, setComentarios] = useState([]);
   const [comentariosSearch, setComentariosSearch] = useState('');
@@ -209,6 +209,7 @@ export default function OperatorView() {
             <div>
               <div className="card-title">{pkg.residente.torre} - {pkg.residente.apto} · {pkg.residente.nombre}</div>
               <div className="card-sub">{pkg.proveedor} · Guía: {pkg.guia}</div>
+              {pkg.pinProveedor && <div className="card-sub">🔑 PIN proveedor: <strong>{pkg.pinProveedor}</strong></div>}
               {pkg.franjaHoraria && <div className="card-sub">🕒 Prefiere: {pkg.franjaHoraria}</div>}
             </div>
             <StatusBadge estado={pkg.estado} />
@@ -265,7 +266,7 @@ export default function OperatorView() {
             <div className="empty">No hay paquetes que coincidan con la búsqueda.</div>
           ) : (
             logEntries.map((pkg) => (
-              <div className="card" key={pkg.id}>
+              <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
                 <div className="card-head">
                   <div>
                     <div className="card-title">{pkg.residente.torre} - Apto {pkg.residente.apto} · {pkg.residente.nombre}</div>
@@ -274,12 +275,7 @@ export default function OperatorView() {
                   </div>
                   <StatusBadge estado={pkg.estado} />
                 </div>
-
-                {pkg.fotoUrl ? (
-                  <PhotoGallery fotoUrl={pkg.fotoUrl} />
-                ) : (
-                  <p className="field-hint" style={{ marginTop: 8 }}>Sin foto de evidencia todavía.</p>
-                )}
+                <p className="field-hint" style={{ marginTop: 8 }}>Toca para ver el detalle{pkg.fotoUrl ? ' y las fotos' : ''} →</p>
               </div>
             ))
           )}
@@ -311,6 +307,98 @@ export default function OperatorView() {
             ))
           )}
         </>
+      )}
+
+      {detailPkg && (
+        <div className="modal-overlay" onClick={() => setDetailPkg(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{detailPkg.residente.torre} - Apto {detailPkg.residente.apto}</h3>
+              <button className="modal-close" onClick={() => setDetailPkg(null)}>✕</button>
+            </div>
+
+            <div className="card-head" style={{ marginBottom: 10 }}>
+              <div>
+                <div className="card-title">{detailPkg.residente.nombre}</div>
+                <div className="card-sub">{detailPkg.residente.telefono}</div>
+              </div>
+              <StatusBadge estado={detailPkg.estado} />
+            </div>
+
+            <div className="grid-2" style={{ marginTop: 0 }}>
+              <div className="tariff-box">
+                <div className="l">Proveedor</div>
+                <div className="v">{detailPkg.proveedor}</div>
+              </div>
+              <div className="tariff-box">
+                <div className="l">Guía</div>
+                <div className="v">{detailPkg.guia}</div>
+              </div>
+            </div>
+
+            {detailPkg.pinProveedor && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>🔑 PIN del proveedor:</span>
+                <strong>{detailPkg.pinProveedor}</strong>
+              </div>
+            )}
+
+            <div className="grid-2">
+              <div className="tariff-box">
+                <div className="l">Categoría</div>
+                <div className="v">{detailPkg.categoriaPeso}</div>
+              </div>
+              <div className="tariff-box">
+                <div className="l">Costo servicio</div>
+                <div className="v">{formatCOP(detailPkg.costoServicio)}</div>
+              </div>
+            </div>
+
+            <div className="cod-box-muted" style={{ marginTop: 10 }}>
+              <span>Recibido:</span>
+              <strong>{formatFecha(detailPkg.fechaIngreso)}</strong>
+            </div>
+            {detailPkg.fechaEntrega && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>Entregado:</span>
+                <strong>{formatFecha(detailPkg.fechaEntrega)}</strong>
+              </div>
+            )}
+            {detailPkg.franjaHoraria && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>Franja / pago:</span>
+                <strong>{detailPkg.franjaHoraria} · {detailPkg.metodoPagoServicio || '—'}</strong>
+              </div>
+            )}
+            {detailPkg.esContraEntregaProveedor && (
+              <div className="cod-box" style={{ marginTop: 10 }}>
+                <span>Recaudo transportista:</span>
+                <strong>{formatCOP(detailPkg.valorProductoProveedor)}</strong>
+              </div>
+            )}
+            {detailPkg.valorDeclarado > 0 && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>Valor declarado:</span>
+                <strong>{formatCOP(detailPkg.valorDeclarado)}</strong>
+              </div>
+            )}
+            {detailPkg.notas && (
+              <div className="cod-box" style={{ marginTop: 10 }}><span>📝 {detailPkg.notas}</span></div>
+            )}
+
+            {parseFotos(detailPkg.fotoUrl).length > 0 ? (
+              <div className="field" style={{ marginTop: 14 }}>
+                <label>Fotos de evidencia</label>
+                {parseFotos(detailPkg.fotoUrl).map((src, i) => (
+                  <img key={i} src={src} alt={`Evidencia ${i + 1}`}
+                    style={{ width: '100%', borderRadius: 12, marginTop: 8, border: '1px solid var(--line)' }} />
+                ))}
+              </div>
+            ) : (
+              <p className="field-hint" style={{ marginTop: 14 }}>Sin foto de evidencia todavía.</p>
+            )}
+          </div>
+        </div>
       )}
 
       {qrOpen && (

@@ -1,7 +1,9 @@
 import { prisma } from '../config/db.js';
 import { generatePin, verifyPin } from '../services/pin.service.js';
 import { costoPara } from '../services/tariff.service.js';
-import { sendNewPackageOperatorEmail, sendPrealertConfirmationEmail } from '../services/email.service.js';
+import {
+  sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
+} from '../services/email.service.js';
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
@@ -18,11 +20,14 @@ import { sendNewPackageOperatorEmail, sendPrealertConfirmationEmail } from '../s
 export async function createPrealert(req, res) {
   const {
     proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
-    valorDeclarado, franjaHoraria, metodoPagoServicio, notas,
+    valorDeclarado, franjaHoraria, metodoPagoServicio, notas, pinProveedor,
   } = req.body;
   if (!proveedor) return res.status(400).json({ error: 'El proveedor es requerido' });
   if (notas && notas.length > 500) {
     return res.status(400).json({ error: 'La nota no puede pasar de 500 caracteres' });
+  }
+  if (pinProveedor && pinProveedor.length > 30) {
+    return res.status(400).json({ error: 'El PIN del proveedor no puede pasar de 30 caracteres' });
   }
 
   let costoServicio;
@@ -45,6 +50,7 @@ export async function createPrealert(req, res) {
       franjaHoraria: franjaHoraria || null,
       metodoPagoServicio: metodoPagoServicio || null,
       notas: notas || null,
+      pinProveedor: pinProveedor || null,
       pin: generatePin(),
     },
   });
@@ -121,7 +127,7 @@ function csvEscape(value) {
 
 const CSV_HEADERS = [
   'ID', 'Fecha Ingreso', 'Torre', 'Apto', 'Residente', 'Teléfono', 'Proveedor', 'Guía',
-  'Categoría', 'Costo Servicio', 'Estado', 'Franja Horaria', 'Método Pago',
+  'PIN Proveedor', 'Categoría', 'Costo Servicio', 'Estado', 'Franja Horaria', 'Método Pago',
   'Cobro Contra Entrega', 'Valor Contra Entrega', 'Valor Declarado', 'Notas', 'Fecha Entrega',
 ];
 
@@ -145,7 +151,7 @@ export async function exportCsv(req, res) {
 
   const rows = packages.map((p) => [
     p.id, p.fechaIngreso.toISOString(), p.residente.torre, p.residente.apto, p.residente.nombre,
-    p.residente.telefono, p.proveedor, p.guia, p.categoriaPeso, p.costoServicio, p.estado,
+    p.residente.telefono, p.proveedor, p.guia, p.pinProveedor || '', p.categoriaPeso, p.costoServicio, p.estado,
     p.franjaHoraria || '', p.metodoPagoServicio || '',
     p.esContraEntregaProveedor ? 'SI' : 'NO', p.valorProductoProveedor, p.valorDeclarado,
     p.notas || '', p.fechaEntrega ? p.fechaEntrega.toISOString() : '',
@@ -173,6 +179,11 @@ export async function confirmDelivery(req, res) {
   const updated = await prisma.package.update({
     where: { id: pkg.id },
     data: { estado: 'ENTREGADO', fechaEntrega: new Date() },
+    include: { residente: { select: { email: true } } },
   });
-  res.json({ ...updated, pin: undefined });
+
+  sendDeliveryThanksEmail(updated.residente.email, updated);
+
+  const { residente, ...pkgSinResidente } = updated;
+  res.json({ ...pkgSinResidente, pin: undefined });
 }
