@@ -24,6 +24,7 @@ export default function OperatorView() {
   const [pinPkg, setPinPkg] = useState(null);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
+  const [delivered, setDelivered] = useState(false);
 
   const [logSearch, setLogSearch] = useState('');
   const [detailPkg, setDetailPkg] = useState(null);
@@ -169,13 +170,19 @@ export default function OperatorView() {
     setPinPkg(pkg);
     setPinInput('');
     setPinError('');
+    setDelivered(false);
+  }
+
+  function closePinModal() {
+    setPinPkg(null);
+    setDelivered(false);
   }
 
   async function handleConfirmDelivery() {
     setPinError('');
     try {
       await api(`/packages/${pinPkg.id}/confirm-delivery`, { method: 'POST', body: { pin: pinInput.trim() } });
-      setPinPkg(null);
+      setDelivered(true);
       await refresh();
     } catch (err) {
       setPinError(err.message);
@@ -475,32 +482,48 @@ export default function OperatorView() {
       )}
 
       {pinPkg && (
-        <div className="modal-overlay" onClick={() => setPinPkg(null)}>
+        <div className="modal-overlay" onClick={closePinModal}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h3>Validar Entrega en Puerta</h3>
-              <button className="modal-close" onClick={() => setPinPkg(null)}>✕</button>
+              <h3>{delivered ? '✅ Entrega Confirmada' : 'Validar Entrega en Puerta'}</h3>
+              <button className="modal-close" onClick={closePinModal}>✕</button>
             </div>
-            <p className="card-sub">Pide al residente el PIN de 4 dígitos que aparece en su pantalla:</p>
-            <input className="pin-input" maxLength={4} placeholder="••••" value={pinInput}
-              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))} />
-            {pinError && <p className="error-text" style={{ textAlign: 'center' }}>{pinError}</p>}
 
-            <div className="tariff-box" style={{ margin: '14px 0' }}>
-              <div className="l">Cobro por entrega</div>
-              <div className="v">{formatCOP(pinPkg.costoServicio)}</div>
-            </div>
-            {pinPkg.esContraEntregaProveedor && (
-              <div className="cod-box" style={{ marginBottom: 14 }}>
-                <span>Recaudo transportista:</span>
-                <strong>{formatCOP(pinPkg.valorProductoProveedor)}</strong>
-              </div>
-            )}
-            {pinPkg.notas && (
-              <div className="cod-box" style={{ marginBottom: 14 }}><span>📝 {pinPkg.notas}</span></div>
-            )}
+            {!delivered ? (
+              <>
+                <p className="card-sub">Pide al residente el PIN de 4 dígitos que aparece en su pantalla:</p>
+                <input className="pin-input" maxLength={4} placeholder="••••" value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))} />
+                {pinError && <p className="error-text" style={{ textAlign: 'center' }}>{pinError}</p>}
 
-            <button className="btn btn-primary" onClick={handleConfirmDelivery}>🛡 Confirmar y Finalizar Entrega</button>
+                <div className="tariff-box" style={{ margin: '14px 0' }}>
+                  <div className="l">Cobro por entrega</div>
+                  <div className="v">{formatCOP(pinPkg.costoServicio)}</div>
+                </div>
+                {pinPkg.esContraEntregaProveedor && (
+                  <div className="cod-box" style={{ marginBottom: 14 }}>
+                    <span>Recaudo transportista:</span>
+                    <strong>{formatCOP(pinPkg.valorProductoProveedor)}</strong>
+                  </div>
+                )}
+                {pinPkg.notas && (
+                  <div className="cod-box" style={{ marginBottom: 14 }}><span>📝 {pinPkg.notas}</span></div>
+                )}
+
+                <button className="btn btn-primary" onClick={handleConfirmDelivery}>🛡 Confirmar y Finalizar Entrega</button>
+              </>
+            ) : (
+              <>
+                <p className="card-sub">
+                  El paquete de {pinPkg.proveedor} para {pinPkg.residente.nombre} quedó marcado como entregado.
+                  Si quieres, envíale un agradecimiento por WhatsApp:
+                </p>
+                <a className="btn btn-whatsapp" style={{ marginTop: 14 }}
+                  href={`https://wa.me/57${pinPkg.residente.telefono}?text=${encodeURIComponent(`¡Hola ${pinPkg.residente.nombre}! Tu paquete de ${pinPkg.proveedor} ya fue entregado. ¡Gracias por confiar en Puertaya Ipanema! 🙌`)}`}
+                  target="_blank" rel="noreferrer">💬 Enviar agradecimiento por WhatsApp</a>
+                <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={closePinModal}>Cerrar</button>
+              </>
+            )}
           </div>
         </div>
       )}

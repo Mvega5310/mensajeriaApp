@@ -91,7 +91,10 @@ para residentes de Conjunto Ipanema.
   de subir) y categoría real — la tarifa final se recalcula server-side.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
 - Nota del residente visible en Recepción, Reparto y al validar el PIN.
-- Validación de PIN en puerta para cerrar la entrega.
+- Validación de PIN en puerta para cerrar la entrega. Al confirmar,
+  aparece un botón de WhatsApp con mensaje de agradecimiento distinto al
+  de recepción — no reemplaza el correo automático, es un segundo canal
+  opcional para ese mismo momento.
 - Bitácora: historial completo, buscable por residente/torre/apto,
   exportable a CSV (sin PIN ni fotos) para llevar cuentas o compartir con
   un contador. Cada registro se toca para abrir un modal con el detalle
