@@ -4,6 +4,7 @@ import { costoPara } from '../services/tariff.service.js';
 import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
 } from '../services/email.service.js';
+import { BONOS_HABILITADOS } from '../config/features.js';
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
@@ -143,7 +144,7 @@ export async function checkin(req, res) {
   // activo en esta misma categoría de peso (el más antiguo primero) — un
   // bono de otra categoría no aplica aquí (ver Bono en schema.prisma).
   let bono = null;
-  if (!esPrimeraEntrega) {
+  if (!esPrimeraEntrega && BONOS_HABILITADOS) {
     const bonos = await prisma.bono.findMany({
       where: { residenteId: actual.residenteId, categoriaPeso },
       orderBy: { createdAt: 'asc' },

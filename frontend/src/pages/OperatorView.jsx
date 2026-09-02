@@ -5,6 +5,7 @@ import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
 import { parseFotos } from '../utils/fotos.js';
+import { BONOS_HABILITADOS } from '../utils/features.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 
 const MAX_FOTOS = 3;
@@ -150,7 +151,9 @@ export default function OperatorView() {
     setPhotos(parseFotos(pkg.fotoUrl));
     setCheckinError('');
     setCheckinBonos([]);
-    api(`/bonos/residente/${pkg.residenteId}`).then(setCheckinBonos).catch(() => {});
+    if (BONOS_HABILITADOS) {
+      api(`/bonos/residente/${pkg.residenteId}`).then(setCheckinBonos).catch(() => {});
+    }
   }
 
   async function handlePhotoSelect(e) {
@@ -301,7 +304,9 @@ export default function OperatorView() {
               href={`https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}`}
               target="_blank" rel="noreferrer">💬 WhatsApp</a>
           </div>
-          <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => openBonoModal(pkg)}>🎟️ Bono</button>
+          {BONOS_HABILITADOS && (
+            <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => openBonoModal(pkg)}>🎟️ Bono</button>
+          )}
         </div>
         );
       })}

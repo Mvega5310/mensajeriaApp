@@ -1,11 +1,16 @@
 import { prisma } from '../config/db.js';
 import { TARIFAS } from '../services/tariff.service.js';
+import { BONOS_HABILITADOS } from '../config/features.js';
 
 // Operador: registra que un residente pagó por adelantado un lote de
 // entregas en una categoría de peso — monto y cantidad libres, el
 // operador decide el descuento caso a caso (no hay tarifas fijas aquí,
 // a diferencia de costoPara()).
 export async function create(req, res) {
+  if (!BONOS_HABILITADOS) {
+    return res.status(403).json({ error: 'Los bonos prepago están deshabilitados por ahora' });
+  }
+
   const { residenteId, categoriaPeso, cantidad, precioPagado } = req.body;
 
   if (!(categoriaPeso in TARIFAS)) {

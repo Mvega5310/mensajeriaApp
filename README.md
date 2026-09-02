@@ -92,19 +92,17 @@ para residentes de Conjunto Ipanema.
   promo del flyer de campaña) — Recepción, Reparto, el modal de validar
   PIN y la Bitácora lo marcan con una franja dorada "🎁 NO cobrar" para
   que quede claro a quién sí toca cobrarle el servicio.
-- Bonos prepago: desde el botón "🎟️ Bono" en Recepción, el operador
-  registra que un residente pagó por adelantado un lote de entregas en
-  una categoría de peso específica (cantidad y precio libres — sin
-  tarifas fijas en el código, el descuento lo decide el operador caso a
-  caso). El pago mismo pasa por fuera de la app (efectivo, transferencia,
-  lo que acuerden por WhatsApp) — el residente no puede comprar ni crear
-  un bono desde su panel, solo el operador tiene ese permiso a nivel de
-  API. Cada paquete de esa categoría descuenta 1 crédito y queda en $0
-  hasta que se agoten; una categoría distinta no consume el bono. La
-  cortesía de primera entrega siempre tiene prioridad y no gasta bono.
-  Una vez registrado, el saldo sí es visible para los dos: en Recepción,
-  Reparto, el checkin y la Bitácora del operador, y en el propio panel
-  del residente (solo aparece ahí si tiene crédito disponible).
+- Bonos prepago *(construido, en pausa)*: el operador podrá registrar
+  que un residente pagó por adelantado un lote de entregas en una
+  categoría de peso específica (cantidad y precio libres, el descuento
+  lo decide caso a caso; el pago pasa por fuera de la app). Cada paquete
+  de esa categoría descontaría 1 crédito y quedaría en $0 hasta
+  agotarse; la cortesía de primera entrega siempre tiene prioridad y no
+  gasta bono. Queda apagado con un interruptor
+  (`BONOS_HABILITADOS` en `backend/src/config/features.js` y
+  `frontend/src/utils/features.js`) hasta que haga falta manejar más de
+  un residente frecuente a la vez — activarlo es cambiar ese valor a
+  `true` en ambos archivos y desplegar, sin tocar el resto del código.
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
   de subir) y categoría real — la tarifa final se recalcula server-side.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
