@@ -96,11 +96,15 @@ para residentes de Conjunto Ipanema.
   registra que un residente pagó por adelantado un lote de entregas en
   una categoría de peso específica (cantidad y precio libres — sin
   tarifas fijas en el código, el descuento lo decide el operador caso a
-  caso). Cada paquete de esa categoría descuenta 1 crédito y queda en $0
+  caso). El pago mismo pasa por fuera de la app (efectivo, transferencia,
+  lo que acuerden por WhatsApp) — el residente no puede comprar ni crear
+  un bono desde su panel, solo el operador tiene ese permiso a nivel de
+  API. Cada paquete de esa categoría descuenta 1 crédito y queda en $0
   hasta que se agoten; una categoría distinta no consume el bono. La
   cortesía de primera entrega siempre tiene prioridad y no gasta bono.
-  El saldo se ve en Recepción, Reparto, el checkin, la Bitácora y en el
-  propio panel del residente.
+  Una vez registrado, el saldo sí es visible para los dos: en Recepción,
+  Reparto, el checkin y la Bitácora del operador, y en el propio panel
+  del residente (solo aparece ahí si tiene crédito disponible).
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
   de subir) y categoría real — la tarifa final se recalcula server-side.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
