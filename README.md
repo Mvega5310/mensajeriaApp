@@ -79,6 +79,9 @@ para residentes de Conjunto Ipanema.
 - Notificación automática por correo al crear una pre-alerta, y de nuevo
   (con agradecimiento) cuando el operador confirma la entrega.
 - Modo oscuro/claro (botón en pantalla, recuerda la preferencia).
+- Las pestañas (Mis Paquetes/Notificar/Comentarios en Residente; Recepción/
+  Reparto/Bitácora/Buzón en Operador) quedan fijas abajo de la pantalla,
+  como el tab bar de una app nativa — no se pierden al hacer scroll.
 - **Instalable como app** (PWA): en Android, Chrome ofrece "Instalar app"
   solo; en iPhone, Compartir → "Agregar a inicio". Queda con ícono propio
   y sin la barra del navegador — no es necesario pasar por App

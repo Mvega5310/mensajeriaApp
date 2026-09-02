@@ -116,7 +116,7 @@ body{
 }
 button, input, select { font: inherit; }
 
-.shell{ max-width: 480px; margin: 0 auto; padding: 16px 16px 96px; }
+.shell{ max-width: 480px; margin: 0 auto; padding: 16px 16px calc(100px + env(safe-area-inset-bottom)); }
 
 .topbar{
   background: var(--surface);
@@ -142,9 +142,14 @@ button, input, select { font: inherit; }
 }
 .floating-theme-toggle{ position:fixed; top:16px; right:16px; z-index:40; }
 
+/* Fija abajo (como el tab bar de una app nativa) para que siga a mano
+   sin importar cuánto se haya bajado en el scroll de la pantalla. */
 .tabs{
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom));
+  max-width: 456px; margin: 0 auto; z-index: 30;
   display:flex; background: var(--surface); border: 1px solid var(--line);
-  border-radius: 14px; padding: 4px; gap: 4px; margin-bottom: 16px;
+  border-radius: 14px; padding: 4px; gap: 4px;
+  box-shadow: 0 6px 20px rgba(15,23,42,.14);
 }
 .tab{
   flex:1; border:none; background:none; padding:10px; border-radius:10px;
