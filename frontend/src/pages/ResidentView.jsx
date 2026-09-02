@@ -31,6 +31,8 @@ export default function ResidentView() {
   const [mensaje, setMensaje] = useState('');
   const [enviandoComentario, setEnviandoComentario] = useState(false);
 
+  const [bonos, setBonos] = useState([]);
+
   function openSchedule(pkg) {
     setScheduling(pkg);
     setSlot(pkg.franjaHoraria || TIME_SLOTS[0]);
@@ -48,6 +50,7 @@ export default function ResidentView() {
   useEffect(() => {
     refresh().catch((err) => setError(err.message));
     refreshComentarios().catch((err) => setError(err.message));
+    api('/bonos/mine').then(setBonos).catch(() => {});
 
     // El estado (ej. "Entregado") lo cambia el operador desde su propio
     // celular — sin esto, el residente solo lo vería al recargar la
@@ -236,6 +239,18 @@ export default function ResidentView() {
 
           <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>Guardar Pre-alerta</button>
         </form>
+      )}
+
+      {tab === 'list' && bonos.some((b) => b.cantidadUsada < b.cantidadTotal) && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <p className="card-sub" style={{ marginBottom: 8 }}>🎟️ Tus entregas prepagas</p>
+          {bonos.filter((b) => b.cantidadUsada < b.cantidadTotal).map((b) => (
+            <div className="gold-box" key={b.id} style={{ marginTop: 6 }}>
+              <span>{TIERS.find((t) => t.value === b.categoriaPeso)?.label || b.categoriaPeso}</span>
+              <strong>Quedan {b.cantidadTotal - b.cantidadUsada} de {b.cantidadTotal}</strong>
+            </div>
+          ))}
+        </div>
       )}
 
       {tab === 'list' && (

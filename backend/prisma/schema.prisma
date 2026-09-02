@@ -33,6 +33,25 @@ model User {
   packages     Package[]
   resetTokens  PasswordResetToken[]
   comentarios  Comentario[]
+  bonos        Bono[]
+}
+
+// Lote de entregas prepago que un residente compra por adelantado con
+// descuento (ej. 5 entregas Estándar por $18.000 en vez de $22.500). El
+// operador decide cantidad y precio caso a caso — no hay tarifas fijas
+// aquí. Cada bono queda amarrado a UNA categoría de peso: solo cubre
+// paquetes de esa categoría (ver checkin() en packages.controller.js).
+model Bono {
+  id            String   @id @default(cuid())
+  residente     User     @relation(fields: [residenteId], references: [id])
+  residenteId   String
+  categoriaPeso String
+  cantidadTotal Int
+  cantidadUsada Int      @default(0)
+  precioPagado  Int
+  createdAt     DateTime @default(now())
+
+  paquetes      Package[]
 }
 
 // Buzón de comentarios/inquietudes del residente hacia el operador —
@@ -96,6 +115,12 @@ model Package {
   pin                  String
   fechaIngreso         DateTime      @default(now())
   fechaEntrega         DateTime?
+
+  // Si este paquete se cobró $0 porque se descontó de un bono prepago
+  // (ver checkin()), queda amarrado aquí para trazabilidad — distinto de
+  // la cortesía de primera entrega, que no consume ningún bono.
+  bono                 Bono?         @relation(fields: [bonoId], references: [id])
+  bonoId               String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

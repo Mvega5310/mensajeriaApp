@@ -9,6 +9,21 @@ import StatusBadge from '../components/StatusBadge.jsx';
 
 const MAX_FOTOS = 3;
 
+// Por qué un paquete no se cobra: cortesía de primera entrega (siempre
+// gana, no consume bono) o un bono prepago con crédito disponible en esa
+// categoría de peso. Se usa igual en las tarjetas, los modales y la
+// bitácora para no repetir la misma lógica cuatro veces.
+function cobroInfo(pkg) {
+  if (pkg.esPrimeraEntrega) {
+    return { gratis: true, texto: '🎁 Primera vez — NO cobrar' };
+  }
+  if (pkg.bono) {
+    const quedan = pkg.bono.cantidadTotal - pkg.bono.cantidadUsada;
+    return { gratis: true, texto: `🎟️ Pagado con bono — quedan ${quedan} de ${pkg.bono.cantidadTotal}` };
+  }
+  return { gratis: false, texto: null };
+}
+
 export default function OperatorView() {
   const [packages, setPackages] = useState([]);
   const [tab, setTab] = useState('reception');
@@ -35,6 +50,14 @@ export default function OperatorView() {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState(null);
   const inviteUrl = `${window.location.origin}/registro`;
+
+  const [checkinBonos, setCheckinBonos] = useState([]);
+
+  const [bonoPkg, setBonoPkg] = useState(null); // paquete cuyo residente estamos gestionando
+  const [bonos, setBonos] = useState([]);
+  const [bonoForm, setBonoForm] = useState({ categoriaPeso: 'ESTANDAR', cantidad: '', precioPagado: '' });
+  const [bonoError, setBonoError] = useState('');
+  const [bonoSaving, setBonoSaving] = useState(false);
 
   async function refresh() {
     setPackages(await api('/packages'));
@@ -126,6 +149,8 @@ export default function OperatorView() {
     setTier(pkg.categoriaPeso || 'ESTANDAR');
     setPhotos(parseFotos(pkg.fotoUrl));
     setCheckinError('');
+    setCheckinBonos([]);
+    api(`/bonos/residente/${pkg.residenteId}`).then(setCheckinBonos).catch(() => {});
   }
 
   async function handlePhotoSelect(e) {
@@ -189,6 +214,41 @@ export default function OperatorView() {
     }
   }
 
+  async function openBonoModal(pkg) {
+    setBonoPkg(pkg);
+    setBonoForm({ categoriaPeso: 'ESTANDAR', cantidad: '', precioPagado: '' });
+    setBonoError('');
+    setBonos([]);
+    try {
+      setBonos(await api(`/bonos/residente/${pkg.residenteId}`));
+    } catch (err) {
+      setBonoError(err.message);
+    }
+  }
+
+  async function handleCrearBono(e) {
+    e.preventDefault();
+    setBonoError('');
+    setBonoSaving(true);
+    try {
+      await api('/bonos', {
+        method: 'POST',
+        body: {
+          residenteId: bonoPkg.residenteId,
+          categoriaPeso: bonoForm.categoriaPeso,
+          cantidad: Number(bonoForm.cantidad),
+          precioPagado: Number(bonoForm.precioPagado),
+        },
+      });
+      setBonos(await api(`/bonos/residente/${bonoPkg.residenteId}`));
+      setBonoForm({ categoriaPeso: 'ESTANDAR', cantidad: '', precioPagado: '' });
+    } catch (err) {
+      setBonoError(err.message);
+    } finally {
+      setBonoSaving(false);
+    }
+  }
+
   return (
     <div className="shell">
       <div className="stat-row">
@@ -210,7 +270,9 @@ export default function OperatorView() {
 
       {error && <p className="error-text">{error}</p>}
 
-      {tab === 'reception' && packages.map((pkg) => (
+      {tab === 'reception' && packages.map((pkg) => {
+        const info = cobroInfo(pkg);
+        return (
         <div className="card" key={pkg.id}>
           <div className="card-head">
             <div>
@@ -221,8 +283,8 @@ export default function OperatorView() {
             </div>
             <StatusBadge estado={pkg.estado} />
           </div>
-          {pkg.esPrimeraEntrega ? (
-            <div className="gold-box"><span>🎁 Primera vez — entrega de cortesía, NO cobrar</span></div>
+          {info.gratis ? (
+            <div className="gold-box"><span>{info.texto}</span></div>
           ) : (
             <div className="cod-box-muted"><span>💰 Ya afiliado — cobrar el servicio</span></div>
           )}
@@ -239,27 +301,31 @@ export default function OperatorView() {
               href={`https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}`}
               target="_blank" rel="noreferrer">💬 WhatsApp</a>
           </div>
+          <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => openBonoModal(pkg)}>🎟️ Bono</button>
         </div>
-      ))}
+        );
+      })}
 
       {tab === 'delivery' && (
         activeDeliveries.length === 0 ? (
           <div className="empty">No hay entregas pendientes para reparto en este momento.</div>
         ) : (
-          activeDeliveries.map((pkg) => (
+          activeDeliveries.map((pkg) => {
+            const info = cobroInfo(pkg);
+            return (
             <div className="card" key={pkg.id} style={{ borderLeft: '4px solid var(--brand)' }}>
               <div className="card-head">
                 <div>
                   <div className="card-title">{pkg.residente.torre} - Apto {pkg.residente.apto}</div>
                   <div className="card-sub">
                     {pkg.residente.nombre} · {pkg.proveedor} ·{' '}
-                    {pkg.esPrimeraEntrega ? 'Cortesía de afiliación' : `Tarifa: ${formatCOP(pkg.costoServicio)}`}
+                    {info.gratis ? 'No se cobra' : `Tarifa: ${formatCOP(pkg.costoServicio)}`}
                   </div>
                 </div>
                 <span className="card-sub">{pkg.franjaHoraria || 'Inmediata'}</span>
               </div>
-              {pkg.esPrimeraEntrega ? (
-                <div className="gold-box" style={{ marginTop: 10 }}><span>🎁 Primera vez — NO cobrar</span></div>
+              {info.gratis ? (
+                <div className="gold-box" style={{ marginTop: 10 }}><span>{info.texto}</span></div>
               ) : (
                 <div className="cod-box-muted" style={{ marginTop: 10 }}><span>💰 Cobrar en puerta</span></div>
               )}
@@ -268,7 +334,8 @@ export default function OperatorView() {
               )}
               <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={() => openPinModal(pkg)}>🔑 Validar PIN en Puerta</button>
             </div>
-          ))
+            );
+          })
         )
       )}
 
@@ -374,9 +441,9 @@ export default function OperatorView() {
               </div>
             </div>
 
-            {detailPkg.esPrimeraEntrega && (
+            {cobroInfo(detailPkg).gratis && (
               <div className="gold-box" style={{ marginTop: 10 }}>
-                <span>🎁 Fue la primera entrega de este residente — cortesía de afiliación</span>
+                <span>{cobroInfo(detailPkg).texto}</span>
               </div>
             )}
 
@@ -485,10 +552,23 @@ export default function OperatorView() {
                   {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label} - {formatCOP(t.costo)}</option>)}
                 </select>
               </div>
-              <div className="tariff-box" style={{ marginBottom: 12 }}>
-                <div className="l">Tarifa calculada</div>
-                <div className="v">{formatCOP(TIERS.find((t) => t.value === tier)?.costo)} COP</div>
-              </div>
+              {checkinPkg.esPrimeraEntrega ? (
+                <div className="gold-box" style={{ marginBottom: 12 }}>
+                  <span>🎁 Primera entrega — no se cobra, sin importar la categoría</span>
+                </div>
+              ) : (() => {
+                const bonoTier = checkinBonos.find((b) => b.categoriaPeso === tier && b.cantidadUsada < b.cantidadTotal);
+                return bonoTier ? (
+                  <div className="gold-box" style={{ marginBottom: 12 }}>
+                    <span>🎟️ Tiene bono activo — quedan {bonoTier.cantidadTotal - bonoTier.cantidadUsada} de {bonoTier.cantidadTotal}, este no se cobra</span>
+                  </div>
+                ) : (
+                  <div className="tariff-box" style={{ marginBottom: 12 }}>
+                    <div className="l">Tarifa calculada</div>
+                    <div className="v">{formatCOP(TIERS.find((t) => t.value === tier)?.costo)} COP</div>
+                  </div>
+                );
+              })()}
 
               {checkinError && <p className="error-text" style={{ marginBottom: 10 }}>{checkinError}</p>}
 
@@ -515,9 +595,9 @@ export default function OperatorView() {
                   onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))} />
                 {pinError && <p className="error-text" style={{ textAlign: 'center' }}>{pinError}</p>}
 
-                {pinPkg.esPrimeraEntrega ? (
+                {cobroInfo(pinPkg).gratis ? (
                   <div className="gold-box" style={{ margin: '14px 0' }}>
-                    <span>🎁 Primera entrega — cortesía de afiliación</span>
+                    <span>{cobroInfo(pinPkg).texto}</span>
                     <strong>NO COBRAR</strong>
                   </div>
                 ) : (
@@ -550,6 +630,59 @@ export default function OperatorView() {
                 <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={closePinModal}>Cerrar</button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {bonoPkg && (
+        <div className="modal-overlay" onClick={() => setBonoPkg(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>Bonos — {bonoPkg.residente.nombre}</h3>
+              <button className="modal-close" onClick={() => setBonoPkg(null)}>✕</button>
+            </div>
+
+            {bonos.length === 0 ? (
+              <p className="field-hint">Todavía no tiene bonos registrados.</p>
+            ) : (
+              bonos.map((b) => {
+                const quedan = b.cantidadTotal - b.cantidadUsada;
+                const tierLabel = TIERS.find((t) => t.value === b.categoriaPeso)?.label || b.categoriaPeso;
+                return (
+                  <div className={quedan > 0 ? 'gold-box' : 'cod-box-muted'} key={b.id} style={{ marginBottom: 8 }}>
+                    <span>{tierLabel} · pagó {formatCOP(b.precioPagado)}</span>
+                    <strong>{quedan > 0 ? `Quedan ${quedan} de ${b.cantidadTotal}` : 'Agotado'}</strong>
+                  </div>
+                );
+              })
+            )}
+
+            <form onSubmit={handleCrearBono} style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+              <p className="card-sub" style={{ marginBottom: 10 }}>Registrar bono nuevo (pago ya recibido)</p>
+              <div className="field">
+                <label>Categoría de peso que cubre</label>
+                <select value={bonoForm.categoriaPeso}
+                  onChange={(e) => setBonoForm({ ...bonoForm, categoriaPeso: e.target.value })}>
+                  {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label} - {formatCOP(t.costo)} c/u</option>)}
+                </select>
+              </div>
+              <div className="grid-2">
+                <div className="field">
+                  <label>Cantidad de entregas</label>
+                  <input type="number" min="1" required placeholder="Ej. 5" value={bonoForm.cantidad}
+                    onChange={(e) => setBonoForm({ ...bonoForm, cantidad: e.target.value })} />
+                </div>
+                <div className="field">
+                  <label>Precio total pagado (COP)</label>
+                  <input type="number" min="0" required placeholder="Ej. 18000" value={bonoForm.precioPagado}
+                    onChange={(e) => setBonoForm({ ...bonoForm, precioPagado: e.target.value })} />
+                </div>
+              </div>
+              {bonoError && <p className="error-text" style={{ marginBottom: 10 }}>{bonoError}</p>}
+              <button className="btn btn-primary" type="submit" disabled={bonoSaving}>
+                {bonoSaving ? 'Guardando…' : '➕ Registrar bono'}
+              </button>
+            </form>
           </div>
         </div>
       )}

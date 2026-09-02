@@ -78,7 +78,10 @@ export async function listMine(req, res) {
 // Operador: ve todos los paquetes, pero el PIN nunca viaja hacia esta vista.
 export async function listAll(req, res) {
   const packages = await prisma.package.findMany({
-    include: { residente: { select: { nombre: true, telefono: true, torre: true, apto: true } } },
+    include: {
+      residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
+      bono: { select: { id: true, categoriaPeso: true, cantidadTotal: true, cantidadUsada: true } },
+    },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -91,7 +94,7 @@ export async function listAll(req, res) {
     if (!actual || p.createdAt < actual) primeraFechaPorResidente.set(p.residenteId, p.createdAt);
   }
 
-  res.json(packages.map(({ pin, ...p }) => ({
+  res.json(packages.map(({ pin, bonoId, ...p }) => ({
     ...p,
     esPrimeraEntrega: primeraFechaPorResidente.get(p.residenteId).getTime() === p.createdAt.getTime(),
   })));
@@ -136,16 +139,37 @@ export async function checkin(req, res) {
   });
   const esPrimeraEntrega = primerPaquete?.id === req.params.id;
 
+  // Si no es la cortesía de bienvenida, se descuenta de un bono prepago
+  // activo en esta misma categoría de peso (el más antiguo primero) — un
+  // bono de otra categoría no aplica aquí (ver Bono en schema.prisma).
+  let bono = null;
+  if (!esPrimeraEntrega) {
+    const bonos = await prisma.bono.findMany({
+      where: { residenteId: actual.residenteId, categoriaPeso },
+      orderBy: { createdAt: 'asc' },
+    });
+    bono = bonos.find((b) => b.cantidadUsada < b.cantidadTotal) || null;
+    if (bono) {
+      await prisma.bono.update({ where: { id: bono.id }, data: { cantidadUsada: { increment: 1 } } });
+    }
+  }
+
   const pkg = await prisma.package.update({
     where: { id: req.params.id },
     data: {
       categoriaPeso,
-      costoServicio: esPrimeraEntrega ? 0 : costoServicio,
+      costoServicio: (esPrimeraEntrega || bono) ? 0 : costoServicio,
+      bonoId: bono?.id || null,
       fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
       estado: 'EN_RECEPCION',
     },
   });
-  res.json({ ...pkg, pin: undefined, esPrimeraEntrega });
+  res.json({
+    ...pkg,
+    pin: undefined,
+    esPrimeraEntrega,
+    bonoAplicado: bono ? { id: bono.id, quedan: bono.cantidadTotal - bono.cantidadUsada - 1 } : null,
+  });
 }
 
 function csvEscape(value) {
@@ -155,7 +179,7 @@ function csvEscape(value) {
 
 const CSV_HEADERS = [
   'ID', 'Fecha Ingreso', 'Torre', 'Apto', 'Residente', 'Teléfono', 'Proveedor', 'Guía',
-  'PIN Proveedor', 'Categoría', 'Costo Servicio', 'Estado', 'Franja Horaria', 'Método Pago',
+  'PIN Proveedor', 'Categoría', 'Costo Servicio', 'Motivo Gratis', 'Estado', 'Franja Horaria', 'Método Pago',
   'Cobro Contra Entrega', 'Valor Contra Entrega', 'Valor Declarado', 'Notas', 'Fecha Entrega',
 ];
 
@@ -173,17 +197,34 @@ export async function exportCsv(req, res) {
 
   const packages = await prisma.package.findMany({
     where,
-    include: { residente: { select: { nombre: true, telefono: true, torre: true, apto: true } } },
+    include: {
+      residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
+      bono: { select: { id: true } },
+    },
     orderBy: { fechaIngreso: 'desc' },
   });
 
-  const rows = packages.map((p) => [
-    p.id, p.fechaIngreso.toISOString(), p.residente.torre, p.residente.apto, p.residente.nombre,
-    p.residente.telefono, p.proveedor, p.guia, p.pinProveedor || '', p.categoriaPeso, p.costoServicio, p.estado,
-    p.franjaHoraria || '', p.metodoPagoServicio || '',
-    p.esContraEntregaProveedor ? 'SI' : 'NO', p.valorProductoProveedor, p.valorDeclarado,
-    p.notas || '', p.fechaEntrega ? p.fechaEntrega.toISOString() : '',
-  ]);
+  // Igual que en listAll(): el motivo de un costo en $0 (primera entrega
+  // vs. bono redimido) sirve para que el contador entienda por qué no se
+  // cobró, sin tener que adivinar.
+  const todos = await prisma.package.findMany({ select: { id: true, residenteId: true, createdAt: true } });
+  const primeraFechaPorResidente = new Map();
+  for (const p of todos) {
+    const actual = primeraFechaPorResidente.get(p.residenteId);
+    if (!actual || p.createdAt < actual) primeraFechaPorResidente.set(p.residenteId, p.createdAt);
+  }
+
+  const rows = packages.map((p) => {
+    const esPrimeraEntrega = primeraFechaPorResidente.get(p.residenteId)?.getTime() === p.createdAt.getTime();
+    const motivoGratis = esPrimeraEntrega ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
+    return [
+      p.id, p.fechaIngreso.toISOString(), p.residente.torre, p.residente.apto, p.residente.nombre,
+      p.residente.telefono, p.proveedor, p.guia, p.pinProveedor || '', p.categoriaPeso, p.costoServicio,
+      motivoGratis, p.estado, p.franjaHoraria || '', p.metodoPagoServicio || '',
+      p.esContraEntregaProveedor ? 'SI' : 'NO', p.valorProductoProveedor, p.valorDeclarado,
+      p.notas || '', p.fechaEntrega ? p.fechaEntrega.toISOString() : '',
+    ];
+  });
 
   const csv = [CSV_HEADERS, ...rows].map((row) => row.map(csvEscape).join(',')).join('\r\n');
 

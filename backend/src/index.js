@@ -4,6 +4,7 @@ import cors from 'cors';
 import authRoutes from './routes/auth.routes.js';
 import packagesRoutes from './routes/packages.routes.js';
 import commentsRoutes from './routes/comments.routes.js';
+import bonosRoutes from './routes/bonos.routes.js';
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/packages', packagesRoutes);
 app.use('/api/comments', commentsRoutes);
+app.use('/api/bonos', bonosRoutes);
 
 // Sin esto, un body demasiado grande devuelve una página HTML de Express
 // en vez de JSON, y el frontend solo puede mostrar "Error de red".
