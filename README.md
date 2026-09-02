@@ -85,7 +85,10 @@ para residentes de Conjunto Ipanema.
 - **Instalable como app** (PWA): en Android, Chrome ofrece "Instalar app"
   solo; en iPhone, Compartir → "Agregar a inicio". Queda con ícono propio
   y sin la barra del navegador — no es necesario pasar por App
-  Store/Google Play para tenerla como app en el celular.
+  Store/Google Play para tenerla como app en el celular. Se actualiza
+  sola: cuando hay una versión nueva desplegada, la próxima vez que se
+  abre la app se recarga automáticamente para tomarla (sin pedir
+  reinstalar ni tener que cerrarla dos veces).
 - Identidad de marca navy/dorado (logo en `docs/logo-fuente.jpeg`),
   consistente entre la interfaz, el ícono de la app y el manifest de PWA.
 
