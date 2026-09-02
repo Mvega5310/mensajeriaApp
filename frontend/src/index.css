@@ -159,10 +159,14 @@ button, input, select { font: inherit; }
   box-shadow: 0 -2px 10px rgba(15,23,42,.08);
 }
 .tab{
-  flex:1; border:none; background:none; padding:10px; border-radius:10px;
+  flex:1; border:1px solid var(--line); background:var(--surface-2); padding:10px; border-radius:10px;
   font-weight:600; font-size:13px; color: var(--ink-soft); cursor:pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
 }
-.tab.active{ background: var(--brand-bg); color: var(--brand-dark); }
+.tab.active{
+  background: var(--brand-bg); border-color: var(--brand-line); color: var(--brand-dark);
+  box-shadow: 0 2px 6px rgba(15,23,42,.12);
+}
 
 .card{
   background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
