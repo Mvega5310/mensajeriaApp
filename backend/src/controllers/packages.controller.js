@@ -81,7 +81,20 @@ export async function listAll(req, res) {
     include: { residente: { select: { nombre: true, telefono: true, torre: true, apto: true } } },
     orderBy: { createdAt: 'desc' },
   });
-  res.json(packages.map(({ pin, ...p }) => p));
+
+  // El primer paquete (por fecha) de cada residente es su entrega de
+  // cortesía por afiliación (ver flyer de campaña) — se marca aquí para
+  // que el operador vea de un vistazo a quién no debe cobrarle.
+  const primeraFechaPorResidente = new Map();
+  for (const p of packages) {
+    const actual = primeraFechaPorResidente.get(p.residenteId);
+    if (!actual || p.createdAt < actual) primeraFechaPorResidente.set(p.residenteId, p.createdAt);
+  }
+
+  res.json(packages.map(({ pin, ...p }) => ({
+    ...p,
+    esPrimeraEntrega: primeraFechaPorResidente.get(p.residenteId).getTime() === p.createdAt.getTime(),
+  })));
 }
 
 // Residente: programa su propia franja de entrega — se verifica dueño.
@@ -108,16 +121,31 @@ export async function checkin(req, res) {
     return res.status(400).json({ error: 'Máximo 3 fotos' });
   }
 
+  const actual = await prisma.package.findUnique({ where: { id: req.params.id }, select: { residenteId: true } });
+  if (!actual) return res.status(404).json({ error: 'Paquete no encontrado' });
+
+  const costoServicio = costoPara(categoriaPeso);
+
+  // Si este es el primer paquete que el residente pre-alerta, es su
+  // entrega de cortesía por afiliación (campaña de lanzamiento): gratis
+  // sin importar la categoría de peso elegida.
+  const primerPaquete = await prisma.package.findFirst({
+    where: { residenteId: actual.residenteId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  const esPrimeraEntrega = primerPaquete?.id === req.params.id;
+
   const pkg = await prisma.package.update({
     where: { id: req.params.id },
     data: {
       categoriaPeso,
-      costoServicio: costoPara(categoriaPeso),
+      costoServicio: esPrimeraEntrega ? 0 : costoServicio,
       fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
       estado: 'EN_RECEPCION',
     },
   });
-  res.json({ ...pkg, pin: undefined });
+  res.json({ ...pkg, pin: undefined, esPrimeraEntrega });
 }
 
 function csvEscape(value) {

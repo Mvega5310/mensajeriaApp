@@ -87,6 +87,11 @@ para residentes de Conjunto Ipanema.
   consistente entre la interfaz, el ícono de la app y el manifest de PWA.
 
 **Operador**
+- Alerta de primera entrega: el primer paquete que pre-alerta cada
+  residente se cobra $0 automáticamente (cortesía de afiliación, la
+  promo del flyer de campaña) — Recepción, Reparto, el modal de validar
+  PIN y la Bitácora lo marcan con una franja dorada "🎁 NO cobrar" para
+  que quede claro a quién sí toca cobrarle el servicio.
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
   de subir) y categoría real — la tarifa final se recalcula server-side.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).

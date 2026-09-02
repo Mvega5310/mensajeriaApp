@@ -221,6 +221,11 @@ export default function OperatorView() {
             </div>
             <StatusBadge estado={pkg.estado} />
           </div>
+          {pkg.esPrimeraEntrega ? (
+            <div className="gold-box"><span>🎁 Primera vez — entrega de cortesía, NO cobrar</span></div>
+          ) : (
+            <div className="cod-box-muted"><span>💰 Ya afiliado — cobrar el servicio</span></div>
+          )}
           {pkg.notas && (
             <div className="cod-box"><span>📝 {pkg.notas}</span></div>
           )}
@@ -246,10 +251,18 @@ export default function OperatorView() {
               <div className="card-head">
                 <div>
                   <div className="card-title">{pkg.residente.torre} - Apto {pkg.residente.apto}</div>
-                  <div className="card-sub">{pkg.residente.nombre} · {pkg.proveedor} · Tarifa: {formatCOP(pkg.costoServicio)}</div>
+                  <div className="card-sub">
+                    {pkg.residente.nombre} · {pkg.proveedor} ·{' '}
+                    {pkg.esPrimeraEntrega ? 'Cortesía de afiliación' : `Tarifa: ${formatCOP(pkg.costoServicio)}`}
+                  </div>
                 </div>
                 <span className="card-sub">{pkg.franjaHoraria || 'Inmediata'}</span>
               </div>
+              {pkg.esPrimeraEntrega ? (
+                <div className="gold-box" style={{ marginTop: 10 }}><span>🎁 Primera vez — NO cobrar</span></div>
+              ) : (
+                <div className="cod-box-muted" style={{ marginTop: 10 }}><span>💰 Cobrar en puerta</span></div>
+              )}
               {pkg.notas && (
                 <div className="cod-box" style={{ marginTop: 10 }}><span>📝 {pkg.notas}</span></div>
               )}
@@ -360,6 +373,12 @@ export default function OperatorView() {
                 <div className="v">{formatCOP(detailPkg.costoServicio)}</div>
               </div>
             </div>
+
+            {detailPkg.esPrimeraEntrega && (
+              <div className="gold-box" style={{ marginTop: 10 }}>
+                <span>🎁 Fue la primera entrega de este residente — cortesía de afiliación</span>
+              </div>
+            )}
 
             <div className="cod-box-muted" style={{ marginTop: 10 }}>
               <span>Recibido:</span>
@@ -496,10 +515,17 @@ export default function OperatorView() {
                   onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))} />
                 {pinError && <p className="error-text" style={{ textAlign: 'center' }}>{pinError}</p>}
 
-                <div className="tariff-box" style={{ margin: '14px 0' }}>
-                  <div className="l">Cobro por entrega</div>
-                  <div className="v">{formatCOP(pinPkg.costoServicio)}</div>
-                </div>
+                {pinPkg.esPrimeraEntrega ? (
+                  <div className="gold-box" style={{ margin: '14px 0' }}>
+                    <span>🎁 Primera entrega — cortesía de afiliación</span>
+                    <strong>NO COBRAR</strong>
+                  </div>
+                ) : (
+                  <div className="tariff-box" style={{ margin: '14px 0' }}>
+                    <div className="l">Cobro por entrega</div>
+                    <div className="v">{formatCOP(pinPkg.costoServicio)}</div>
+                  </div>
+                )}
                 {pinPkg.esContraEntregaProveedor && (
                   <div className="cod-box" style={{ marginBottom: 14 }}>
                     <span>Recaudo transportista:</span>
