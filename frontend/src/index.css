@@ -226,10 +226,17 @@ button, input, select { font: inherit; }
 .field textarea{ resize:vertical; }
 .field input:focus, .field select:focus, .field textarea:focus{ outline:2px solid var(--brand); outline-offset:1px; }
 
-/* Desde/Hasta de Bitácora: van lado a lado (grid-2), pero un poco más
-   compactas que un input normal para que quede un respiro visible
-   entre las dos en vez de tocarse borde con borde. */
-.field-dates input[type="date"]{ padding:9px 8px; font-size:13px; }
+/* Desde/Hasta de Bitácora: la etiqueta y la fecha van en la misma
+   fila (mucho más compacto que etiqueta arriba + input abajo) y cada
+   una ocupa toda la fila para sí sola — nada de dos <input type="date">
+   nativos peleando por la mitad del ancho, que es justo lo que hacía
+   que uno se saliera de la pantalla en iOS Safari. flex + min-width:0
+   sí deja que el control nativo se encoja si hiciera falta (a
+   diferencia de CSS Grid, que WebKit no siempre respeta igual con
+   estos controles). */
+.field-inline{ display:flex; align-items:center; gap:10px; }
+.field-inline label{ margin-bottom:0; flex-shrink:0; white-space:nowrap; }
+.field-inline input{ flex:1; min-width:0; width:auto; }
 .field-hint{ font-size:11px; color:var(--ink-soft); margin:4px 0 0; }
 
 .password-wrap{ position:relative; }
