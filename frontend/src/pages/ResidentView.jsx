@@ -5,8 +5,12 @@ import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import { TIME_SLOTS, PAYMENT_METHODS } from '../utils/schedule.js';
 import { BONOS_HABILITADOS } from '../utils/features.js';
+import { paginar } from '../utils/pagination.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import PhotoGallery from '../components/PhotoGallery.jsx';
+import Pagination from '../components/Pagination.jsx';
+
+const PAGE_SIZE = 10;
 
 const emptyForm = {
   proveedor: '', guia: '', categoriaPeso: 'ESTANDAR',
@@ -36,6 +40,9 @@ export default function ResidentView() {
 
   const [detailPkg, setDetailPkg] = useState(null);
   const [detailComentario, setDetailComentario] = useState(null);
+
+  const [paquetesPage, setPaquetesPage] = useState(1);
+  const [comentariosPage, setComentariosPage] = useState(1);
 
   function formatFecha(iso) {
     return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -136,6 +143,9 @@ export default function ResidentView() {
       setError(err.message);
     }
   }
+
+  const paquetesPaginados = paginar(packages, paquetesPage, PAGE_SIZE);
+  const comentariosPaginados = paginar(comentarios, comentariosPage, PAGE_SIZE);
 
   return (
     <div className="shell">
@@ -271,7 +281,8 @@ export default function ResidentView() {
             <button className="btn btn-primary" onClick={() => setTab('form')}>+ Notificar nuevo paquete</button>
           </div>
         ) : (
-          packages.map((pkg) => (
+          <>
+          {paquetesPaginados.items.map((pkg) => (
             <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
               <div className="card-head">
                 <div>
@@ -312,7 +323,9 @@ export default function ResidentView() {
                 Toca para ver el detalle{pkg.fotoUrl ? ' y las fotos' : ''} →
               </p>
             </div>
-          ))
+          ))}
+          <Pagination page={paquetesPaginados.safePage} totalPages={paquetesPaginados.totalPages} onChange={setPaquetesPage} />
+          </>
         )
       )}
 
@@ -333,14 +346,17 @@ export default function ResidentView() {
           {comentarios.length === 0 ? (
             <div className="empty">Todavía no has enviado comentarios.</div>
           ) : (
-            comentarios.map((c) => (
+            <>
+            {comentariosPaginados.items.map((c) => (
               <div className="card" key={c.id} style={{ cursor: 'pointer' }} onClick={() => setDetailComentario(c)}>
                 <p style={{ fontSize: 13.5, margin: 0 }}>
                   {c.mensaje.length > 140 ? `${c.mensaje.slice(0, 140)}…` : c.mensaje}
                 </p>
                 <p className="card-sub" style={{ marginTop: 8 }}>{formatFecha(c.createdAt)}</p>
               </div>
-            ))
+            ))}
+            <Pagination page={comentariosPaginados.safePage} totalPages={comentariosPaginados.totalPages} onChange={setComentariosPage} />
+            </>
           )}
         </>
       )}

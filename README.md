@@ -133,6 +133,10 @@ para residentes de Conjunto Ipanema.
   o compartir con un contador. Cada registro se toca para abrir un modal
   con el detalle completo (fotos más grandes, nota, PIN del proveedor,
   fechas, cobros).
+- Paginación de 10 en 10 en toda lista que pueda crecer sin límite
+  (Recepción, Reparto, Bitácora, Buzón del operador; Mis Paquetes y
+  Comentarios del residente) — evita listas interminables a medida que
+  se acumula historial.
 - Recepción y Reparto: tocar el cuerpo de la tarjeta abre el mismo modal
   de detalle completo de la Bitácora (fotos, valor declarado, teléfono,
   fechas) sin perder los botones de acción rápida (Recibir, Editar,

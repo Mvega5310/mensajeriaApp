@@ -189,7 +189,11 @@ button, input, select { font: inherit; }
 .stat .n{ font-size:18px; font-weight:800; }
 .stat .l{ font-size:10.5px; color: var(--ink-soft); }
 
-.grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+/* minmax(0,1fr) en vez de 1fr: sin esto, un contenido ancho (ej. un
+   <input type="date"> nativo, que en iOS Safari pide más espacio del
+   que cabe en la mitad de la pantalla) desborda su columna y queda
+   montado encima de la columna vecina en vez de encogerse. */
+.grid-2{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:10px; margin-top:10px; }
 .pin-box{ background: var(--gold-bg); border:1px solid var(--gold-line); border-radius:12px; padding:10px; text-align:center; }
 .pin-box .l{ font-size:10px; font-weight:700; color: var(--gold); text-transform:uppercase; }
 .pin-box .v{ font-size:20px; font-weight:800; color: var(--gold); letter-spacing:.3em; }
@@ -276,6 +280,14 @@ button, input, select { font: inherit; }
 .btn-primary:hover{ background: var(--brand-hover); }
 .btn-secondary{ background:var(--surface-2); color:var(--ink); border:1px solid var(--line); }
 .btn-whatsapp{ background:var(--whatsapp-bg); color:var(--whatsapp-fg); border:1px solid var(--whatsapp-line); text-decoration:none; }
+.btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+.pagination{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  margin-top:14px;
+}
+.pagination .btn{ width:auto; flex-shrink:0; padding:10px 14px; }
+.pagination-info{ font-size:12.5px; color:var(--ink-soft); font-weight:600; white-space:nowrap; }
 
 .error-text{ color: var(--danger); font-size:12.5px; font-weight:600; margin-top:6px; }
 

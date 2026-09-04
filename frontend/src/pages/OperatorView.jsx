@@ -7,8 +7,11 @@ import { compressImage } from '../utils/image.js';
 import { parseFotos } from '../utils/fotos.js';
 import { BONOS_HABILITADOS } from '../utils/features.js';
 import StatusBadge from '../components/StatusBadge.jsx';
+import Pagination from '../components/Pagination.jsx';
+import { paginar } from '../utils/pagination.js';
 
 const MAX_FOTOS = 3;
+const PAGE_SIZE = 10;
 
 const ESTADOS_FILTRO = [
   { value: 'TODOS', label: 'Todos los estados' },
@@ -77,6 +80,11 @@ export default function OperatorView() {
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState(null);
   const inviteUrl = `${window.location.origin}/registro`;
+
+  const [recepcionPage, setRecepcionPage] = useState(1);
+  const [repartoPage, setRepartoPage] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const [comentariosPage, setComentariosPage] = useState(1);
 
   const [checkinBonos, setCheckinBonos] = useState([]);
 
@@ -168,6 +176,11 @@ export default function OperatorView() {
       c.mensaje.toLowerCase().includes(q)
     );
   });
+
+  const recepcionPaginada = paginar(recepcionHoy, recepcionPage, PAGE_SIZE);
+  const repartoPaginado = paginar(activeDeliveries, repartoPage, PAGE_SIZE);
+  const logPaginado = paginar(logEntries, logPage, PAGE_SIZE);
+  const comentariosPaginados = paginar(comentariosFiltrados, comentariosPage, PAGE_SIZE);
 
   function formatFecha(iso) {
     return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -317,7 +330,8 @@ export default function OperatorView() {
             No hay nada pendiente en recepción por ahora. Lo entregado sigue completo en Bitácora.
           </div>
         ) : (
-          recepcionHoy.map((pkg) => {
+          <>
+          {recepcionPaginada.items.map((pkg) => {
             const info = cobroInfo(pkg);
             return (
             <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
@@ -355,7 +369,9 @@ export default function OperatorView() {
               <p className="field-hint" style={{ marginTop: 8 }}>Toca la tarjeta para ver el detalle completo →</p>
             </div>
             );
-          })
+          })}
+          <Pagination page={recepcionPaginada.safePage} totalPages={recepcionPaginada.totalPages} onChange={setRecepcionPage} />
+          </>
         )
       )}
 
@@ -363,7 +379,8 @@ export default function OperatorView() {
         activeDeliveries.length === 0 ? (
           <div className="empty">No hay entregas pendientes para reparto en este momento.</div>
         ) : (
-          activeDeliveries.map((pkg) => {
+          <>
+          {repartoPaginado.items.map((pkg) => {
             const info = cobroInfo(pkg);
             return (
             <div className="card" key={pkg.id} style={{ borderLeft: '4px solid var(--brand)', cursor: 'pointer' }}
@@ -391,7 +408,9 @@ export default function OperatorView() {
               <p className="field-hint" style={{ marginTop: 8 }}>Toca la tarjeta para ver el detalle completo →</p>
             </div>
             );
-          })
+          })}
+          <Pagination page={repartoPaginado.safePage} totalPages={repartoPaginado.totalPages} onChange={setRepartoPage} />
+          </>
         )
       )}
 
@@ -404,15 +423,13 @@ export default function OperatorView() {
             <input placeholder="Buscar por residente, torre, apto o proveedor…"
               value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
           </div>
-          <div className="grid-2" style={{ marginTop: 0, marginBottom: 12 }}>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label>Desde</label>
-              <input type="date" value={logDesde} onChange={(e) => setLogDesde(e.target.value)} />
-            </div>
-            <div className="field" style={{ marginBottom: 0 }}>
-              <label>Hasta</label>
-              <input type="date" value={logHasta} onChange={(e) => setLogHasta(e.target.value)} />
-            </div>
+          <div className="field">
+            <label>Desde</label>
+            <input type="date" value={logDesde} onChange={(e) => setLogDesde(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Hasta</label>
+            <input type="date" value={logHasta} onChange={(e) => setLogHasta(e.target.value)} />
           </div>
           <div className="field">
             <label>Estado</label>
@@ -430,7 +447,8 @@ export default function OperatorView() {
           {logEntries.length === 0 ? (
             <div className="empty">No hay paquetes que coincidan con la búsqueda.</div>
           ) : (
-            logEntries.map((pkg) => (
+            <>
+            {logPaginado.items.map((pkg) => (
               <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
                 <div className="card-head">
                   <div>
@@ -442,7 +460,9 @@ export default function OperatorView() {
                 </div>
                 <p className="field-hint" style={{ marginTop: 8 }}>Toca para ver el detalle{pkg.fotoUrl ? ' y las fotos' : ''} →</p>
               </div>
-            ))
+            ))}
+            <Pagination page={logPaginado.safePage} totalPages={logPaginado.totalPages} onChange={setLogPage} />
+            </>
           )}
         </>
       )}
@@ -457,7 +477,8 @@ export default function OperatorView() {
           {comentariosFiltrados.length === 0 ? (
             <div className="empty">No hay comentarios que coincidan con la búsqueda.</div>
           ) : (
-            comentariosFiltrados.map((c) => (
+            <>
+            {comentariosPaginados.items.map((c) => (
               <div className="card" key={c.id} style={{ cursor: 'pointer' }} onClick={() => setDetailComentario(c)}>
                 <div className="card-head">
                   <div>
@@ -470,7 +491,9 @@ export default function OperatorView() {
                 </div>
                 <p style={{ fontSize: 13.5, margin: '10px 0 0' }}>{truncar(c.mensaje)}</p>
               </div>
-            ))
+            ))}
+            <Pagination page={comentariosPaginados.safePage} totalPages={comentariosPaginados.totalPages} onChange={setComentariosPage} />
+            </>
           )}
         </>
       )}
