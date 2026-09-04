@@ -34,6 +34,13 @@ export default function ResidentView() {
 
   const [bonos, setBonos] = useState([]);
 
+  const [detailPkg, setDetailPkg] = useState(null);
+  const [detailComentario, setDetailComentario] = useState(null);
+
+  function formatFecha(iso) {
+    return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  }
+
   function openSchedule(pkg) {
     setScheduling(pkg);
     setSlot(pkg.franjaHoraria || TIME_SLOTS[0]);
@@ -265,36 +272,15 @@ export default function ResidentView() {
           </div>
         ) : (
           packages.map((pkg) => (
-            <div className="card" key={pkg.id}>
+            <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
               <div className="card-head">
                 <div>
                   <div className="card-id">{pkg.id.slice(0, 8).toUpperCase()}</div>
                   <div className="card-title">{pkg.proveedor}</div>
                   <div className="card-sub">Guía: {pkg.guia}</div>
-                  {pkg.pinProveedor && <div className="card-sub">PIN proveedor: {pkg.pinProveedor}</div>}
                 </div>
                 <StatusBadge estado={pkg.estado} />
               </div>
-
-              <PhotoGallery fotoUrl={pkg.fotoUrl} />
-
-              {pkg.esContraEntregaProveedor && (
-                <div className="cod-box">
-                  <span>Cobro transportista:</span>
-                  <strong>{formatCOP(pkg.valorProductoProveedor)}</strong>
-                </div>
-              )}
-
-              {pkg.valorDeclarado > 0 && (
-                <div className="cod-box-muted">
-                  <span>Valor declarado:</span>
-                  <strong>{formatCOP(pkg.valorDeclarado)}</strong>
-                </div>
-              )}
-
-              {pkg.notas && (
-                <p className="field-hint" style={{ marginTop: 8 }}>📝 Tu nota: {pkg.notas}</p>
-              )}
 
               <div className="grid-2">
                 <div className="tariff-box">
@@ -307,18 +293,24 @@ export default function ResidentView() {
                 </div>
               </div>
 
-              {pkg.estado === 'EN_RECEPCION' && (
-                <button className="btn btn-primary" style={{ marginTop: 12 }}
-                  onClick={() => openSchedule(pkg)}>
-                  🕒 Programar Horario de Entrega
-                </button>
-              )}
               {pkg.franjaHoraria && (
                 <div className="cod-box-muted" style={{ marginTop: 12 }}>
                   <span>🕒 {pkg.franjaHoraria}</span>
                   <span style={{ fontWeight: 400 }}>{pkg.estado === 'PROGRAMADO' ? 'Programado' : 'Preferencia'}</span>
                 </div>
               )}
+
+              {pkg.estado === 'EN_RECEPCION' && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <button className="btn btn-primary" style={{ marginTop: 12 }}
+                    onClick={() => openSchedule(pkg)}>
+                    🕒 Programar Horario de Entrega
+                  </button>
+                </div>
+              )}
+              <p className="field-hint" style={{ marginTop: 8 }}>
+                Toca para ver el detalle{pkg.fotoUrl ? ' y las fotos' : ''} →
+              </p>
             </div>
           ))
         )
@@ -342,15 +334,109 @@ export default function ResidentView() {
             <div className="empty">Todavía no has enviado comentarios.</div>
           ) : (
             comentarios.map((c) => (
-              <div className="card" key={c.id}>
-                <p style={{ fontSize: 13.5, margin: 0 }}>{c.mensaje}</p>
-                <p className="card-sub" style={{ marginTop: 8 }}>
-                  {new Date(c.createdAt).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              <div className="card" key={c.id} style={{ cursor: 'pointer' }} onClick={() => setDetailComentario(c)}>
+                <p style={{ fontSize: 13.5, margin: 0 }}>
+                  {c.mensaje.length > 140 ? `${c.mensaje.slice(0, 140)}…` : c.mensaje}
                 </p>
+                <p className="card-sub" style={{ marginTop: 8 }}>{formatFecha(c.createdAt)}</p>
               </div>
             ))
           )}
         </>
+      )}
+
+      {detailPkg && (
+        <div className="modal-overlay" onClick={() => setDetailPkg(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{detailPkg.proveedor}</h3>
+              <button className="modal-close" onClick={() => setDetailPkg(null)}>✕</button>
+            </div>
+
+            <div className="card-head" style={{ marginBottom: 10 }}>
+              <div className="card-id">{detailPkg.id.slice(0, 8).toUpperCase()}</div>
+              <StatusBadge estado={detailPkg.estado} />
+            </div>
+
+            <div className="grid-2" style={{ marginTop: 0 }}>
+              <div className="tariff-box">
+                <div className="l">Guía</div>
+                <div className="v">{detailPkg.guia}</div>
+              </div>
+              <div className="tariff-box">
+                <div className="l">Categoría</div>
+                <div className="v">{detailPkg.categoriaPeso}</div>
+              </div>
+            </div>
+
+            <div className="grid-2">
+              <div className="tariff-box">
+                <div className="l">{detailPkg.estado === 'PREALERTADO' ? 'Tarifa Estimada' : 'Tarifa Servicio'}</div>
+                <div className="v">{formatCOP(detailPkg.costoServicio)} COP</div>
+              </div>
+              <div className="pin-box">
+                <div className="l">PIN de Entrega</div>
+                <div className="v">{detailPkg.pin}</div>
+              </div>
+            </div>
+
+            {detailPkg.pinProveedor && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>🔑 PIN del proveedor:</span>
+                <strong>{detailPkg.pinProveedor}</strong>
+              </div>
+            )}
+
+            <div className="cod-box-muted" style={{ marginTop: 10 }}>
+              <span>Recibido:</span>
+              <strong>{formatFecha(detailPkg.fechaIngreso)}</strong>
+            </div>
+            {detailPkg.fechaEntrega && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>Entregado:</span>
+                <strong>{formatFecha(detailPkg.fechaEntrega)}</strong>
+              </div>
+            )}
+            {detailPkg.franjaHoraria && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>Franja / pago:</span>
+                <strong>{detailPkg.franjaHoraria} · {detailPkg.metodoPagoServicio || '—'}</strong>
+              </div>
+            )}
+            {detailPkg.esContraEntregaProveedor && (
+              <div className="cod-box" style={{ marginTop: 10 }}>
+                <span>Cobro transportista:</span>
+                <strong>{formatCOP(detailPkg.valorProductoProveedor)}</strong>
+              </div>
+            )}
+            {detailPkg.valorDeclarado > 0 && (
+              <div className="cod-box-muted" style={{ marginTop: 10 }}>
+                <span>Valor declarado:</span>
+                <strong>{formatCOP(detailPkg.valorDeclarado)}</strong>
+              </div>
+            )}
+            {detailPkg.notas && (
+              <p className="field-hint" style={{ marginTop: 10 }}>📝 Tu nota: {detailPkg.notas}</p>
+            )}
+
+            <div style={{ marginTop: 14 }}>
+              <PhotoGallery fotoUrl={detailPkg.fotoUrl} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailComentario && (
+        <div className="modal-overlay" onClick={() => setDetailComentario(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>Tu comentario</h3>
+              <button className="modal-close" onClick={() => setDetailComentario(null)}>✕</button>
+            </div>
+            <p className="card-sub" style={{ marginBottom: 10 }}>{formatFecha(detailComentario.createdAt)}</p>
+            <p style={{ fontSize: 14, lineHeight: 1.5 }}>{detailComentario.mensaje}</p>
+          </div>
+        </div>
       )}
 
       {scheduling && (

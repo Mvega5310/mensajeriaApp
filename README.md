@@ -72,10 +72,15 @@ para residentes de Conjunto Ipanema.
   propio mensajero — el operador lo necesita a mano en recepción.
 - Seguimiento del paquete con su PIN de entrega, galería de hasta 3 fotos
   de evidencia colapsable, y reprogramación de franja una vez el paquete llega.
+  La tarjeta muestra lo esencial (tarifa, PIN, franja); tocarla abre un
+  modal con el detalle completo (guía, PIN del proveedor, cobros, nota,
+  fechas).
 - El estado se refresca solo (cada 20s mientras la pestaña está visible,
   y de una vez al volver a ella) — no hay que recargar a mano para ver
   cuándo el operador confirma la entrega.
-- Buzón de comentarios/inquietudes generales hacia el operador.
+- Buzón de comentarios/inquietudes generales hacia el operador — los
+  mensajes largos se acortan en la lista y se tocan para ver el texto
+  completo en un modal.
 - Notificación automática por correo al crear una pre-alerta, y de nuevo
   (con agradecimiento) cuando el operador confirma la entrega.
 - Modo oscuro/claro (botón en pantalla, recuerda la preferencia).
@@ -121,12 +126,20 @@ para residentes de Conjunto Ipanema.
   aparece un botón de WhatsApp con mensaje de agradecimiento distinto al
   de recepción — no reemplaza el correo automático, es un segundo canal
   opcional para ese mismo momento.
-- Bitácora: historial completo, buscable por residente/torre/apto,
-  exportable a CSV (sin PIN ni fotos) para llevar cuentas o compartir con
-  un contador. Cada registro se toca para abrir un modal con el detalle
-  completo (fotos más grandes, nota, PIN del proveedor, fechas, cobros).
+- Bitácora: historial completo, buscable por residente/torre/apto/proveedor
+  y filtrable por rango de fechas (Desde/Hasta) y por estado (Pre-alertado/
+  En Recepción/Programado/Entregado) — útil cuando no se recuerda el
+  nombre exacto. Exportable a CSV (sin PIN ni fotos) para llevar cuentas
+  o compartir con un contador. Cada registro se toca para abrir un modal
+  con el detalle completo (fotos más grandes, nota, PIN del proveedor,
+  fechas, cobros).
+- Recepción y Reparto: tocar el cuerpo de la tarjeta abre el mismo modal
+  de detalle completo de la Bitácora (fotos, valor declarado, teléfono,
+  fechas) sin perder los botones de acción rápida (Recibir, Editar,
+  Validar PIN, WhatsApp), que siguen funcionando directo desde la tarjeta.
 - Buzón: lee los comentarios de todos los residentes, con acceso directo a
-  WhatsApp de cada uno.
+  WhatsApp de cada uno. Los mensajes largos se acortan en la lista y se
+  tocan para ver el texto completo en un modal.
 - Generador de QR (código apunta a `/registro`) para distribuir e invitar
   residentes a crear su cuenta, descargable como PNG.
 - Notificación automática por correo cuando entra una pre-alerta nueva.

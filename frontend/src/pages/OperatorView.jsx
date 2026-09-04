@@ -10,6 +10,14 @@ import StatusBadge from '../components/StatusBadge.jsx';
 
 const MAX_FOTOS = 3;
 
+const ESTADOS_FILTRO = [
+  { value: 'TODOS', label: 'Todos los estados' },
+  { value: 'PREALERTADO', label: '🟡 Pre-alertado' },
+  { value: 'EN_RECEPCION', label: '📦 En Recepción' },
+  { value: 'PROGRAMADO', label: '🕒 Programado' },
+  { value: 'ENTREGADO', label: '✅ Entregado' },
+];
+
 // Por qué un paquete no se cobra: cortesía de primera entrega (siempre
 // gana, no consume bono) o un bono prepago con crédito disponible en esa
 // categoría de peso. Se usa igual en las tarjetas, los modales y la
@@ -22,6 +30,10 @@ function esHoy(iso) {
   const d = new Date(iso);
   const hoy = new Date();
   return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
+}
+
+function truncar(texto, max = 140) {
+  return texto.length > max ? `${texto.slice(0, max)}…` : texto;
 }
 
 function cobroInfo(pkg) {
@@ -53,10 +65,14 @@ export default function OperatorView() {
   const [delivered, setDelivered] = useState(false);
 
   const [logSearch, setLogSearch] = useState('');
+  const [logDesde, setLogDesde] = useState('');
+  const [logHasta, setLogHasta] = useState('');
+  const [logEstado, setLogEstado] = useState('TODOS');
   const [detailPkg, setDetailPkg] = useState(null);
 
   const [comentarios, setComentarios] = useState([]);
   const [comentariosSearch, setComentariosSearch] = useState('');
+  const [detailComentario, setDetailComentario] = useState(null);
 
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState(null);
@@ -127,13 +143,19 @@ export default function OperatorView() {
     .sort((a, b) => new Date(b.fechaIngreso) - new Date(a.fechaIngreso))
     .filter((p) => {
       const q = logSearch.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        p.residente.nombre.toLowerCase().includes(q) ||
-        p.residente.apto.toLowerCase().includes(q) ||
-        p.residente.torre.toLowerCase().includes(q) ||
-        p.proveedor.toLowerCase().includes(q)
-      );
+      const coincideTexto = !q
+        || p.residente.nombre.toLowerCase().includes(q)
+        || p.residente.apto.toLowerCase().includes(q)
+        || p.residente.torre.toLowerCase().includes(q)
+        || p.proveedor.toLowerCase().includes(q);
+
+      const coincideEstado = logEstado === 'TODOS' || p.estado === logEstado;
+
+      const fechaIngreso = new Date(p.fechaIngreso);
+      const coincideDesde = !logDesde || fechaIngreso >= new Date(`${logDesde}T00:00:00`);
+      const coincideHasta = !logHasta || fechaIngreso <= new Date(`${logHasta}T23:59:59`);
+
+      return coincideTexto && coincideEstado && coincideDesde && coincideHasta;
     });
 
   const comentariosFiltrados = comentarios.filter((c) => {
@@ -298,7 +320,7 @@ export default function OperatorView() {
           recepcionHoy.map((pkg) => {
             const info = cobroInfo(pkg);
             return (
-            <div className="card" key={pkg.id}>
+            <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
               <div className="card-head">
                 <div>
                   <div className="card-title">{pkg.residente.torre} - {pkg.residente.apto} · {pkg.residente.nombre}</div>
@@ -316,7 +338,7 @@ export default function OperatorView() {
               {pkg.notas && (
                 <div className="cod-box"><span>📝 {pkg.notas}</span></div>
               )}
-              <div className="grid-2">
+              <div className="grid-2" onClick={(e) => e.stopPropagation()}>
                 {pkg.estado === 'PREALERTADO' ? (
                   <button className="btn btn-primary" onClick={() => openCheckin(pkg)}>📷 Recibir y Fotografiar</button>
                 ) : (
@@ -327,8 +349,10 @@ export default function OperatorView() {
                   target="_blank" rel="noreferrer">💬 WhatsApp</a>
               </div>
               {BONOS_HABILITADOS && (
-                <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => openBonoModal(pkg)}>🎟️ Bono</button>
+                <button className="btn btn-secondary" style={{ marginTop: 8 }}
+                  onClick={(e) => { e.stopPropagation(); openBonoModal(pkg); }}>🎟️ Bono</button>
               )}
+              <p className="field-hint" style={{ marginTop: 8 }}>Toca la tarjeta para ver el detalle completo →</p>
             </div>
             );
           })
@@ -342,7 +366,8 @@ export default function OperatorView() {
           activeDeliveries.map((pkg) => {
             const info = cobroInfo(pkg);
             return (
-            <div className="card" key={pkg.id} style={{ borderLeft: '4px solid var(--brand)' }}>
+            <div className="card" key={pkg.id} style={{ borderLeft: '4px solid var(--brand)', cursor: 'pointer' }}
+              onClick={() => setDetailPkg(pkg)}>
               <div className="card-head">
                 <div>
                   <div className="card-title">{pkg.residente.torre} - Apto {pkg.residente.apto}</div>
@@ -361,7 +386,9 @@ export default function OperatorView() {
               {pkg.notas && (
                 <div className="cod-box" style={{ marginTop: 10 }}><span>📝 {pkg.notas}</span></div>
               )}
-              <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={() => openPinModal(pkg)}>🔑 Validar PIN en Puerta</button>
+              <button className="btn btn-primary" style={{ marginTop: 10 }}
+                onClick={(e) => { e.stopPropagation(); openPinModal(pkg); }}>🔑 Validar PIN en Puerta</button>
+              <p className="field-hint" style={{ marginTop: 8 }}>Toca la tarjeta para ver el detalle completo →</p>
             </div>
             );
           })
@@ -377,6 +404,28 @@ export default function OperatorView() {
             <input placeholder="Buscar por residente, torre, apto o proveedor…"
               value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
           </div>
+          <div className="grid-2" style={{ marginTop: 0, marginBottom: 12 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Desde</label>
+              <input type="date" value={logDesde} onChange={(e) => setLogDesde(e.target.value)} />
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Hasta</label>
+              <input type="date" value={logHasta} onChange={(e) => setLogHasta(e.target.value)} />
+            </div>
+          </div>
+          <div className="field">
+            <label>Estado</label>
+            <select value={logEstado} onChange={(e) => setLogEstado(e.target.value)}>
+              {ESTADOS_FILTRO.map((e) => <option key={e.value} value={e.value}>{e.label}</option>)}
+            </select>
+          </div>
+          {(logSearch || logDesde || logHasta || logEstado !== 'TODOS') && (
+            <button className="btn btn-secondary" style={{ marginBottom: 12 }}
+              onClick={() => { setLogSearch(''); setLogDesde(''); setLogHasta(''); setLogEstado('TODOS'); }}>
+              ✕ Limpiar filtros
+            </button>
+          )}
 
           {logEntries.length === 0 ? (
             <div className="empty">No hay paquetes que coincidan con la búsqueda.</div>
@@ -409,16 +458,17 @@ export default function OperatorView() {
             <div className="empty">No hay comentarios que coincidan con la búsqueda.</div>
           ) : (
             comentariosFiltrados.map((c) => (
-              <div className="card" key={c.id}>
+              <div className="card" key={c.id} style={{ cursor: 'pointer' }} onClick={() => setDetailComentario(c)}>
                 <div className="card-head">
                   <div>
                     <div className="card-title">{c.residente.torre} - Apto {c.residente.apto} · {c.residente.nombre}</div>
                     <div className="card-sub">{formatFecha(c.createdAt)}</div>
                   </div>
                   <a className="btn btn-whatsapp" style={{ width: 'auto', padding: '6px 12px' }}
+                    onClick={(e) => e.stopPropagation()}
                     href={`https://wa.me/57${c.residente.telefono}`} target="_blank" rel="noreferrer">💬</a>
                 </div>
-                <p style={{ fontSize: 13.5, margin: '10px 0 0' }}>{c.mensaje}</p>
+                <p style={{ fontSize: 13.5, margin: '10px 0 0' }}>{truncar(c.mensaje)}</p>
               </div>
             ))
           )}
@@ -519,6 +569,32 @@ export default function OperatorView() {
             ) : (
               <p className="field-hint" style={{ marginTop: 14 }}>Sin foto de evidencia todavía.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {detailComentario && (
+        <div className="modal-overlay" onClick={() => setDetailComentario(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>{detailComentario.residente.torre} - Apto {detailComentario.residente.apto}</h3>
+              <button className="modal-close" onClick={() => setDetailComentario(null)}>✕</button>
+            </div>
+            <div className="card-head" style={{ marginBottom: 10 }}>
+              <div>
+                <div className="card-title">{detailComentario.residente.nombre}</div>
+                <div className="card-sub">{detailComentario.residente.telefono}</div>
+              </div>
+            </div>
+            <div className="cod-box-muted" style={{ marginBottom: 10 }}>
+              <span>Enviado:</span>
+              <strong>{formatFecha(detailComentario.createdAt)}</strong>
+            </div>
+            <p style={{ fontSize: 14, lineHeight: 1.5 }}>{detailComentario.mensaje}</p>
+            <a className="btn btn-whatsapp" style={{ marginTop: 14 }}
+              href={`https://wa.me/57${detailComentario.residente.telefono}`} target="_blank" rel="noreferrer">
+              💬 Responder por WhatsApp
+            </a>
           </div>
         </div>
       )}
