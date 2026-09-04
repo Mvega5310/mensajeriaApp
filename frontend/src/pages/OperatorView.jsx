@@ -14,6 +14,16 @@ const MAX_FOTOS = 3;
 // gana, no consume bono) o un bono prepago con crédito disponible en esa
 // categoría de peso. Se usa igual en las tarjetas, los modales y la
 // bitácora para no repetir la misma lógica cuatro veces.
+// Compara solo año/mes/día (con la hora local del dispositivo, igual
+// que el resto de la app) — sirve para "¿esto pasó hoy?" sin que la
+// hora del día afecte la comparación.
+function esHoy(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const hoy = new Date();
+  return d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate();
+}
+
 function cobroInfo(pkg) {
   if (pkg.esPrimeraEntrega) {
     return { gratis: true, texto: '🎁 Primera vez — NO cobrar' };
@@ -104,8 +114,14 @@ export default function OperatorView() {
 
   const enRecepcion = packages.filter((p) => p.estado === 'EN_RECEPCION').length;
   const programado = packages.filter((p) => p.estado === 'PROGRAMADO').length;
-  const entregado = packages.filter((p) => p.estado === 'ENTREGADO').length;
+  const entregado = packages.filter((p) => p.estado === 'ENTREGADO' && esHoy(p.fechaEntrega)).length;
   const activeDeliveries = packages.filter((p) => p.estado === 'PROGRAMADO' || p.estado === 'EN_RECEPCION');
+
+  // Recepción es la vista de trabajo del día, no un historial: lo
+  // pendiente se ve sin importar qué tan viejo sea (para que nada se
+  // pierda de vista), pero lo ya entregado solo se queda ahí el mismo
+  // día — al siguiente, sigue completo en Bitácora, nunca se borra.
+  const recepcionHoy = packages.filter((p) => p.estado !== 'ENTREGADO' || esHoy(p.fechaEntrega));
 
   const logEntries = [...packages]
     .sort((a, b) => new Date(b.fechaIngreso) - new Date(a.fechaIngreso))
@@ -273,43 +289,51 @@ export default function OperatorView() {
 
       {error && <p className="error-text">{error}</p>}
 
-      {tab === 'reception' && packages.map((pkg) => {
-        const info = cobroInfo(pkg);
-        return (
-        <div className="card" key={pkg.id}>
-          <div className="card-head">
-            <div>
-              <div className="card-title">{pkg.residente.torre} - {pkg.residente.apto} · {pkg.residente.nombre}</div>
-              <div className="card-sub">{pkg.proveedor} · Guía: {pkg.guia}</div>
-              {pkg.pinProveedor && <div className="card-sub">🔑 PIN proveedor: <strong>{pkg.pinProveedor}</strong></div>}
-              {pkg.franjaHoraria && <div className="card-sub">🕒 Prefiere: {pkg.franjaHoraria}</div>}
+      {tab === 'reception' && (
+        recepcionHoy.length === 0 ? (
+          <div className="empty">
+            No hay nada pendiente en recepción por ahora. Lo entregado sigue completo en Bitácora.
+          </div>
+        ) : (
+          recepcionHoy.map((pkg) => {
+            const info = cobroInfo(pkg);
+            return (
+            <div className="card" key={pkg.id}>
+              <div className="card-head">
+                <div>
+                  <div className="card-title">{pkg.residente.torre} - {pkg.residente.apto} · {pkg.residente.nombre}</div>
+                  <div className="card-sub">{pkg.proveedor} · Guía: {pkg.guia}</div>
+                  {pkg.pinProveedor && <div className="card-sub">🔑 PIN proveedor: <strong>{pkg.pinProveedor}</strong></div>}
+                  {pkg.franjaHoraria && <div className="card-sub">🕒 Prefiere: {pkg.franjaHoraria}</div>}
+                </div>
+                <StatusBadge estado={pkg.estado} />
+              </div>
+              {info.gratis ? (
+                <div className="gold-box"><span>{info.texto}</span></div>
+              ) : (
+                <div className="cod-box-muted"><span>💰 Ya afiliado — cobrar el servicio</span></div>
+              )}
+              {pkg.notas && (
+                <div className="cod-box"><span>📝 {pkg.notas}</span></div>
+              )}
+              <div className="grid-2">
+                {pkg.estado === 'PREALERTADO' ? (
+                  <button className="btn btn-primary" onClick={() => openCheckin(pkg)}>📷 Recibir y Fotografiar</button>
+                ) : (
+                  <button className="btn btn-secondary" onClick={() => openCheckin(pkg)}>✏️ Editar</button>
+                )}
+                <a className="btn btn-whatsapp"
+                  href={`https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}`}
+                  target="_blank" rel="noreferrer">💬 WhatsApp</a>
+              </div>
+              {BONOS_HABILITADOS && (
+                <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => openBonoModal(pkg)}>🎟️ Bono</button>
+              )}
             </div>
-            <StatusBadge estado={pkg.estado} />
-          </div>
-          {info.gratis ? (
-            <div className="gold-box"><span>{info.texto}</span></div>
-          ) : (
-            <div className="cod-box-muted"><span>💰 Ya afiliado — cobrar el servicio</span></div>
-          )}
-          {pkg.notas && (
-            <div className="cod-box"><span>📝 {pkg.notas}</span></div>
-          )}
-          <div className="grid-2">
-            {pkg.estado === 'PREALERTADO' ? (
-              <button className="btn btn-primary" onClick={() => openCheckin(pkg)}>📷 Recibir y Fotografiar</button>
-            ) : (
-              <button className="btn btn-secondary" onClick={() => openCheckin(pkg)}>✏️ Editar</button>
-            )}
-            <a className="btn btn-whatsapp"
-              href={`https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}`}
-              target="_blank" rel="noreferrer">💬 WhatsApp</a>
-          </div>
-          {BONOS_HABILITADOS && (
-            <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => openBonoModal(pkg)}>🎟️ Bono</button>
-          )}
-        </div>
-        );
-      })}
+            );
+          })
+        )
+      )}
 
       {tab === 'delivery' && (
         activeDeliveries.length === 0 ? (

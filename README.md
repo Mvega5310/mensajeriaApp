@@ -111,6 +111,10 @@ para residentes de Conjunto Ipanema.
   `true` en ambos archivos y desplegar, sin tocar el resto del código.
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
   de subir) y categoría real — la tarifa final se recalcula server-side.
+  Es la vista de trabajo del día, no un historial: lo pendiente se ve
+  siempre sin importar qué tan viejo sea (nada se pierde de vista), pero
+  lo ya entregado solo aparece ahí el mismo día — al siguiente sigue
+  completo en Bitácora, nunca se borra de la base de datos.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
 - Nota del residente visible en Recepción, Reparto y al validar el PIN.
 - Validación de PIN en puerta para cerrar la entrega. Al confirmar,
