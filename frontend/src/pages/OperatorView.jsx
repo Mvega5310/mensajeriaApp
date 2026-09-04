@@ -423,13 +423,15 @@ export default function OperatorView() {
             <input placeholder="Buscar por residente, torre, apto o proveedor…"
               value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
           </div>
-          <div className="field">
-            <label>Desde</label>
-            <input type="date" value={logDesde} onChange={(e) => setLogDesde(e.target.value)} />
-          </div>
-          <div className="field">
-            <label>Hasta</label>
-            <input type="date" value={logHasta} onChange={(e) => setLogHasta(e.target.value)} />
+          <div className="grid-2 field-dates">
+            <div className="field">
+              <label>Desde</label>
+              <input type="date" value={logDesde} onChange={(e) => setLogDesde(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Hasta</label>
+              <input type="date" value={logHasta} onChange={(e) => setLogHasta(e.target.value)} />
+            </div>
           </div>
           <div className="field">
             <label>Estado</label>

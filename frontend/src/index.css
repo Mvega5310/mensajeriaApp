@@ -225,6 +225,11 @@ button, input, select { font: inherit; }
 }
 .field textarea{ resize:vertical; }
 .field input:focus, .field select:focus, .field textarea:focus{ outline:2px solid var(--brand); outline-offset:1px; }
+
+/* Desde/Hasta de Bitácora: van lado a lado (grid-2), pero un poco más
+   compactas que un input normal para que quede un respiro visible
+   entre las dos en vez de tocarse borde con borde. */
+.field-dates input[type="date"]{ padding:9px 8px; font-size:13px; }
 .field-hint{ font-size:11px; color:var(--ink-soft); margin:4px 0 0; }
 
 .password-wrap{ position:relative; }
