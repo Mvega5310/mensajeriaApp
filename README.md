@@ -84,6 +84,9 @@ para residentes de Conjunto Ipanema.
 - Notificación automática por correo al crear una pre-alerta, y de nuevo
   (con agradecimiento) cuando el operador confirma la entrega.
 - Modo oscuro/claro (botón en pantalla, recuerda la preferencia).
+- "Salir" pide confirmación antes de cerrar sesión — evita cerrarla sin
+  querer cuando el dedo buscaba el botón de tema, que está justo al lado
+  (aplica igual para Residente y Operador, es el mismo encabezado).
 - Las pestañas (Mis Paquetes/Notificar/Comentarios en Residente; Recepción/
   Reparto/Bitácora/Buzón en Operador) quedan fijas abajo de la pantalla,
   como el tab bar de una app nativa — no se pierden al hacer scroll.
@@ -116,10 +119,11 @@ para residentes de Conjunto Ipanema.
   `true` en ambos archivos y desplegar, sin tocar el resto del código.
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
   de subir) y categoría real — la tarifa final se recalcula server-side.
-  Es la vista de trabajo del día, no un historial: lo pendiente se ve
-  siempre sin importar qué tan viejo sea (nada se pierde de vista), pero
-  lo ya entregado solo aparece ahí el mismo día — al siguiente sigue
-  completo en Bitácora, nunca se borra de la base de datos.
+  Solo muestra lo pre-alertado que falta recibir; apenas se hace el
+  checkin, el paquete desaparece de ahí solo y pasa a Reparto. Al
+  confirmar la entrega, desaparece de Reparto y queda solo en Bitácora
+  (nunca se borra de la base de datos) — cada pestaña se despeja sola a
+  medida que el paquete avanza, sin superposición entre ellas.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
 - Nota del residente visible en Recepción, Reparto y al validar el PIN.
 - Validación de PIN en puerta para cerrar la entrega. Al confirmar,

@@ -141,11 +141,13 @@ export default function OperatorView() {
   const entregado = packages.filter((p) => p.estado === 'ENTREGADO' && esHoy(p.fechaEntrega)).length;
   const activeDeliveries = packages.filter((p) => p.estado === 'PROGRAMADO' || p.estado === 'EN_RECEPCION');
 
-  // Recepción es la vista de trabajo del día, no un historial: lo
-  // pendiente se ve sin importar qué tan viejo sea (para que nada se
-  // pierda de vista), pero lo ya entregado solo se queda ahí el mismo
-  // día — al siguiente, sigue completo en Bitácora, nunca se borra.
-  const recepcionHoy = packages.filter((p) => p.estado !== 'ENTREGADO' || esHoy(p.fechaEntrega));
+  // Recepción solo muestra lo que todavía no se ha recibido
+  // (PREALERTADO). Apenas el operador hace el checkin pasa a
+  // EN_RECEPCION y desaparece de aquí automáticamente — ya vive en
+  // Reparto (activeDeliveries, arriba). Cada pestaña se despeja sola a
+  // medida que el paquete avanza; el historial completo sigue intacto
+  // en Bitácora sin importar el estado.
+  const recepcionHoy = packages.filter((p) => p.estado === 'PREALERTADO');
 
   const logEntries = [...packages]
     .sort((a, b) => new Date(b.fechaIngreso) - new Date(a.fechaIngreso))
@@ -327,7 +329,7 @@ export default function OperatorView() {
       {tab === 'reception' && (
         recepcionHoy.length === 0 ? (
           <div className="empty">
-            No hay nada pendiente en recepción por ahora. Lo entregado sigue completo en Bitácora.
+            No hay paquetes pre-alertados por recibir. Lo que ya recibiste está en Reparto.
           </div>
         ) : (
           <>
@@ -353,11 +355,7 @@ export default function OperatorView() {
                 <div className="cod-box"><span>📝 {pkg.notas}</span></div>
               )}
               <div className="grid-2" onClick={(e) => e.stopPropagation()}>
-                {pkg.estado === 'PREALERTADO' ? (
-                  <button className="btn btn-primary" onClick={() => openCheckin(pkg)}>📷 Recibir y Fotografiar</button>
-                ) : (
-                  <button className="btn btn-secondary" onClick={() => openCheckin(pkg)}>✏️ Editar</button>
-                )}
+                <button className="btn btn-primary" onClick={() => openCheckin(pkg)}>📷 Recibir y Fotografiar</button>
                 <a className="btn btn-whatsapp"
                   href={`https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}`}
                   target="_blank" rel="noreferrer">💬 WhatsApp</a>

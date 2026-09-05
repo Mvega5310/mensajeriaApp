@@ -28,6 +28,7 @@ function PublicPage({ children }) {
 
 function Home() {
   const [me, setMe] = useState(null);
+  const [confirmandoSalida, setConfirmandoSalida] = useState(false);
   const role = getRole();
 
   useEffect(() => {
@@ -43,10 +44,28 @@ function Home() {
         </div>
         <div className="topbar-actions">
           <ThemeToggle />
-          <button className="btn-link" onClick={() => { logout(); window.location.href = '/login'; }}>Salir</button>
+          <button className="btn-link" onClick={() => setConfirmandoSalida(true)}>Salir</button>
         </div>
       </header>
       {role === 'OPERATOR' ? <OperatorView /> : <ResidentView />}
+
+      {confirmandoSalida && (
+        <div className="modal-overlay" onClick={() => setConfirmandoSalida(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3>¿Salir de la cuenta?</h3>
+              <button className="modal-close" onClick={() => setConfirmandoSalida(false)}>✕</button>
+            </div>
+            <p className="card-sub" style={{ marginBottom: 16 }}>
+              Vas a cerrar sesión. Si solo querías cambiar el tema, toca Cancelar.
+            </p>
+            <div className="grid-2">
+              <button className="btn btn-secondary" onClick={() => setConfirmandoSalida(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={() => { logout(); window.location.href = '/login'; }}>Sí, salir</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
