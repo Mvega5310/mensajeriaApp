@@ -62,9 +62,7 @@ export default function Register() {
               <div className="field">
                 <label htmlFor="torre">Torre</label>
                 <select id="torre" value={fields.torre} onChange={(e) => update('torre', e.target.value)}>
-                  <option>Torre 1</option>
-                  <option>Torre 2</option>
-                  <option>Torre 3</option>
+                  {[1, 2, 3, 4, 5, 6].map((n) => <option key={n}>{`Torre ${n}`}</option>)}
                 </select>
               </div>
               <div className="field">

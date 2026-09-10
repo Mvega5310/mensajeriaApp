@@ -62,7 +62,8 @@ para residentes de Conjunto Ipanema.
 
 **Residente**
 - Registro con aceptación obligatoria de Términos y Aviso de Privacidad
-  (queda constancia con fecha — `termsAcceptedAt`).
+  (queda constancia con fecha — `termsAcceptedAt`). El selector de torre
+  cubre las 6 torres del conjunto (`frontend/src/pages/Register.jsx`).
 - Recuperación de contraseña por correo (enlace de un solo uso, vence en 1h).
 - Pre-alerta de paquete: categoría de peso estimada (con tarifa de
   referencia), valor declarado (tope de responsabilidad por custodia),
