@@ -124,7 +124,9 @@ para residentes de Conjunto Ipanema.
   checkin, el paquete desaparece de ahí solo y pasa a Reparto. Al
   confirmar la entrega, desaparece de Reparto y queda solo en Bitácora
   (nunca se borra de la base de datos) — cada pestaña se despeja sola a
-  medida que el paquete avanza, sin superposición entre ellas.
+  medida que el paquete avanza, sin superposición entre ellas. Los
+  contadores "En Recepción"/"Para Reparto" arriba salen de esas mismas
+  listas filtradas, así que siempre cuadran con lo que se ve abajo.
 - Ronda de reparto organizada en 2 sesiones fijas al día (9am-12m y 6pm-9pm).
 - Nota del residente visible en Recepción, Reparto y al validar el PIN.
 - Validación de PIN en puerta para cerrar la entrega. Al confirmar,

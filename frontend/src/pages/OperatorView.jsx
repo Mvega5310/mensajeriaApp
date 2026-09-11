@@ -136,8 +136,6 @@ export default function OperatorView() {
     }
   }
 
-  const enRecepcion = packages.filter((p) => p.estado === 'EN_RECEPCION').length;
-  const programado = packages.filter((p) => p.estado === 'PROGRAMADO').length;
   const entregado = packages.filter((p) => p.estado === 'ENTREGADO' && esHoy(p.fechaEntrega)).length;
   const activeDeliveries = packages.filter((p) => p.estado === 'PROGRAMADO' || p.estado === 'EN_RECEPCION');
 
@@ -148,6 +146,12 @@ export default function OperatorView() {
   // medida que el paquete avanza; el historial completo sigue intacto
   // en Bitácora sin importar el estado.
   const recepcionHoy = packages.filter((p) => p.estado === 'PREALERTADO');
+
+  // Los contadores de arriba salen de las mismas listas que ya filtran
+  // cada pestaña (recepcionHoy/activeDeliveries) — así nunca pueden
+  // desincronizarse del conteo real de tarjetas que se ven abajo.
+  const enRecepcion = recepcionHoy.length;
+  const programado = activeDeliveries.length;
 
   const logEntries = [...packages]
     .sort((a, b) => new Date(b.fechaIngreso) - new Date(a.fechaIngreso))
