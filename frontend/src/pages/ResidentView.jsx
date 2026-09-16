@@ -39,6 +39,7 @@ export default function ResidentView() {
   const [bonos, setBonos] = useState([]);
 
   const [detailPkg, setDetailPkg] = useState(null);
+  const [detailFotoLoading, setDetailFotoLoading] = useState(false);
   const [detailComentario, setDetailComentario] = useState(null);
 
   const [paquetesPage, setPaquetesPage] = useState(1);
@@ -52,6 +53,18 @@ export default function ResidentView() {
     setScheduling(pkg);
     setSlot(pkg.franjaHoraria || TIME_SLOTS[0]);
     setPaymentMethod(pkg.metodoPagoServicio || PAYMENT_METHODS[0].value);
+  }
+
+  // El listado general ya no trae fotoUrl (pueden pesar cientos de KB
+  // por paquete y esta lista se sondea cada 20s) — se pide aparte, solo
+  // al abrir el detalle de ESTE paquete.
+  function openDetail(pkg) {
+    setDetailPkg(pkg);
+    setDetailFotoLoading(true);
+    api(`/packages/${pkg.id}/foto`)
+      .then(({ fotoUrl }) => setDetailPkg((prev) => (prev && prev.id === pkg.id ? { ...prev, fotoUrl } : prev)))
+      .catch(() => {})
+      .finally(() => setDetailFotoLoading(false));
   }
 
   async function refresh() {
@@ -283,7 +296,7 @@ export default function ResidentView() {
         ) : (
           <>
           {paquetesPaginados.items.map((pkg) => (
-            <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
+            <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(pkg)}>
               <div className="card-head">
                 <div>
                   <div className="card-id">{pkg.id.slice(0, 8).toUpperCase()}</div>
@@ -320,7 +333,7 @@ export default function ResidentView() {
                 </div>
               )}
               <p className="field-hint" style={{ marginTop: 8 }}>
-                Toca para ver el detalle{pkg.fotoUrl ? ' y las fotos' : ''} →
+                Toca para ver el detalle y las fotos →
               </p>
             </div>
           ))}
@@ -436,7 +449,11 @@ export default function ResidentView() {
             )}
 
             <div style={{ marginTop: 14 }}>
-              <PhotoGallery fotoUrl={detailPkg.fotoUrl} />
+              {detailFotoLoading ? (
+                <p className="field-hint">Cargando fotos…</p>
+              ) : (
+                <PhotoGallery fotoUrl={detailPkg.fotoUrl} />
+              )}
             </div>
           </div>
         </div>

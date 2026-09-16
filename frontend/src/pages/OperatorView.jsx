@@ -72,6 +72,7 @@ export default function OperatorView() {
   const [logHasta, setLogHasta] = useState('');
   const [logEstado, setLogEstado] = useState('TODOS');
   const [detailPkg, setDetailPkg] = useState(null);
+  const [detailFotoLoading, setDetailFotoLoading] = useState(false);
 
   const [comentarios, setComentarios] = useState([]);
   const [comentariosSearch, setComentariosSearch] = useState('');
@@ -200,6 +201,19 @@ export default function OperatorView() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  // El listado general ya no trae fotoUrl (ver comentario en
+  // packages.controller.js) — se pide aparte, solo al abrir el detalle
+  // de ESTE paquete puntual, para no mandar cientos de KB de fotos en
+  // cada refresh/poll de toda la lista.
+  function openDetail(pkg) {
+    setDetailPkg(pkg);
+    setDetailFotoLoading(true);
+    api(`/packages/${pkg.id}/foto`)
+      .then(({ fotoUrl }) => setDetailPkg((prev) => (prev && prev.id === pkg.id ? { ...prev, fotoUrl } : prev)))
+      .catch(() => {})
+      .finally(() => setDetailFotoLoading(false));
   }
 
   function openCheckin(pkg) {
@@ -340,7 +354,7 @@ export default function OperatorView() {
           {recepcionPaginada.items.map((pkg) => {
             const info = cobroInfo(pkg);
             return (
-            <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
+            <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(pkg)}>
               <div className="card-head">
                 <div>
                   <div className="card-title">{pkg.residente.torre} - {pkg.residente.apto} · {pkg.residente.nombre}</div>
@@ -386,7 +400,7 @@ export default function OperatorView() {
             const info = cobroInfo(pkg);
             return (
             <div className="card" key={pkg.id} style={{ borderLeft: '4px solid var(--brand)', cursor: 'pointer' }}
-              onClick={() => setDetailPkg(pkg)}>
+              onClick={() => openDetail(pkg)}>
               <div className="card-head">
                 <div>
                   <div className="card-title">{pkg.residente.torre} - Apto {pkg.residente.apto}</div>
@@ -451,7 +465,7 @@ export default function OperatorView() {
           ) : (
             <>
             {logPaginado.items.map((pkg) => (
-              <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => setDetailPkg(pkg)}>
+              <div className="card" key={pkg.id} style={{ cursor: 'pointer' }} onClick={() => openDetail(pkg)}>
                 <div className="card-head">
                   <div>
                     <div className="card-title">{pkg.residente.torre} - Apto {pkg.residente.apto} · {pkg.residente.nombre}</div>
@@ -460,7 +474,7 @@ export default function OperatorView() {
                   </div>
                   <StatusBadge estado={pkg.estado} />
                 </div>
-                <p className="field-hint" style={{ marginTop: 8 }}>Toca para ver el detalle{pkg.fotoUrl ? ' y las fotos' : ''} →</p>
+                <p className="field-hint" style={{ marginTop: 8 }}>Toca para ver el detalle y las fotos →</p>
               </div>
             ))}
             <Pagination page={logPaginado.safePage} totalPages={logPaginado.totalPages} onChange={setLogPage} />
@@ -583,7 +597,9 @@ export default function OperatorView() {
               <div className="cod-box" style={{ marginTop: 10 }}><span>📝 {detailPkg.notas}</span></div>
             )}
 
-            {parseFotos(detailPkg.fotoUrl).length > 0 ? (
+            {detailFotoLoading ? (
+              <p className="field-hint" style={{ marginTop: 14 }}>Cargando fotos…</p>
+            ) : parseFotos(detailPkg.fotoUrl).length > 0 ? (
               <div className="field" style={{ marginTop: 14 }}>
                 <label>Fotos de evidencia</label>
                 {parseFotos(detailPkg.fotoUrl).map((src, i) => (

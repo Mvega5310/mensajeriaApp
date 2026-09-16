@@ -8,6 +8,7 @@ import {
   checkin,
   confirmDelivery,
   exportCsv,
+  getFoto,
 } from '../controllers/packages.controller.js';
 
 const router = Router();
@@ -17,6 +18,9 @@ router.use(requireAuth);
 router.post('/', requireRole('RESIDENT'), createPrealert);
 router.get('/mine', requireRole('RESIDENT'), listMine);
 router.patch('/:id/schedule', requireRole('RESIDENT'), schedule);
+// Ambos roles pueden pedirla; getFoto() valida por dentro que un
+// residente solo vea la foto de su propio paquete.
+router.get('/:id/foto', getFoto);
 
 router.get('/', requireRole('OPERATOR'), listAll);
 router.get('/export', requireRole('OPERATOR'), exportCsv);

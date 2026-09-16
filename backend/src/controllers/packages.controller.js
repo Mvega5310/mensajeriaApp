@@ -68,15 +68,21 @@ export async function createPrealert(req, res) {
 
 // Residente: solo ve sus propios paquetes (nunca los de otros) — e
 // incluye siempre su PIN, porque lo necesita cada vez que abre la puerta.
+// fotoUrl NUNCA viaja aquí: puede pesar cientos de KB por paquete (hasta
+// 3 fotos en base64) y esta lista se pide cada 20s mientras el residente
+// tiene la pestaña abierta — mandarla en cada sondeo fue lo que saturó
+// el servidor en producción. Se pide aparte, solo al abrir el detalle
+// de un paquete puntual (ver getFoto()).
 export async function listMine(req, res) {
   const packages = await prisma.package.findMany({
     where: { residenteId: req.user.sub },
     orderBy: { createdAt: 'desc' },
   });
-  res.json(packages);
+  res.json(packages.map(({ fotoUrl, ...p }) => p));
 }
 
-// Operador: ve todos los paquetes, pero el PIN nunca viaja hacia esta vista.
+// Operador: ve todos los paquetes, pero el PIN nunca viaja hacia esta
+// vista — y tampoco fotoUrl, por la misma razón que en listMine().
 export async function listAll(req, res) {
   const packages = await prisma.package.findMany({
     include: {
@@ -95,10 +101,25 @@ export async function listAll(req, res) {
     if (!actual || p.createdAt < actual) primeraFechaPorResidente.set(p.residenteId, p.createdAt);
   }
 
-  res.json(packages.map(({ pin, bonoId, ...p }) => ({
+  res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => ({
     ...p,
     esPrimeraEntrega: primeraFechaPorResidente.get(p.residenteId).getTime() === p.createdAt.getTime(),
   })));
+}
+
+// Fotos aparte del listado general (ver comentario en listMine/listAll):
+// el residente solo puede pedir las de su propio paquete; el operador,
+// las de cualquiera.
+export async function getFoto(req, res) {
+  const pkg = await prisma.package.findUnique({
+    where: { id: req.params.id },
+    select: { fotoUrl: true, residenteId: true },
+  });
+  if (!pkg) return res.status(404).json({ error: 'Paquete no encontrado' });
+  if (req.user.role === 'RESIDENT' && pkg.residenteId !== req.user.sub) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+  res.json({ fotoUrl: pkg.fotoUrl });
 }
 
 // Residente: programa su propia franja de entrega — se verifica dueño.

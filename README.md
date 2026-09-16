@@ -164,6 +164,15 @@ para residentes de Conjunto Ipanema.
 - Correo transaccional vía Resend, con dominio propio verificado
   (`prospect01.com`) — llega a cualquier residente, no solo a la cuenta
   del operador.
+- Las fotos (`fotoUrl`, hasta 3 imágenes en base64 por paquete) nunca
+  viajan en los listados generales (`GET /packages`, `GET /packages/mine`)
+  ni en el sondeo de 20s del residente — solo se piden aparte, al abrir
+  el detalle de un paquete puntual, vía `GET /packages/:id/foto`. Antes
+  de este cambio, cada respuesta de listado incluía todas las fotos de
+  todos los paquetes (con solo 9 paquetes con foto, el listado pesaba
+  ~1.7MB), lo que sobrecargaba el servidor en producción — reinicios
+  frecuentes del backend y la app "poniéndose oscura"/quedándose sin
+  responder en el celular.
 
 ## Pendiente
 
