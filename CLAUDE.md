@@ -2,7 +2,9 @@
 
 App real en producción de recepción/custodia/entrega de paquetes para el
 Conjunto Residencial Ipanema, operada por Francisco Caro Yances (un solo
-operador). Repo: `Mvega5310/mensajeriaApp`, rama `main`.
+operador). Repo: `Mvega5310/mensajeriaApp`. La app está por arrancar de
+verdad en el conjunto — por eso la rama de trabajo es `develop`, no `main`
+(ver regla de ramas abajo, es la más importante de este archivo).
 
 **Para features, funcionalidades y cómo levantar el proyecto en local:
 lee [README.md](README.md).** Para infraestructura, despliegue y cómo
@@ -13,6 +15,25 @@ no están ahí.
 **En producción:**
 - App: https://mensajeria-app-iota.vercel.app
 - API: https://mensajeriaapp-production.up.railway.app
+
+## Regla de ramas: todo el trabajo va a `develop`, nunca directo a `main`
+
+`main` es lo que Railway y Vercel despliegan a producción automáticamente
+en cada push — y la app está a punto de arrancar de verdad con el
+conjunto, así que un push a `main` ya no es un ensayo, es tocar el
+sistema en uso. Desde ahora:
+
+- **Todo commit va a `develop`** (`git checkout develop` si no estás ahí).
+  `git push origin develop` es seguro: Railway solo despliega desde
+  `main`, así que no dispara nada en producción (Vercel puede crear un
+  *preview* aparte de esa rama, pero no toca la URL real).
+- **Nunca hacer merge/push a `main` por iniciativa propia.** Eso solo pasa
+  cuando el usuario lo pide explícitamente (ej. "ya podemos pasar esto a
+  producción", "mergea a main"). Si no lo dice, el trabajo se queda en
+  `develop` aunque esté terminado y probado.
+- Esto **no** aplica a operaciones directas sobre la base de datos de
+  producción (como una limpieza de datos) cuando el usuario las pide
+  explícitamente — esas son independientes de qué rama esté commiteada.
 
 ## Regla de oro: documentación al día
 
@@ -37,9 +58,9 @@ docs/        # Prototipo original, flyer de campaña, logo — referencia histó
    - Si el cambio toca UI: levantar `npm run dev` en `backend/` y `frontend/`, y verificar en un navegador real — no solo `npm run build`. Playwright con Chromium ya está cacheado en esta máquina (`C:\Users\ACER\AppData\Local\ms-playwright\`); solo falta `npm install playwright@1.61.1` en el scratchpad de la sesión si no está.
    - Limpiar al terminar: matar `nodemon`/`vite`, volver el `provider` a `"postgresql"`, borrar `backend/.env` y `backend/prisma/dev.db*`, `npx prisma generate`.
 2. **Si el cambio requiere migración de esquema**, aplicarla contra Postgres de producción vía túnel SSH de Railway — `railway run` NO funciona para esto (ver DEPLOY.md, sección "Migraciones de Postgres"). Nunca commitear migraciones generadas contra SQLite.
-3. **Commit + push a `main`** (Vercel y Railway despliegan solos al hacer push). Nunca force-push, nunca amend de un commit ya publicado — siempre un commit nuevo.
-4. **Verificar en vivo** después de desplegar: sondear el bundle/API de producción hasta confirmar que el deploy nuevo está activo (los hashes de archivo cambian con cada build), no asumir que terminó por el solo hecho de haber hecho push.
-5. **Actualizar README.md/DEPLOY.md** en el mismo commit (ver regla de oro arriba).
+3. **Commit + push a `develop`** (ver "Regla de ramas" arriba — nunca a `main` sin que el usuario lo pida). Nunca force-push, nunca amend de un commit ya publicado — siempre un commit nuevo.
+4. Solo cuando el usuario pida explícitamente pasar algo a producción: merge de `develop` a `main` y push. Ahí sí, **verificar en vivo** después: sondear el bundle/API de producción hasta confirmar que el deploy nuevo está activo (los hashes de archivo cambian con cada build), no asumir que terminó por el solo hecho de haber hecho push.
+5. **Actualizar README.md/DEPLOY.md** en el mismo commit (ver regla de oro arriba), sea en `develop` o al mergear a `main`.
 
 ## Cosas ya decididas — no las reabras sin que el usuario lo pida
 
