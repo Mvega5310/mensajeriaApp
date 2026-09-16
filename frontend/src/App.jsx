@@ -50,7 +50,7 @@ function Home() {
       {role === 'OPERATOR' ? <OperatorView /> : <ResidentView />}
 
       {confirmandoSalida && (
-        <div className="modal-overlay" onClick={() => setConfirmandoSalida(false)}>
+        <div className="modal-overlay modal-overlay-center" onClick={() => setConfirmandoSalida(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <h3>¿Salir de la cuenta?</h3>

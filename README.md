@@ -87,10 +87,15 @@ para residentes de Conjunto Ipanema.
 - Modo oscuro/claro (botón en pantalla, recuerda la preferencia).
 - "Salir" pide confirmación antes de cerrar sesión — evita cerrarla sin
   querer cuando el dedo buscaba el botón de tema, que está justo al lado
-  (aplica igual para Residente y Operador, es el mismo encabezado).
+  (aplica igual para Residente y Operador, es el mismo encabezado). Ese
+  modal flota centrado en la pantalla (no anclado abajo como el resto)
+  para que quede al alcance del pulgar usando el celular con una mano.
 - Las pestañas (Mis Paquetes/Notificar/Comentarios en Residente; Recepción/
   Reparto/Bitácora/Buzón en Operador) quedan fijas abajo de la pantalla,
-  como el tab bar de una app nativa — no se pierden al hacer scroll.
+  como el tab bar de una app nativa — no se pierden al hacer scroll. Al
+  cambiar de pestaña la página vuelve arriba sola, para que un salto de
+  scroll (cuando la pestaña nueva tiene menos contenido que donde estabas
+  desplazado) no se sienta como si la pantalla "brincara" de tamaño.
 - **Instalable como app** (PWA): en Android, Chrome ofrece "Instalar app"
   solo; en iPhone, Compartir → "Agregar a inicio". Queda con ícono propio
   y sin la barra del navegador — no es necesario pasar por App

@@ -49,6 +49,15 @@ export default function ResidentView() {
     return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
   }
 
+  // Si venías desplazado hacia abajo viendo una lista larga y la
+  // pestaña nueva tiene menos contenido, el navegador ajusta el scroll
+  // de golpe — se ve como si la pantalla "brincara" de tamaño. Volver
+  // arriba al cambiar de pestaña evita ese salto.
+  function cambiarTab(nuevaTab) {
+    setTab(nuevaTab);
+    window.scrollTo(0, 0);
+  }
+
   function openSchedule(pkg) {
     setScheduling(pkg);
     setSlot(pkg.franjaHoraria || TIME_SLOTS[0]);
@@ -168,13 +177,13 @@ export default function ResidentView() {
       </div>
 
       <div className="tabs">
-        <button className={`tab ${tab === 'list' ? 'active' : ''}`} onClick={() => setTab('list')}>
+        <button className={`tab ${tab === 'list' ? 'active' : ''}`} onClick={() => cambiarTab('list')}>
           Mis Paquetes ({packages.length})
         </button>
-        <button className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => setTab('form')}>
+        <button className={`tab ${tab === 'form' ? 'active' : ''}`} onClick={() => cambiarTab('form')}>
           + Notificar Paquete
         </button>
-        <button className={`tab ${tab === 'comentarios' ? 'active' : ''}`} onClick={() => setTab('comentarios')}>
+        <button className={`tab ${tab === 'comentarios' ? 'active' : ''}`} onClick={() => cambiarTab('comentarios')}>
           💬 Comentarios
         </button>
       </div>

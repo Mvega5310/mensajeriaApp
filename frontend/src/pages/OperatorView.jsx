@@ -108,6 +108,15 @@ export default function OperatorView() {
     refreshComentarios().catch((err) => setError(err.message));
   }, []);
 
+  // Si venías desplazado hacia abajo viendo una lista larga y la
+  // pestaña nueva tiene menos contenido, el navegador ajusta el scroll
+  // de golpe — se ve como si la pantalla "brincara" de tamaño. Volver
+  // arriba al cambiar de pestaña evita ese salto.
+  function cambiarTab(nuevaTab) {
+    setTab(nuevaTab);
+    window.scrollTo(0, 0);
+  }
+
   function openQr() {
     setQrOpen(true);
     QRCode.toDataURL(inviteUrl, { width: 320, margin: 2 }).then(setQrDataUrl);
@@ -336,10 +345,10 @@ export default function OperatorView() {
       </button>
 
       <div className="tabs">
-        <button className={`tab ${tab === 'reception' ? 'active' : ''}`} onClick={() => setTab('reception')}>📥 Recepción</button>
-        <button className={`tab ${tab === 'delivery' ? 'active' : ''}`} onClick={() => setTab('delivery')}>🚪 Reparto</button>
-        <button className={`tab ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>🗂️ Bitácora</button>
-        <button className={`tab ${tab === 'comentarios' ? 'active' : ''}`} onClick={() => setTab('comentarios')}>💬 Buzón</button>
+        <button className={`tab ${tab === 'reception' ? 'active' : ''}`} onClick={() => cambiarTab('reception')}>📥 Recepción</button>
+        <button className={`tab ${tab === 'delivery' ? 'active' : ''}`} onClick={() => cambiarTab('delivery')}>🚪 Reparto</button>
+        <button className={`tab ${tab === 'log' ? 'active' : ''}`} onClick={() => cambiarTab('log')}>🗂️ Bitácora</button>
+        <button className={`tab ${tab === 'comentarios' ? 'active' : ''}`} onClick={() => cambiarTab('comentarios')}>💬 Buzón</button>
       </div>
 
       {error && <p className="error-text">{error}</p>}
