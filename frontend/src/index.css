@@ -109,6 +109,17 @@
 .how-it-works strong{ color: var(--brand-dark); }
 body{
   margin: 0;
+  /* Sin esto, una pestaña con poco contenido (ej. Reparto vacío) es más
+     corta que la pantalla y no da con qué hacer scroll — en iOS Safari
+     eso mantiene la barra de direcciones expandida, mientras que una
+     pestaña larga (ej. Bitácora) sí deja hacer scroll y la barra se
+     contrae. Ese cambio de alto de la barra de Safari es lo que hacía
+     que la barra fija de abajo pareciera "subir y bajar" según la
+     pestaña — forzando el mismo alto mínimo en todas, Safari queda en
+     el mismo estado siempre y la barra deja de moverse.
+     100vh como respaldo para navegadores sin soporte de dvh. */
+  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;

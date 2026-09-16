@@ -96,6 +96,11 @@ para residentes de Conjunto Ipanema.
   cambiar de pestaña la página vuelve arriba sola, para que un salto de
   scroll (cuando la pestaña nueva tiene menos contenido que donde estabas
   desplazado) no se sienta como si la pantalla "brincara" de tamaño.
+  `body` además fuerza `min-height: 100dvh`: sin eso, una pestaña corta
+  (ej. Reparto vacío) no da con qué hacer scroll y en iOS Safari eso deja
+  la barra de direcciones expandida, mientras que una pestaña larga sí
+  la contrae — ese cambio de alto de la barra de Safari es lo que hacía
+  que la barra fija de abajo pareciera moverse de una pestaña a otra.
 - **Instalable como app** (PWA): en Android, Chrome ofrece "Instalar app"
   solo; en iPhone, Compartir → "Agregar a inicio". Queda con ícono propio
   y sin la barra del navegador — no es necesario pasar por App
