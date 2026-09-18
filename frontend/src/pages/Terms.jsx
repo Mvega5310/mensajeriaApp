@@ -16,8 +16,7 @@ export default function Terms() {
       <h2>1. Quién presta el servicio</h2>
       <p>
         Puertaya Ipanema es operado de forma independiente por <strong>Francisco Caro Yances</strong>,
-        identificado con C.C. <strong>1128060641</strong>, domiciliado en{' '}
-        <strong>Ipanema Torre 1, Ap. 302</strong>, contacto <strong>3006248062</strong>.
+        domiciliado en <strong>Ipanema Torre 1, Ap. 302</strong>, contacto <strong>3006248062</strong>.
       </p>
 
       <h2>2. Qué hace el servicio</h2>
