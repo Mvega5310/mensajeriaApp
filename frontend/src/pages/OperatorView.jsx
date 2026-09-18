@@ -8,6 +8,7 @@ import { parseFotos } from '../utils/fotos.js';
 import { BONOS_HABILITADOS } from '../utils/features.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import Pagination from '../components/Pagination.jsx';
+import PhotoGallery from '../components/PhotoGallery.jsx';
 import { paginar } from '../utils/pagination.js';
 
 const MAX_FOTOS = 3;
@@ -609,12 +610,8 @@ export default function OperatorView() {
             {detailFotoLoading ? (
               <p className="field-hint" style={{ marginTop: 14 }}>Cargando fotos…</p>
             ) : parseFotos(detailPkg.fotoUrl).length > 0 ? (
-              <div className="field" style={{ marginTop: 14 }}>
-                <label>Fotos de evidencia</label>
-                {parseFotos(detailPkg.fotoUrl).map((src, i) => (
-                  <img key={i} src={src} alt={`Evidencia ${i + 1}`}
-                    style={{ width: '100%', borderRadius: 12, marginTop: 8, border: '1px solid var(--line)' }} />
-                ))}
+              <div style={{ marginTop: 14 }}>
+                <PhotoGallery fotoUrl={detailPkg.fotoUrl} />
               </div>
             ) : (
               <p className="field-hint" style={{ marginTop: 14 }}>Sin foto de evidencia todavía.</p>

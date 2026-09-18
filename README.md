@@ -71,11 +71,14 @@ para residentes de Conjunto Ipanema.
   para el operador (ej. "pago con billete de $100.000, llevar vueltos"),
   y el PIN que algunas plataformas (ej. Mercado Libre) generan para su
   propio mensajero — el operador lo necesita a mano en recepción.
-- Seguimiento del paquete con su PIN de entrega, galería de hasta 3 fotos
-  de evidencia colapsable, y reprogramación de franja una vez el paquete llega.
-  La tarjeta muestra lo esencial (tarifa, PIN, franja); tocarla abre un
-  modal con el detalle completo (guía, PIN del proveedor, cobros, nota,
-  fechas).
+- Seguimiento del paquete con su PIN de entrega, y reprogramación de
+  franja una vez el paquete llega. La tarjeta muestra lo esencial
+  (tarifa, PIN, franja); tocarla abre un modal con el detalle completo
+  (guía, PIN del proveedor, cobros, nota, fechas y las fotos de
+  evidencia). Las fotos se ven en miniatura y se tocan para abrirlas en
+  pantalla completa (`components/PhotoGallery.jsx`, compartido con el
+  detalle del operador) — antes quedaban recortadas y chicas, sin forma
+  de verlas más grande.
 - El estado se refresca solo (cada 20s mientras la pestaña está visible,
   y de una vez al volver a ella) — no hay que recargar a mano para ver
   cuándo el operador confirma la entrega.
@@ -162,8 +165,8 @@ para residentes de Conjunto Ipanema.
   En Recepción/Programado/Entregado) — útil cuando no se recuerda el
   nombre exacto. Exportable a CSV (sin PIN ni fotos) para llevar cuentas
   o compartir con un contador. Cada registro se toca para abrir un modal
-  con el detalle completo (fotos más grandes, nota, PIN del proveedor,
-  fechas, cobros).
+  con el detalle completo (miniaturas que abren en pantalla completa al
+  tocarlas, nota, PIN del proveedor, fechas, cobros).
 - Paginación de 10 en 10 en toda lista que pueda crecer sin límite
   (Recepción, Reparto, Bitácora, Buzón del operador; Mis Paquetes y
   Comentarios del residente) — evita listas interminables a medida que
