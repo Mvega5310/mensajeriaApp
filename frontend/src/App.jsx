@@ -18,14 +18,14 @@ function Protected({ children }) {
 }
 
 // Las páginas públicas (login, registro, etc.) no tienen topbar propio —
-// esto les da el mismo botón de tema y el sello de marca sin tocar cada
+// esto les da el mismo botón de tema y el logo de marca sin tocar cada
 // archivo por separado.
 function PublicPage({ children }) {
   const [theme, setTheme] = useTheme();
   return (
     <>
       <div className="floating-theme-toggle"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
-      <div className="auth-brand"><Logo variant="sello" size={150} mode={theme} /></div>
+      <div className="auth-brand"><Logo variant="lockup" size={150} mode={theme} /></div>
       {children}
     </>
   );

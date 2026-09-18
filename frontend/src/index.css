@@ -1,18 +1,19 @@
 /* Variables --puertaya-* del kit de marca (frontend/src/puertaya-brand/) —
    disponibles para quien las quiera usar directo; el resto del CSS de la
-   app sigue usando sus propios tokens --brand/--gold (arriba), ya
-   actualizados a estos mismos valores. */
+   app sigue usando sus propios tokens --brand/--gold (arriba), migrados a
+   la identidad azul/turquesa (--gold ahora vale el turquesa de acento,
+   el nombre de la variable se conserva para no reescribir todo el CSS). */
 @import "./puertaya-brand/tokens.css";
 
 :root{
-  --brand: #17223A;
-  --brand-dark: #12233F;
-  --brand-hover: #12233F;
-  --brand-bg: #eef1f6;
-  --brand-line: #c7d0de;
-  --gold: #C79A3E;
-  --gold-bg: #fbf1e2;
-  --gold-line: #f0dcb0;
+  --brand: #1E63C9;
+  --brand-dark: #13294B;
+  --brand-hover: #0C2E73;
+  --brand-bg: #e7effc;
+  --brand-line: #c3d6f2;
+  --gold: #17B6C4;
+  --gold-bg: #e3f7f9;
+  --gold-line: #bfeaee;
   --ink: #1e293b;
   --ink-soft: #64748b;
   --line: #e2e8f0;
@@ -41,14 +42,14 @@
    guardada (ver ThemeToggle) — el atributo data-theme la representa. */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --brand: #17223A;
-    --brand-dark: #8fabdb;
-    --brand-hover: #2a4270;
-    --brand-bg: #16233a;
-    --brand-line: #2a3b57;
-    --gold: #E8CE86;
-    --gold-bg: #2e2412;
-    --gold-line: #4a3a1c;
+    --brand: #1E63C9;
+    --brand-dark: #9dc2f5;
+    --brand-hover: #2f5fa8;
+    --brand-bg: #122a4d;
+    --brand-line: #24406b;
+    --gold: #5fdce6;
+    --gold-bg: #0f2e33;
+    --gold-line: #1d4e56;
     --ink: #e8ede9;
     --ink-soft: #93a39a;
     --line: #253029;
@@ -74,14 +75,14 @@
   }
 }
 :root[data-theme="dark"]{
-  --brand: #17223A;
-  --brand-dark: #8fabdb;
-  --brand-hover: #2a4270;
-  --brand-bg: #16233a;
-  --brand-line: #2a3b57;
-  --gold: #E8CE86;
-  --gold-bg: #2e2412;
-  --gold-line: #4a3a1c;
+  --brand: #1E63C9;
+  --brand-dark: #9dc2f5;
+  --brand-hover: #2f5fa8;
+  --brand-bg: #122a4d;
+  --brand-line: #24406b;
+  --gold: #5fdce6;
+  --gold-bg: #0f2e33;
+  --gold-line: #1d4e56;
   --ink: #e8ede9;
   --ink-soft: #93a39a;
   --line: #253029;

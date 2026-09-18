@@ -111,14 +111,17 @@ para residentes de Conjunto Ipanema.
   sola: cuando hay una versión nueva desplegada, la próxima vez que se
   abre la app se recarga automáticamente para tomarla (sin pedir
   reinstalar ni tener que cerrarla dos veces).
-- Identidad de marca navy/dorado ("Puertayá"), con el kit de marca en
+- Identidad de marca azul/turquesa ("Puertayá"), con el kit de marca en
   `frontend/src/puertaya-brand/` (componente `Logo`, `tokens.css` con
   las variables `--puertaya-*`, y los logos en `logos/icono/` — versión
-  chica para el encabezado — y `logos/sello/` — el emblema completo,
-  usado en la pantalla de login/registro). El logo cambia de versión
-  clara/oscura junto con el resto de la app (`useTheme`, compartido con
-  `ThemeToggle`). El favicon, ícono de instalación y el `theme_color`
-  del manifest de PWA usan el mismo set de íconos (`frontend/public/`).
+  chica para el encabezado — y `logos/lockup/` — símbolo + nombre +
+  eslogan, usado en la pantalla de login/registro). El logo cambia de
+  versión clara/oscura junto con el resto de la app (`useTheme`,
+  compartido con `ThemeToggle`); como el imagotipo transparente del kit
+  solo existe en versión clara, en modo oscuro `Logo` compone el ícono
+  oscuro con el nombre en texto en vez de mostrarlo (ver comentario en
+  `Logo.jsx`). El favicon, ícono de instalación y el `theme_color` del
+  manifest de PWA usan el mismo set de íconos (`frontend/public/`).
 
 **Operador**
 - Alerta de primera entrega: **es por apartamento físico, no por
