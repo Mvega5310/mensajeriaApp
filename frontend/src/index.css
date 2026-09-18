@@ -1,10 +1,16 @@
+/* Variables --puertaya-* del kit de marca (frontend/src/puertaya-brand/) —
+   disponibles para quien las quiera usar directo; el resto del CSS de la
+   app sigue usando sus propios tokens --brand/--gold (arriba), ya
+   actualizados a estos mismos valores. */
+@import "./puertaya-brand/tokens.css";
+
 :root{
-  --brand: #1c2f52;
-  --brand-dark: #0f1b30;
-  --brand-hover: #0f1b30;
+  --brand: #17223A;
+  --brand-dark: #12233F;
+  --brand-hover: #12233F;
   --brand-bg: #eef1f6;
   --brand-line: #c7d0de;
-  --gold: #c2852c;
+  --gold: #C79A3E;
   --gold-bg: #fbf1e2;
   --gold-line: #f0dcb0;
   --ink: #1e293b;
@@ -35,12 +41,12 @@
    guardada (ver ThemeToggle) — el atributo data-theme la representa. */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --brand: #1c2f52;
+    --brand: #17223A;
     --brand-dark: #8fabdb;
     --brand-hover: #2a4270;
     --brand-bg: #16233a;
     --brand-line: #2a3b57;
-    --gold: #d9a54a;
+    --gold: #E8CE86;
     --gold-bg: #2e2412;
     --gold-line: #4a3a1c;
     --ink: #e8ede9;
@@ -68,12 +74,12 @@
   }
 }
 :root[data-theme="dark"]{
-  --brand: #1c2f52;
+  --brand: #17223A;
   --brand-dark: #8fabdb;
   --brand-hover: #2a4270;
   --brand-bg: #16233a;
   --brand-line: #2a3b57;
-  --gold: #d9a54a;
+  --gold: #E8CE86;
   --gold-bg: #2e2412;
   --gold-line: #4a3a1c;
   --ink: #e8ede9;
@@ -144,6 +150,7 @@ button, input, select { font: inherit; }
   gap: 10px;
   z-index: 20;
 }
+.topbar-brand{ display:flex; align-items:center; gap:8px; min-width:0; }
 .topbar-user{ color: var(--ink-soft); font-size: 13px; }
 .topbar-actions{ display:flex; align-items:center; gap:12px; flex-shrink:0; }
 .btn-link{
@@ -344,7 +351,8 @@ button, input, select { font: inherit; }
   padding:12px; border:2px solid var(--brand); border-radius:14px; background:var(--surface-2); color:var(--ink);
 }
 
-.auth-shell{ max-width:380px; margin: 60px auto; padding: 0 16px; }
+.auth-brand{ display:flex; justify-content:center; padding-top: max(28px, calc(16px + env(safe-area-inset-top))); }
+.auth-shell{ max-width:380px; margin: 24px auto 60px; padding: 0 16px; }
 .auth-card{ background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:24px; }
 .auth-card h1{ font-size:20px; margin:0 0 4px; }
 .auth-card p.sub{ color:var(--ink-soft); font-size:13px; margin:0 0 20px; }

@@ -10,17 +10,22 @@ import OperatorView from './pages/OperatorView.jsx';
 import { getRole, isAuthenticated, logout } from './services/auth.js';
 import { api } from './services/api.js';
 import ThemeToggle from './components/ThemeToggle.jsx';
+import useTheme from './hooks/useTheme.js';
+import Logo from './puertaya-brand/Logo.jsx';
 
 function Protected({ children }) {
   return isAuthenticated() ? children : <Navigate to="/login" replace />;
 }
 
 // Las páginas públicas (login, registro, etc.) no tienen topbar propio —
-// esto les da el mismo botón de tema sin tocar cada archivo por separado.
+// esto les da el mismo botón de tema y el sello de marca sin tocar cada
+// archivo por separado.
 function PublicPage({ children }) {
+  const [theme, setTheme] = useTheme();
   return (
     <>
-      <div className="floating-theme-toggle"><ThemeToggle /></div>
+      <div className="floating-theme-toggle"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
+      <div className="auth-brand"><Logo variant="sello" size={150} mode={theme} /></div>
       {children}
     </>
   );
@@ -29,6 +34,7 @@ function PublicPage({ children }) {
 function Home() {
   const [me, setMe] = useState(null);
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
+  const [theme, setTheme] = useTheme();
   const role = getRole();
 
   useEffect(() => {
@@ -38,12 +44,15 @@ function Home() {
   return (
     <>
       <header className="topbar">
-        <div>
-          <strong>Puertaya Ipanema</strong>
-          {me && <span className="topbar-user"> — {me.nombre} ({role === 'OPERATOR' ? 'Operador' : 'Residente'})</span>}
+        <div className="topbar-brand">
+          <Logo variant="icono" size={30} mode={theme} />
+          <div>
+            <strong>Puertaya Ipanema</strong>
+            {me && <span className="topbar-user"> — {me.nombre} ({role === 'OPERATOR' ? 'Operador' : 'Residente'})</span>}
+          </div>
         </div>
         <div className="topbar-actions">
-          <ThemeToggle />
+          <ThemeToggle theme={theme} setTheme={setTheme} />
           <button className="btn-link" onClick={() => setConfirmandoSalida(true)}>Salir</button>
         </div>
       </header>

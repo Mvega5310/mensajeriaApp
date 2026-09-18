@@ -7,13 +7,13 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         name: 'Puertaya Ipanema',
         short_name: 'Puertaya',
         description: 'Recepción, custodia y entrega de paquetes — Conjunto Ipanema',
-        theme_color: '#1c2f52',
-        background_color: '#F4F3F1',
+        theme_color: '#17223A',
+        background_color: '#F4F1EA',
         display: 'standalone',
         start_url: '/',
         scope: '/',

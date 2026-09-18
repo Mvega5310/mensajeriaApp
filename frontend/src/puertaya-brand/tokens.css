@@ -1,0 +1,13 @@
+/* Puertayá — tokens de marca
+   Importa este archivo una vez (p. ej. en tu index.css o App):
+     @import "./puertaya-brand/tokens.css";
+   y usa las variables en tu CSS: color: var(--puertaya-navy); */
+
+:root {
+  --puertaya-navy: #17223A;        /* azul marino principal */
+  --puertaya-navy-deep: #12233F;   /* variante más profunda */
+  --puertaya-gold: #C79A3E;        /* dorado de marca */
+  --puertaya-gold-light: #E8CE86;  /* dorado claro / champagne */
+  --puertaya-cream: #F4F1EA;       /* crema (fondo claro del sello) */
+  --puertaya-charcoal: #12161F;    /* fondo oscuro */
+}

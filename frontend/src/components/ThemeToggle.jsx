@@ -1,17 +1,8 @@
-import { useEffect, useState } from 'react';
-
-function getSystemPrefersDark() {
-  return window.matchMedia('(prefers-color-scheme: dark)').matches;
-}
-
-export default function ThemeToggle() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || (getSystemPrefersDark() ? 'dark' : 'light'));
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
+// Controlado desde afuera (ver hooks/useTheme.js) para que el logo de
+// marca, que vive junto a este botón, pueda compartir el mismo valor de
+// tema y cambiar de versión clara/oscura al mismo tiempo que el resto
+// de la app.
+export default function ThemeToggle({ theme, setTheme }) {
   return (
     <button
       type="button"

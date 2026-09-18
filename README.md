@@ -108,8 +108,14 @@ para residentes de Conjunto Ipanema.
   sola: cuando hay una versión nueva desplegada, la próxima vez que se
   abre la app se recarga automáticamente para tomarla (sin pedir
   reinstalar ni tener que cerrarla dos veces).
-- Identidad de marca navy/dorado (logo en `docs/logo-fuente.jpeg`),
-  consistente entre la interfaz, el ícono de la app y el manifest de PWA.
+- Identidad de marca navy/dorado ("Puertayá"), con el kit de marca en
+  `frontend/src/puertaya-brand/` (componente `Logo`, `tokens.css` con
+  las variables `--puertaya-*`, y los logos en `logos/icono/` — versión
+  chica para el encabezado — y `logos/sello/` — el emblema completo,
+  usado en la pantalla de login/registro). El logo cambia de versión
+  clara/oscura junto con el resto de la app (`useTheme`, compartido con
+  `ThemeToggle`). El favicon, ícono de instalación y el `theme_color`
+  del manifest de PWA usan el mismo set de íconos (`frontend/public/`).
 
 **Operador**
 - Alerta de primera entrega: el primer paquete que pre-alerta cada
