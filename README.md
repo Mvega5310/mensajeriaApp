@@ -201,8 +201,6 @@ para residentes de Conjunto Ipanema.
 - **Multi-conjunto**: toda la app asume un solo conjunto (Ipanema). Si se
   usa en más de un conjunto residencial, hace falta un modelo de
   "tenant" que separe los datos entre conjuntos.
-- **Cédula personal en Términos**: `Terms.jsx` expone la C.C. del operador
-  públicamente — considerar usar NIT si se formaliza el negocio.
 - **App Store / Google Play**: la PWA (arriba) cubre "instalable" hoy. Para
   estar en las tiendas de verdad, el paso siguiente es envolver este mismo
   código con Capacitor — no es una reescritura, pero suma cuenta de Apple
