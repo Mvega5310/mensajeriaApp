@@ -25,7 +25,7 @@ function PublicPage({ children }) {
   return (
     <>
       <div className="floating-theme-toggle"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
-      <div className="auth-brand"><Logo variant="lockup" size={150} mode={theme} /></div>
+      <div className="auth-brand"><Logo variant="lockup" size={72} mode={theme} /></div>
       {children}
     </>
   );

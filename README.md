@@ -115,13 +115,13 @@ para residentes de Conjunto Ipanema.
   `frontend/src/puertaya-brand/` (componente `Logo`, `tokens.css` con
   las variables `--puertaya-*`, y los logos en `logos/icono/` — versión
   chica para el encabezado — y `logos/lockup/` — símbolo + nombre +
-  eslogan, usado en la pantalla de login/registro). El logo cambia de
-  versión clara/oscura junto con el resto de la app (`useTheme`,
-  compartido con `ThemeToggle`); como el imagotipo transparente del kit
-  solo existe en versión clara, en modo oscuro `Logo` compone el ícono
-  oscuro con el nombre en texto en vez de mostrarlo (ver comentario en
-  `Logo.jsx`). El favicon, ícono de instalación y el `theme_color` del
-  manifest de PWA usan el mismo set de íconos (`frontend/public/`).
+  eslogan, usado en la pantalla de login/registro, tamaño mesurado a
+  72px). El logo cambia de versión clara/oscura junto con el resto de
+  la app (`useTheme`, compartido con `ThemeToggle`); el lockup tiene
+  imagen transparente propia para cada modo (`puertaya-lockup-light.png`
+  y `puertaya-lockup-dark.png`, esta última con el texto en blanco). El
+  favicon, ícono de instalación y el `theme_color` del manifest de PWA
+  usan el mismo set de íconos (`frontend/public/`).
 
 **Operador**
 - Alerta de primera entrega: **es por apartamento físico, no por

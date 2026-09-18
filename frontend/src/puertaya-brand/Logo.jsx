@@ -3,34 +3,32 @@ import React, { useEffect, useState } from "react";
 import iconoLight from "./logos/icono/puertaya-icono-light.png";
 import iconoDark from "./logos/icono/puertaya-icono-dark.png";
 import lockupLight from "./logos/lockup/puertaya-lockup-light.png";
+import lockupDark from "./logos/lockup/puertaya-lockup-dark.png";
 
 const SOURCES = {
   icono: { light: iconoLight, dark: iconoDark },
-  // El imagotipo (símbolo + "Puertayá" + eslogan) transparente solo existe
-  // en claro. En oscuro no hay archivo equivalente (ver LEEME.md del kit),
-  // así que se compone el ícono oscuro + el nombre en texto (sugerencia del
-  // propio kit) en vez de mostrar el lockup claro ilegible sobre fondo oscuro.
-  lockup: { light: lockupLight, dark: null },
+  lockup: { light: lockupLight, dark: lockupDark },
 };
 
 /**
  * Logo de Puertayá.
  *
+ * IMPORTANTE: el "lockup" ya incluye el símbolo + "Puertayá" + el eslogan como
+ * una sola imagen. NO pongas texto "Puertayá" aparte al lado: usa solo <Logo />.
+ *
  * Props:
- *   variant: "icono" (por defecto) | "lockup"
- *     - "icono": solo el hexágono con la puerta/P. Para encabezados y espacios chicos.
- *     - "lockup": símbolo + "Puertayá" + eslogan. Para bienvenida, web, documentos.
+ *   variant: "lockup" (por defecto) | "icono"
+ *     - "lockup": símbolo + nombre + eslogan. Para login, bienvenida, encabezados.
+ *     - "icono": solo el hexágono. Para barras compactas o espacios muy chicos.
  *   mode: "light" | "dark" | undefined
  *     - undefined -> detecta el modo del sistema automáticamente.
- *     - si tu app ya maneja el tema, pásale tu valor ("light"/"dark").
- *   size: alto en px (por defecto 96). El ancho se ajusta solo.
+ *     - si tu app maneja el tema, pásale tu valor ("light"/"dark").
+ *   size: alto en px. Por defecto 72 (mesurado). El ancho se ajusta solo.
  *
- * Ejemplos:
- *   <Logo />                                   // ícono, modo automático
- *   <Logo variant="lockup" size={64} />        // imagotipo (claro)
- *   <Logo mode={temaOscuro ? "dark" : "light"} />
+ * Ejemplo en el login (una sola imagen, centrada y discreta):
+ *   <Logo variant="lockup" mode={temaOscuro ? "dark" : "light"} size={72} />
  */
-export default function Logo({ variant = "icono", size = 96, mode, alt, style }) {
+export default function Logo({ variant = "lockup", size = 72, mode, alt, style }) {
   const [systemDark, setSystemDark] = useState(false);
 
   useEffect(() => {
@@ -43,29 +41,7 @@ export default function Logo({ variant = "icono", size = 96, mode, alt, style })
   }, [mode]);
 
   const isDark = mode ? mode === "dark" : systemDark;
-
-  if (variant === "lockup" && isDark) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: size * 0.16, ...style }}>
-        <img
-          src={iconoDark}
-          alt=""
-          height={size}
-          style={{ display: "block", width: "auto", objectFit: "contain" }}
-        />
-        <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.15 }}>
-          <span style={{ fontSize: size * 0.32, fontWeight: 800, color: "var(--puertaya-silver)" }}>
-            Puertayá
-          </span>
-          <span style={{ fontSize: size * 0.12, fontWeight: 500, color: "var(--puertaya-teal)" }}>
-            De la portería a tu puerta.
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  const set = SOURCES[variant] || SOURCES.icono;
+  const set = SOURCES[variant] || SOURCES.lockup;
   const src = isDark ? set.dark : set.light;
 
   return (
@@ -73,7 +49,7 @@ export default function Logo({ variant = "icono", size = 96, mode, alt, style })
       src={src}
       alt={alt || "Puertayá — De la portería a tu puerta"}
       height={size}
-      style={{ display: "block", width: "auto", objectFit: "contain", ...style }}
+      style={{ display: "block", width: "auto", maxWidth: "100%", objectFit: "contain", ...style }}
     />
   );
 }
