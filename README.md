@@ -118,11 +118,19 @@ para residentes de Conjunto Ipanema.
   del manifest de PWA usan el mismo set de íconos (`frontend/public/`).
 
 **Operador**
-- Alerta de primera entrega: el primer paquete que pre-alerta cada
-  residente se cobra $0 automáticamente (cortesía de afiliación, la
-  promo del flyer de campaña) — Recepción, Reparto, el modal de validar
-  PIN y la Bitácora lo marcan con una franja dorada "🎁 NO cobrar" para
-  que quede claro a quién sí toca cobrarle el servicio.
+- Alerta de primera entrega: **es por apartamento físico, no por
+  cuenta** — si varias personas del mismo apto se registran con correos
+  distintos, solo la primera entrega de cualquiera de ellas sale en $0;
+  la cortesía no se repite por cuenta. `torre`/`apto` se normalizan al
+  registrarse (`auth.controller.js`: mayúsculas/trim para torre, solo
+  dígitos para apto — "Apto 302", "apto-302" y "302" cuentan como el
+  mismo apartamento), y `packages.controller.js` agrupa por esa clave
+  normalizada en `checkin()`, `listAll()` y `exportCsv()`
+  (`services/apartamento.service.js`). Si una cuenta no tiene torre o
+  apto completos, no se agrupa con otras cuentas incompletas — conserva
+  su propia cortesía, como antes. Recepción, Reparto, el modal de
+  validar PIN y la Bitácora marcan con una franja dorada "🎁 NO cobrar"
+  para que quede claro a quién sí toca cobrarle el servicio.
 - Bonos prepago *(construido, en pausa)*: el operador podrá registrar
   que un residente pagó por adelantado un lote de entregas en una
   categoría de peso específica (cantidad y precio libres, el descuento

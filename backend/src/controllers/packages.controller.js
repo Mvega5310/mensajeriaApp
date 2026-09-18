@@ -5,6 +5,17 @@ import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
 } from '../services/email.service.js';
 import { BONOS_HABILITADOS } from '../config/features.js';
+import { claveApartamento } from '../services/apartamento.service.js';
+
+// La cortesía de primera entrega es por apartamento físico, no por
+// cuenta — varias personas del mismo apto pueden registrarse con
+// correos distintos (ver claveApartamento). Cuando torre/apto vienen
+// incompletos no hay con qué agrupar de forma confiable, así que cada
+// cuenta incompleta cae en su propia clave (nunca se agrupa con otra
+// cuenta también incompleta, como si fueran el mismo apartamento).
+function claveDeGrupo(residenteId, torre, apto) {
+  return claveApartamento(torre, apto) || `cuenta:${residenteId}`;
+}
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
@@ -92,19 +103,24 @@ export async function listAll(req, res) {
     orderBy: { createdAt: 'desc' },
   });
 
-  // El primer paquete (por fecha) de cada residente es su entrega de
-  // cortesía por afiliación (ver flyer de campaña) — se marca aquí para
-  // que el operador vea de un vistazo a quién no debe cobrarle.
-  const primeraFechaPorResidente = new Map();
+  // El primer paquete (por fecha) de cada apartamento físico (no de cada
+  // cuenta — ver claveDeGrupo) es la entrega de cortesía por afiliación
+  // (ver flyer de campaña) — se marca aquí para que el operador vea de
+  // un vistazo a quién no debe cobrarle.
+  const primeraFechaPorGrupo = new Map();
   for (const p of packages) {
-    const actual = primeraFechaPorResidente.get(p.residenteId);
-    if (!actual || p.createdAt < actual) primeraFechaPorResidente.set(p.residenteId, p.createdAt);
+    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
+    const actual = primeraFechaPorGrupo.get(clave);
+    if (!actual || p.createdAt < actual) primeraFechaPorGrupo.set(clave, p.createdAt);
   }
 
-  res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => ({
-    ...p,
-    esPrimeraEntrega: primeraFechaPorResidente.get(p.residenteId).getTime() === p.createdAt.getTime(),
-  })));
+  res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => {
+    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
+    return {
+      ...p,
+      esPrimeraEntrega: primeraFechaPorGrupo.get(clave).getTime() === p.createdAt.getTime(),
+    };
+  }));
 }
 
 // Fotos aparte del listado general (ver comentario en listMine/listAll):
@@ -146,16 +162,34 @@ export async function checkin(req, res) {
     return res.status(400).json({ error: 'Máximo 3 fotos' });
   }
 
-  const actual = await prisma.package.findUnique({ where: { id: req.params.id }, select: { residenteId: true } });
+  const actual = await prisma.package.findUnique({
+    where: { id: req.params.id },
+    select: { residenteId: true, residente: { select: { torre: true, apto: true } } },
+  });
   if (!actual) return res.status(404).json({ error: 'Paquete no encontrado' });
 
   const costoServicio = costoPara(categoriaPeso);
 
-  // Si este es el primer paquete que el residente pre-alerta, es su
-  // entrega de cortesía por afiliación (campaña de lanzamiento): gratis
-  // sin importar la categoría de peso elegida.
+  // Si este es el primer paquete pre-alertado por cualquier cuenta de
+  // este mismo apartamento físico, es la entrega de cortesía por
+  // afiliación (campaña de lanzamiento): gratis sin importar la
+  // categoría de peso elegida. Si torre/apto vienen incompletos, no hay
+  // con qué agrupar de forma confiable — se mantiene el comportamiento
+  // anterior, por cuenta sola.
+  const clave = claveApartamento(actual.residente.torre, actual.residente.apto);
+  let idsRelevantes = [actual.residenteId];
+  if (clave) {
+    const residentes = await prisma.user.findMany({
+      where: { role: 'RESIDENT' },
+      select: { id: true, torre: true, apto: true },
+    });
+    idsRelevantes = residentes
+      .filter((u) => claveApartamento(u.torre, u.apto) === clave)
+      .map((u) => u.id);
+  }
+
   const primerPaquete = await prisma.package.findFirst({
-    where: { residenteId: actual.residenteId },
+    where: { residenteId: { in: idsRelevantes } },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   });
@@ -228,16 +262,22 @@ export async function exportCsv(req, res) {
 
   // Igual que en listAll(): el motivo de un costo en $0 (primera entrega
   // vs. bono redimido) sirve para que el contador entienda por qué no se
-  // cobró, sin tener que adivinar.
-  const todos = await prisma.package.findMany({ select: { id: true, residenteId: true, createdAt: true } });
-  const primeraFechaPorResidente = new Map();
+  // cobró, sin tener que adivinar. Se recalcula sobre TODOS los
+  // paquetes (sin el filtro desde/hasta), porque el primer paquete real
+  // de un apartamento puede quedar fuera del rango exportado.
+  const todos = await prisma.package.findMany({
+    select: { id: true, createdAt: true, residenteId: true, residente: { select: { torre: true, apto: true } } },
+  });
+  const primeraFechaPorGrupo = new Map();
   for (const p of todos) {
-    const actual = primeraFechaPorResidente.get(p.residenteId);
-    if (!actual || p.createdAt < actual) primeraFechaPorResidente.set(p.residenteId, p.createdAt);
+    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
+    const actual = primeraFechaPorGrupo.get(clave);
+    if (!actual || p.createdAt < actual) primeraFechaPorGrupo.set(clave, p.createdAt);
   }
 
   const rows = packages.map((p) => {
-    const esPrimeraEntrega = primeraFechaPorResidente.get(p.residenteId)?.getTime() === p.createdAt.getTime();
+    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
+    const esPrimeraEntrega = primeraFechaPorGrupo.get(clave)?.getTime() === p.createdAt.getTime();
     const motivoGratis = esPrimeraEntrega ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
     return [
       p.id, p.fechaIngreso.toISOString(), p.residente.torre, p.residente.apto, p.residente.nombre,

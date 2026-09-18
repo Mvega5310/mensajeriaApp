@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db.js';
 import { sendPasswordResetEmail } from '../services/email.service.js';
+import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
 const RESET_COOLDOWN_MS = 60 * 1000; // evita reenvíos en cadena al mismo correo
@@ -35,7 +36,17 @@ export async function register(req, res) {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { email, passwordHash, role: 'RESIDENT', nombre, telefono, torre, apto, termsAcceptedAt: new Date() },
+    data: {
+      email, passwordHash, role: 'RESIDENT', nombre, telefono,
+      // Normalizado server-side (no basta con que el frontend ya mande
+      // el valor "limpio" — cualquiera puede pegar directo contra la
+      // API): así la cortesía de primera entrega por apartamento (ver
+      // packages.controller.js) puede agrupar cuentas distintas del
+      // mismo apto sin que la inconsistencia de escritura lo impida.
+      torre: normalizarTorre(torre),
+      apto: normalizarApto(apto),
+      termsAcceptedAt: new Date(),
+    },
   });
 
   res.status(201).json({ id: user.id, email: user.email, role: user.role });
