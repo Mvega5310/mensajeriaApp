@@ -87,9 +87,10 @@ model User {
   comentarios  Comentario[]
   bonos        Bono[]
 
-  // Indices de tenant (A3). El compuesto acelera findMany({conjuntoId, role})
-  // usado por checkin() y createPrealert() (design.md 1.2).
-  @@index([conjuntoId])
+  // Indice de tenant (A3). El compuesto sirve tambien para las consultas que
+  // filtran solo por conjuntoId (Postgres usa la primera columna), asi que no
+  // se agrega un @@index([conjuntoId]) suelto. Acelera ademas
+  // findMany({conjuntoId, role}) de checkin() y createPrealert() (design.md 1.2).
   @@index([conjuntoId, role])
 }
 
@@ -200,8 +201,8 @@ model Package {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Indices de tenant (A3). El compuesto acelera los listados por estado
-  // dentro de un conjunto (design.md 1.2).
-  @@index([conjuntoId])
+  // Indice de tenant (A3). El compuesto cubre tambien el filtro solo por
+  // conjuntoId (primera columna), asi que no se agrega un @@index([conjuntoId])
+  // suelto. Acelera los listados por estado dentro de un conjunto (design.md 1.2).
   @@index([conjuntoId, estado])
 }

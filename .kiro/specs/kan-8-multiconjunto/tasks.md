@@ -32,9 +32,12 @@
   - Confirmar que `User.email` permanece `@unique` **global** (sin cambios).
   - _Requisitos:_ R1.1 · _Diseño:_ §1.2, §1.3, §1.4, Nota R5
 
-- [x] **A3. Añadir índices de tenant.** _(commit `4ccf27f`, junto con A2)_
-  - `@@index([conjuntoId])` en `User`, `Package`, `Bono`, `Comentario`; además `@@index([conjuntoId, role])`
-    en `User` y `@@index([conjuntoId, estado])` en `Package`.
+- [x] **A3. Añadir índices de tenant.** _(commit `4ccf27f`; ajuste de redundantes en commit aparte)_
+  - `User`: `@@index([conjuntoId, role])`. `Package`: `@@index([conjuntoId, estado])`.
+    `Bono` y `Comentario`: `@@index([conjuntoId])`.
+  - **No** se agregan `@@index([conjuntoId])` sueltos en `User`/`Package`: serían redundantes porque
+    Postgres usa la primera columna del índice compuesto para las consultas que filtran solo por
+    `conjuntoId`. `Bono`/`Comentario` sí llevan el índice simple porque no tienen compuesto.
   - _Diseño:_ §1.2, §1.3
 
 - [ ] **A4. Generar la migración Prisma "expand" (nullable). — PENDIENTE (la genera el equipo con la CLI real).**
