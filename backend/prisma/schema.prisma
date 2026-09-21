@@ -54,6 +54,12 @@ model Conjunto {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relaciones inversas hacia las tablas propias del conjunto (agregadas en A2).
+  usuarios    User[]
+  paquetes    Package[]
+  bonos       Bono[]
+  comentarios Comentario[]
 }
 
 model User {
@@ -70,10 +76,21 @@ model User {
   termsAcceptedAt DateTime
   createdAt    DateTime @default(now())
 
+  // Tenant (KAN-8). Nullable en la fase "expand" para permitir el backfill de
+  // Ipanema; se vuelve obligatorio en la migracion "contract" (design.md 5.2).
+  // email se mantiene @unique GLOBAL, sin cambios (requirements, nota R5).
+  conjunto     Conjunto? @relation(fields: [conjuntoId], references: [id])
+  conjuntoId   String?
+
   packages     Package[]
   resetTokens  PasswordResetToken[]
   comentarios  Comentario[]
   bonos        Bono[]
+
+  // Indices de tenant (A3). El compuesto acelera findMany({conjuntoId, role})
+  // usado por checkin() y createPrealert() (design.md 1.2).
+  @@index([conjuntoId])
+  @@index([conjuntoId, role])
 }
 
 // Lote de entregas prepago que un residente compra por adelantado con
@@ -85,6 +102,12 @@ model Bono {
   id            String   @id @default(cuid())
   residente     User     @relation(fields: [residenteId], references: [id])
   residenteId   String
+  // Tenant directo (denormalizado). Aunque el conjunto es derivable via
+  // residenteId -> User.conjuntoId, la columna directa deja que la extension
+  // de Prisma filtre de forma uniforme sin join (design.md 1.3). Nullable en
+  // "expand"; obligatorio en "contract".
+  conjunto      Conjunto? @relation(fields: [conjuntoId], references: [id])
+  conjuntoId    String?
   categoriaPeso String
   cantidadTotal Int
   cantidadUsada Int      @default(0)
@@ -92,6 +115,8 @@ model Bono {
   createdAt     DateTime @default(now())
 
   paquetes      Package[]
+
+  @@index([conjuntoId])
 }
 
 // Buzón de comentarios/inquietudes del residente hacia el operador —
@@ -100,8 +125,13 @@ model Comentario {
   id          String   @id @default(cuid())
   residente   User     @relation(fields: [residenteId], references: [id])
   residenteId String
+  // Tenant directo (denormalizado), mismo criterio que Bono (design.md 1.3).
+  conjunto    Conjunto? @relation(fields: [conjuntoId], references: [id])
+  conjuntoId  String?
   mensaje     String
   createdAt   DateTime @default(now())
+
+  @@index([conjuntoId])
 }
 
 // El token crudo (alta entropía, de un solo uso) solo existe en el correo
@@ -121,6 +151,11 @@ model Package {
   id        String @id @default(cuid())
   residente User   @relation(fields: [residenteId], references: [id])
   residenteId String
+
+  // Tenant (KAN-8). Nullable en "expand"; obligatorio en "contract"
+  // (design.md 5.2).
+  conjunto  Conjunto? @relation(fields: [conjuntoId], references: [id])
+  conjuntoId String?
 
   // datos del paquete
   proveedor                 String
@@ -164,4 +199,9 @@ model Package {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Indices de tenant (A3). El compuesto acelera los listados por estado
+  // dentro de un conjunto (design.md 1.2).
+  @@index([conjuntoId])
+  @@index([conjuntoId, estado])
 }
