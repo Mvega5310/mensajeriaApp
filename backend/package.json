@@ -8,6 +8,7 @@
     "postinstall": "prisma generate",
     "start": "prisma migrate deploy && node src/index.js",
     "prisma:migrate": "prisma migrate dev",
+    "test": "node --test",
     "seed": "node prisma/seed.js"
   },
   "prisma": {

@@ -64,8 +64,102 @@ export function forzarConjuntoEnData(data, conjuntoId) {
 }
 
 /**
- * Construye la extensión de tenant. Factory para poder aplicarla una sola vez
- * en config/db.js (un único cliente extendido).
+ * Lógica pura del interceptor de aislamiento. Se extrae para poder probarla sin
+ * una base de datos real: recibe explícitamente `query` (ejecutor de la
+ * operación original) y `client` (para la reescritura findUnique -> findFirst),
+ * ambos inyectables en pruebas con fakes.
+ *
+ * @param {object} p
+ * @param {string} p.model      nombre de modelo de Prisma
+ * @param {string} p.operation  operación (findMany, create, ...)
+ * @param {object} p.args       argumentos originales
+ * @param {(a:object)=>Promise<any>} p.query  ejecuta la operación original
+ * @param {object} p.client     cliente extendido (para reescritura)
+ * @param {()=>(object|undefined)} [p.leerContexto]  fuente del contexto (test)
+ */
+export async function aplicarAislamiento({ model, operation, args, query, client, leerContexto = getContext }) {
+  // Modelos sin tenant (Conjunto, PasswordResetToken): pasan tal cual y no
+  // requieren contexto. Es lo que permite las lecturas pre-tenant (resolver
+  // Conjunto por codigoInvitacion, etc.).
+  if (!esModeloConTenant(model)) {
+    return query(args);
+  }
+
+  const ctx = leerContexto();
+
+  // Falla cerrado: sin contexto no se toca un modelo con tenant.
+  if (!ctx) {
+    throw new Error(
+      `Aislamiento de tenant: operación '${operation}' sobre '${model}' ` +
+        'sin contexto de conjunto. Debe correr dentro de runWithTenant(...) o, ' +
+        'para autenticación, de buscarUsuarioPorEmailSinTenant().'
+    );
+  }
+
+  // Exención puntual y explícita para autenticación pre-tenant.
+  if (ctx.scope === SCOPE.GLOBAL_LOOKUP) {
+    return query(args);
+  }
+
+  // scope TENANT
+  const { conjuntoId } = ctx;
+  const nextArgs = { ...args };
+
+  // 1) findUnique / findUniqueOrThrow -> findFirst / findFirstOrThrow.
+  //    Se redirige al método del modelo en el cliente extendido (client[model]
+  //    existe en tiempo de ejecución).
+  if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
+    const destino = operation === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
+    nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
+    const delegate = client[model] ?? client[lowerFirst(model)];
+    return delegate[destino](nextArgs);
+  }
+
+  // 2) Lecturas por filtro.
+  if (LECTURAS_POR_FILTRO.has(operation)) {
+    nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
+    return query(nextArgs);
+  }
+
+  // 3) Escrituras/borrados con where.
+  if (ESCRITURAS_CON_WHERE.has(operation)) {
+    nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
+    if (nextArgs.data !== undefined) {
+      nextArgs.data = forzarConjuntoEnData(nextArgs.data, conjuntoId);
+    }
+    return query(nextArgs);
+  }
+
+  // 4) Creaciones: conjuntoId SIEMPRE desde el contexto.
+  if (operation === 'create' || operation === 'createMany') {
+    nextArgs.data = forzarConjuntoEnData(nextArgs.data, conjuntoId);
+    return query(nextArgs);
+  }
+
+  // 5) upsert: filtro en where + conjuntoId forzado en create/update.
+  if (operation === 'upsert') {
+    nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
+    if (nextArgs.create !== undefined) {
+      nextArgs.create = forzarConjuntoEnData(nextArgs.create, conjuntoId);
+    }
+    if (nextArgs.update !== undefined) {
+      nextArgs.update = forzarConjuntoEnData(nextArgs.update, conjuntoId);
+    }
+    return query(nextArgs);
+  }
+
+  // Operación no contemplada sobre un modelo con tenant: no se deja pasar sin
+  // filtro (falla cerrado por defecto).
+  throw new Error(
+    `Aislamiento de tenant: operación no soportada '${operation}' sobre ` +
+      `'${model}'. Revisa la extensión antes de usarla.`
+  );
+}
+
+/**
+ * Construye la extensión de tenant. Factory para aplicarla una sola vez en
+ * config/db.js (un único cliente extendido). Delega toda la lógica en
+ * aplicarAislamiento().
  */
 export function tenantExtension() {
   return Prisma.defineExtension((client) =>
@@ -74,83 +168,7 @@ export function tenantExtension() {
       query: {
         $allModels: {
           async $allOperations({ model, operation, args, query }) {
-            // Modelos sin tenant (Conjunto, PasswordResetToken): pasan tal
-            // cual y no requieren contexto. Es lo que permite las lecturas
-            // pre-tenant (resolver Conjunto por codigoInvitacion, etc.).
-            if (!esModeloConTenant(model)) {
-              return query(args);
-            }
-
-            const ctx = getContext();
-
-            // Falla cerrado: sin contexto no se toca un modelo con tenant.
-            if (!ctx) {
-              throw new Error(
-                `Aislamiento de tenant: operación '${operation}' sobre '${model}' ` +
-                  'sin contexto de conjunto. Debe correr dentro de ' +
-                  'runWithTenant(...) o, para autenticación, de ' +
-                  'buscarUsuarioPorEmailSinTenant().'
-              );
-            }
-
-            // Exención puntual y explícita para autenticación pre-tenant.
-            if (ctx.scope === SCOPE.GLOBAL_LOOKUP) {
-              return query(args);
-            }
-
-            // scope TENANT
-            const { conjuntoId } = ctx;
-            const nextArgs = { ...args };
-
-            // 1) findUnique / findUniqueOrThrow -> findFirst / findFirstOrThrow.
-            //    Se redirige al método correspondiente del modelo en el cliente
-            //    extendido (client[model] existe en tiempo de ejecución).
-            if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
-              const destino = operation === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
-              nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
-              const delegate = client[model] ?? client[lowerFirst(model)];
-              return delegate[destino](nextArgs);
-            }
-
-            // 2) Lecturas por filtro.
-            if (LECTURAS_POR_FILTRO.has(operation)) {
-              nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
-              return query(nextArgs);
-            }
-
-            // 3) Escrituras/borrados con where.
-            if (ESCRITURAS_CON_WHERE.has(operation)) {
-              nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
-              if (nextArgs.data !== undefined) {
-                nextArgs.data = forzarConjuntoEnData(nextArgs.data, conjuntoId);
-              }
-              return query(nextArgs);
-            }
-
-            // 4) Creaciones: conjuntoId SIEMPRE desde el contexto.
-            if (operation === 'create' || operation === 'createMany') {
-              nextArgs.data = forzarConjuntoEnData(nextArgs.data, conjuntoId);
-              return query(nextArgs);
-            }
-
-            // 5) upsert: filtro en where + conjuntoId forzado en create/update.
-            if (operation === 'upsert') {
-              nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
-              if (nextArgs.create !== undefined) {
-                nextArgs.create = forzarConjuntoEnData(nextArgs.create, conjuntoId);
-              }
-              if (nextArgs.update !== undefined) {
-                nextArgs.update = forzarConjuntoEnData(nextArgs.update, conjuntoId);
-              }
-              return query(nextArgs);
-            }
-
-            // Operación no contemplada sobre un modelo con tenant: no se deja
-            // pasar sin filtro (falla cerrado por defecto).
-            throw new Error(
-              `Aislamiento de tenant: operación no soportada '${operation}' sobre ` +
-                `'${model}'. Revisa la extensión antes de usarla.`
-            );
+            return aplicarAislamiento({ model, operation, args, query, client });
           },
         },
       },
