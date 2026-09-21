@@ -2,7 +2,8 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db.js';
-import { tenantStore, SCOPE } from '../config/tenantContext.js';
+import { tenantStore, SCOPE, runWithTenant } from '../config/tenantContext.js';
+import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
 import { sendPasswordResetEmail } from '../services/email.service.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 
@@ -92,7 +93,10 @@ export async function forgotPassword(req, res) {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'El correo es requerido' });
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  // Flujo sin sesión: el usuario aún no está autenticado, así que no hay
+  // contexto de tenant. La búsqueda por email pasa por la única función
+  // autorizada a abrir GLOBAL_LOOKUP (design.md §2.3.1, §3.6).
+  const user = await buscarUsuarioPorEmailSinTenant(email);
   if (!user) return res.json(GENERIC_RESET_RESPONSE);
 
   const recent = await prisma.passwordResetToken.findFirst({
@@ -120,6 +124,8 @@ export async function resetPassword(req, res) {
     return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres, con al menos una letra y un número' });
   }
 
+  // PasswordResetToken es un modelo SIN tenant: este findFirst no requiere
+  // contexto y pasa tal cual por la extensión.
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash } });
 
@@ -127,12 +133,24 @@ export async function resetPassword(req, res) {
     return res.status(400).json({ error: 'El enlace es inválido o ya venció' });
   }
 
+  // Flujo sin sesión: no hay JWT, así que resolvemos el conjunto del dueño del
+  // token por su id (bootstrap del tenant) y ejecutamos la actualización de
+  // User dentro de ese contexto. user.update es un modelo con tenant y sin
+  // contexto la extensión lanzaría (falla cerrado).
+  const conjuntoId = await resolverConjuntoIdPorUsuario(record.userId);
+  if (!conjuntoId) {
+    return res.status(400).json({ error: 'El enlace es inválido o ya venció' });
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
-    // invalida también cualquier otro enlace pendiente de esta cuenta
-    prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } }),
-  ]);
+  await runWithTenant({ conjuntoId, role: 'RESIDENT' }, () =>
+    prisma.$transaction([
+      prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
+      // invalida también cualquier otro enlace pendiente de esta cuenta
+      // (PasswordResetToken es sin tenant; el deleteMany pasa sin filtrar).
+      prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } }),
+    ])
+  );
 
   res.json({ message: 'Contraseña actualizada' });
 }
