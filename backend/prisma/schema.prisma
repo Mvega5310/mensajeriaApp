@@ -16,6 +16,46 @@ datasource db {
 // Role: "RESIDENT" | "OPERATOR"
 // EstadoPaquete: "PREALERTADO" | "EN_RECEPCION" | "PROGRAMADO" | "ENTREGADO"
 
+// Tenant raíz del modelo multi-conjunto (KAN-8). Cada conjunto residencial
+// (ej. Ipanema) tiene sus propios residentes, operador y paquetes, aislados
+// de los demás. Aquí vive además la configuración que antes estaba fija en
+// código: tarifas por categoría de peso (services/tariff.service.js) y datos
+// de contacto/identidad del operador (frontend Terms.jsx).
+// NOTA: Conjunto NO lleva conjuntoId (es la tabla raíz) y por eso queda
+// fuera del filtro automático de tenant — ver design.md §1.5 y §2.3.
+model Conjunto {
+  id            String   @id @default(cuid())
+
+  // Identidad
+  nombre        String                  // "Conjunto Residencial Ipanema"
+  slug          String   @unique         // "ipanema" — legible, para URLs/soporte
+
+  // Código de invitación (design.md §3): token opaco embebido en el enlace/QR
+  // de registro. invitacionActiva permite revocar/regenerar sin borrar histórico.
+  codigoInvitacion String @unique
+  invitacionActiva Boolean @default(true)
+
+  // Configuración de contacto/identidad del operador (hoy fija en Terms.jsx)
+  operadorNombre    String               // "Francisco Caro Yances"
+  operadorWhatsapp  String               // E.164 sin '+', ej "573001112233" (para wa.me)
+  operadorDomicilio String               // domicilio/dirección legal en Términos
+  puntoRecepcion    String               // punto físico de recepción de paquetes
+
+  // Tarifas por categoría de peso (hoy fijas en services/tariff.service.js).
+  // Los defaults coinciden con la constante TARIFAS actual.
+  tarifaMano     Int  @default(3000)      // MANO
+  tarifaEstandar Int  @default(4500)      // ESTANDAR
+  tarifaVolumen  Int  @default(7000)      // VOLUMEN
+  tarifaPesado   Int  @default(12000)     // PESADO
+
+  // Flag de bonos prepago por conjunto. false por defecto para todo conjunto
+  // nuevo (restricción dura: BONOS_HABILITADOS apagado).
+  bonosHabilitados Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
