@@ -18,28 +18,37 @@
 
 ## Fase A — Modelo de datos (esquema Prisma)
 
-- [ ] **A1. Crear el modelo `Conjunto`.**
+- [x] **A1. Crear el modelo `Conjunto`.** _(commit `cf5772c`)_
   - Añadir el modelo `Conjunto` con: `id`, `nombre`, `slug @unique`, `codigoInvitacion @unique`,
     `invitacionActiva`, `operadorNombre`, `operadorWhatsapp`, `operadorDomicilio`, `puntoRecepcion`,
     `tarifaMano/Estandar/Volumen/Pesado` (con `@default` = 3000/4500/7000/12000), `bonosHabilitados`
     (`@default(false)`), `createdAt`, `updatedAt`, y relaciones inversas.
   - _Requisitos:_ R2.1, R2.3, R2.6 · _Diseño:_ §1.1
 
-- [ ] **A2. Añadir `conjuntoId` (nullable) y relaciones a los modelos con tenant.**
+- [x] **A2. Añadir `conjuntoId` (nullable) y relaciones a los modelos con tenant.** _(commit `4ccf27f`)_
   - Agregar `conjuntoId String?` + relación a `Conjunto` en `User`, `Package`, `Bono`, `Comentario`
     (nullable en esta fase para permitir el backfill; se endurece en Fase F).
   - **No** tocar `PasswordResetToken` (fuera del tenant).
   - Confirmar que `User.email` permanece `@unique` **global** (sin cambios).
   - _Requisitos:_ R1.1 · _Diseño:_ §1.2, §1.3, §1.4, Nota R5
 
-- [ ] **A3. Añadir índices de tenant.**
+- [x] **A3. Añadir índices de tenant.** _(commit `4ccf27f`, junto con A2)_
   - `@@index([conjuntoId])` en `User`, `Package`, `Bono`, `Comentario`; además `@@index([conjuntoId, role])`
     en `User` y `@@index([conjuntoId, estado])` en `Package`.
   - _Diseño:_ §1.2, §1.3
 
-- [ ] **A4. Generar la migración Prisma "expand" (nullable).**
-  - Crear la migración que añade tabla `Conjunto`, columnas `conjuntoId` nullable e índices.
-  - **No** aplicar contra producción todavía; validar en entorno local/prueba.
+- [ ] **A4. Generar la migración Prisma "expand" (nullable). — PENDIENTE (la genera el equipo con la CLI real).**
+  - **NO escribir el `migration.sql` a mano.** El SQL que genera Prisma tiene detalles no replicables a
+    ciegas (nombres de constraints/índices, traducción de tipos); una divergencia desincroniza el
+    checksum del historial de migraciones justo al aplicarlo contra producción.
+  - **Procedimiento:** en local, con la CLI real de Prisma contra un **Postgres desechable**, ejecutar
+    `npx prisma migrate dev --name add_conjunto_multitenant` (o equivalente) a partir del `schema.prisma`
+    ya actualizado en A1–A3. Esto crea `prisma/migrations/<timestamp>_add_conjunto_multitenant/migration.sql`.
+  - Revisar que el SQL añade: tabla `Conjunto`, columnas `conjuntoId` **nullable** + FKs en las 4 tablas,
+    e índices de A3. **No** aplicar contra producción todavía (eso es Fase F, por túnel SSH de Railway).
+  - Commitear la migración generada en `feature/kan-8-multiconjunto`.
+  - _Nota de entorno:_ la CLI de Prisma no se pudo instalar en el sandbox de esta sesión (descarga de
+    engines bloqueada por la red restringida); por eso A4 se delega al entorno local.
   - _Requisitos:_ R4.3 · _Diseño:_ §5.2 (Fase 1)
 
 ---
