@@ -2,8 +2,23 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db.js';
+import { tenantStore, SCOPE } from '../config/tenantContext.js';
 import { sendPasswordResetEmail } from '../services/email.service.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
+
+// ÚNICO punto del código autorizado a abrir el scope GLOBAL_LOOKUP
+// (invariante design.md §2.3.1). Resuelve un usuario por email SIN filtro de
+// tenant, para las lecturas pre-tenant de autenticación (login), donde todavía
+// no hay conjunto activo.
+//
+// REGLA: `tenantStore.run({ scope: SCOPE.GLOBAL_LOOKUP }, ...)` debe aparecer
+// EXACTAMENTE UNA VEZ en todo el repositorio, y es aquí. Ninguna otra función
+// puede abrir este scope; todo lookup pre-tenant por email pasa por aquí.
+export function buscarUsuarioPorEmailSinTenant(email) {
+  return tenantStore.run({ scope: SCOPE.GLOBAL_LOOKUP }, () =>
+    prisma.user.findUnique({ where: { email } })
+  );
+}
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
 const RESET_COOLDOWN_MS = 60 * 1000; // evita reenvíos en cadena al mismo correo

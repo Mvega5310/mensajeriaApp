@@ -14,8 +14,7 @@
 //
 // Reglas duras que este módulo ayuda a sostener (design.md §2.3, §2.3.1):
 // - El scope GLOBAL_LOOKUP SOLO se abre dentro de buscarUsuarioPorEmailSinTenant()
-//   (auth.controller / Fase C). Ninguna otra parte del código debe llamar a
-//   runGlobalLookup() ni a als.run({ scope: 'GLOBAL_LOOKUP' }, ...).
+//   (auth.controller.js). Ninguna otra parte del código debe abrir ese scope.
 // - No existe ningún flag de runtime que active/desactive el aislamiento: el
 //   comportamiento depende solo del contexto presente en cada request.
 
