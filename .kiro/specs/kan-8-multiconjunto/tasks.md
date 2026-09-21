@@ -94,13 +94,11 @@
     (falla cerrado).
   - Nunca tomar el conjunto de query/body/headers ni de ningún claim del cliente.
   - _Implementado:_ `src/middleware/tenant.middleware.js` (`requireTenant`).
-  - ⚠️ **DECISIÓN DE DISEÑO NUEVA pendiente de reflejar en `design.md`:** la lectura de *bootstrap* del
-    tenant (leer `User.conjuntoId` por `sub`) es un problema huevo-y-gallina porque `User` está bajo la
-    extensión que exige contexto. Se resuelve con `resolverConjuntoIdPorUsuario()` usando
-    `prisma.$queryRaw` parametrizado por `id`: no usa `GLOBAL_LOOKUP` (reservado a
-    `buscarUsuarioPorEmailSinTenant()`) ni un segundo cliente (sigue siendo el único `prisma`); `$queryRaw`
-    no atraviesa la capa de modelos, así que no dispara el falla-cerrado. **Falta el visto bueno para
-    documentarlo en design.md §2.3/§3.6.**
+  - **Bootstrap del tenant (aprobado en revisión, pto 4):** la lectura de `User.conjuntoId` por `sub`
+    vive en `resolverConjuntoIdPorUsuario()` (`config/tenantBootstrap.js`) usando `prisma.$queryRaw`
+    parametrizado por `id`: no usa `GLOBAL_LOOKUP` ni un segundo cliente; `$queryRaw` no atraviesa la
+    capa de modelos, así que no dispara el falla-cerrado. Documentado en design.md §2.3 (bootstrap) y
+    §3.6.2; invariante de consultas crudas en el checklist.
   - _Requisitos:_ R1.3, R1.5, R3.6 · _Diseño:_ §2.3 (componente 2), §3.6
 
 - [x] **B5. Implementar `buscarUsuarioPorEmailSinTenant()` — ÚNICO punto de entrada de `GLOBAL_LOOKUP`.** _(commit `398de13`)_
@@ -282,6 +280,14 @@
 - [ ] `AsyncLocalStorage.run({ scope: 'GLOBAL_LOOKUP' }` aparece **exactamente una vez** (en
   `buscarUsuarioPorEmailSinTenant`). _(§2.3.1, §8.1)_
 - [ ] No existe un segundo `PrismaClient` sin la extensión de tenant. _(§6.1)_
+- [ ] **`$queryRaw`, `$executeRaw`, `$queryRawUnsafe` y `$executeRawUnsafe` aparecen SOLO en
+  `resolverConjuntoIdPorUsuario()`** (`config/tenantBootstrap.js`). Cualquier otra consulta cruda se
+  saltaría la extensión y sería una vía sin aislamiento. _(§2.3 bootstrap, §8.1)_
+- [ ] **Operaciones con `WhereUniqueInput`** (`findUnique`/`update`/`delete`/`upsert`) combinan el
+  conjunto en el **primer nivel** del `where` (`{ ...where, conjuntoId }`), **nunca** con `AND`; el `AND`
+  es solo para `WhereInput`. _(§2.3.1)_
+- [ ] **No se reescribe `findUnique` a `findFirst`** (Prisma 5 admite campos no únicos en el `where`
+  único). _(§2.3.1)_
 - [ ] `fotoUrl` ausente en `GET /packages` y `GET /packages/mine`. _(§2.5)_
 - [ ] `bonosHabilitados=false` por defecto en conjuntos nuevos. _(§4)_
 - [ ] WhatsApp solo `wa.me` manual; sin Twilio/API. _(§4.3)_

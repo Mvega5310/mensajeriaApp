@@ -274,76 +274,73 @@ profundidad" si algún día se justifica.
 
 3. **Extensión de Prisma — `prisma.$extends({ query: { ... } })`.**
    Se aplica a los modelos de la lista "con tenant" (§1.5). Para cada operación:
-   - **Lecturas por filtro** (`findMany`, `findFirst`, `count`, `aggregate`, `groupBy`): inyecta
-     `where: { AND: [ argsWhere, { conjuntoId: activo } ] }`. Si no hay conjunto activo, **lanza error**
-     (falla cerrado, nunca abre a todos los conjuntos).
-   - **Lecturas por clave única** (`findUnique`, `findUniqueOrThrow`): ver decisión firme en §2.3.1 —
-     se **reescriben a `findFirst`** con el filtro de tenant inyectado.
+   - **Operaciones con `WhereInput`** (`findMany`, `findFirst`, `findFirstOrThrow`, `count`, `aggregate`,
+     `groupBy`, `updateMany`, `deleteMany`): inyecta `where: { AND: [ argsWhere, { conjuntoId: activo } ] }`.
+     Si no hay conjunto activo, **lanza error** (falla cerrado, nunca abre a todos los conjuntos).
+   - **Operaciones con `WhereUniqueInput`** (`findUnique`, `findUniqueOrThrow`, `update`, `delete`,
+     `upsert`): el `conjuntoId` se combina en el **primer nivel** del `where` (`{ ...where, conjuntoId }`),
+     **no** con `AND` — ver §2.3.1. Si el `where` ya trae un `conjuntoId` distinto del contexto, **lanza**.
    - **Escrituras de creación** (`create`, `createMany`): fuerza `data.conjuntoId = activo`, tomándolo
      **exclusivamente del contexto** (`AsyncLocalStorage`). Si no hay contexto activo → **lanza error**
      (falla cerrado); nunca acepta un `conjuntoId` provisto por el llamador como sustituto del contexto.
-     Si además el llamador pasó un `conjuntoId` en `data`, la extensión lo **ignora y/o rechaza** (nunca
-     lo usa para decidir el tenant): el valor del llamador jamás puede fijar ni suplir el tenant, en
-     ninguna ruta (R1.2). En otras palabras, para toda escritura de un modelo con tenant, el `conjuntoId`
-     proviene **siempre** del contexto y de ninguna otra fuente.
-   - **Escrituras/actualizaciones/borrados con filtro** (`update`, `updateMany`, `delete`, `deleteMany`,
-     `upsert`): inyecta el `where: { conjuntoId: activo }` igual que en lecturas, y en el `create`/
-     `update` del upsert fuerza el `conjuntoId`.
-#### 2.3.1. Decisión firme: `findUnique({ where: { id } })` → reescritura a `findFirst`
+     Si además el llamador pasó un `conjuntoId` en `data`, la extensión lo **rechaza** (nunca lo usa para
+     decidir el tenant): el valor del llamador jamás puede fijar ni suplir el tenant, en ninguna ruta
+     (R1.2). En `update`/`updateMany`/`upsert` se fuerza igualmente el `conjuntoId` en `data`/`create`/
+     `update`.
 
-**Problema.** El patrón real más usado en el código es `findUnique({ where: { id } })` (en `getFoto`,
-`schedule`, `checkin` —dos veces—, y varios puntos de `auth.controller.js` / `bonos.controller.js`).
-Prisma **no** permite añadir `conjuntoId` al `where` de un `findUnique` salvo que exista una clave única
-compuesta que lo incluya. Por tanto, tal como se describía el mecanismo por filtro, estas llamadas
-**quedaban sin cubrir**: recuperaban el registro por PK global, sin filtro de tenant.
+**Bootstrap del tenant con `$queryRaw` (consultas crudas — invariante).** El propio middleware necesita
+leer `User.conjuntoId` por `sub` para *abrir* el contexto, pero `User` está bajo la extensión, que exige
+contexto que aún no existe (problema huevo-y-gallina). Se resuelve con una consulta **cruda**
+parametrizada — `prisma.$queryRaw(Prisma.sql\`SELECT "conjuntoId" FROM "User" WHERE "id" = ${id}\`)` —
+encapsulada en la función `resolverConjuntoIdPorUsuario()` (módulo `config/tenantBootstrap.js`). Las
+consultas crudas **no** atraviesan la capa de modelos de la extensión, así que no disparan el
+falla-cerrado; siguen usando el **único** cliente extendido (no un segundo cliente); y leen una sola
+columna por PK con parámetro ligado (sin inyección).
 
-**Dos opciones consideradas:**
+> **INVARIANTE (checklist §8.1):** `$queryRaw`, `$executeRaw`, `$queryRawUnsafe` y `$executeRawUnsafe`
+> aparecen **solo** dentro de `resolverConjuntoIdPorUsuario()`. Cualquier otra consulta cruda sería una
+> vía **sin aislamiento** y está prohibida. Es auditable por búsqueda de texto.
 
-- **(a) La extensión reescribe `findUnique`/`findUniqueOrThrow` a `findFirst`** con el `AND` del
-  `conjuntoId` activo inyectado.
-- **(b) El esquema agrega `@@unique([id, conjuntoId])`** en `User` y `Package` (y demás modelos con
-  tenant) para que el `findUnique` original pueda incluir `conjuntoId` en el `where`.
+#### 2.3.1. `findUnique({ where: { id } })`: filtro en el primer nivel, sin reescritura
 
-**Decisión: se elige (a).** La extensión intercepta `findUnique` y `findUniqueOrThrow` sobre modelos con
-tenant y los **reescribe a `findFirst`** (o `findFirstOrThrow`), transformando
-`where: { id }` en `where: { AND: [ { id }, { conjuntoId: activo } ] }`. Si no hay conjunto activo,
-**lanza** (mismo fallo cerrado que las demás lecturas).
+**Problema.** El patrón más usado en el código es `findUnique({ where: { id } })` (en `getFoto`,
+`schedule`, `checkin` —dos veces—, y varios puntos de `auth.controller.js` / `bonos.controller.js`). Hay
+que añadirle el filtro de conjunto sin romper la firma de Prisma.
 
-**Justificación de (a) frente a (b):**
+**Premisa corregida (revisión de Fase B).** Una versión anterior de este diseño afirmaba que Prisma "no
+permite añadir `conjuntoId` al `where` de un `findUnique`" y proponía **reescribir `findUnique` →
+`findFirst`**. Eso era **incorrecto**: desde **Prisma 5.0**, un `WhereUniqueInput` admite campos **no
+únicos** en el mismo nivel, siempre que también esté presente al menos un identificador único. Por tanto
+`findUnique({ where: { id, conjuntoId } })` es válido y devuelve `null` si el conjunto no coincide, **sin
+reescribir la operación**. La reescritura a `findFirst` se **eliminó**.
 
-- **Un solo lugar de verdad.** El aislamiento sigue viviendo enteramente en la extensión. Con (b) habría
-  que recordar añadir `@@unique([id, conjuntoId])` a **cada** modelo con tenant nuevo *y* garantizar que
-  toda consulta `findUnique` la use; olvidarlo dejaría ese modelo silenciosamente sin cubrir — justo el
-  olvido "discrecional" que la spec prohíbe.
-- **Falla seguro.** Con (a), un `findUnique({ where: { id } })` cuyo `id` pertenece a **otro** conjunto
-  devuelve `null` (o lanza en la variante `OrThrow`), en vez de recuperar el registro por PK. Con (b) el
-  aislamiento depende de que la clave compuesta exista y se use correctamente en cada llamada.
-- **No cambia el esquema por este motivo.** (b) añadiría índices únicos compuestos redundantes (el `id`
-  ya es único por sí solo) solo para complacer la firma de `findUnique`.
+**Regla implementada.** La extensión combina el conjunto según el tipo de `where`:
 
-**Contrapartidas de (a) (documentadas):**
+- **`WhereUniqueInput`** (`findUnique`, `findUniqueOrThrow`, `update`, `delete`, `upsert`): el
+  `conjuntoId` va en el **primer nivel**, con *spread* — `{ ...where, conjuntoId }`. **Nunca** con `AND`:
+  Prisma exige que el campo único esté en el primer nivel del `WhereUniqueInput`, así que un `AND` aquí
+  provocaría un error de validación (esto era el bug de `package.update({ where: { id } })` de
+  `checkin`/`schedule` y de `bono.update`).
+- **`WhereInput`** (`findMany`, `findFirst`, `count`, `aggregate`, `groupBy`, `updateMany`, `deleteMany`):
+  el conjunto va con **`AND`** — `{ AND: [ argsWhere, { conjuntoId } ] }` — para no pisar las condiciones
+  del llamador.
 
-- Se pierde la garantía de "resultado único" a nivel de tipos que da `findUnique`; funcionalmente es
-  equivalente porque el filtro es `{ id } AND { conjuntoId }` y `id` sigue siendo PK única.
-- `findFirst` no admite algunas opciones exclusivas de `findUnique`; en la práctica el código real solo
-  usa `where: { id }` (a veces con `select`/`include`), que `findFirst` soporta sin cambios. La
-  reescritura preserva `select`/`include`/`rejectOnNotFound`-equivalente según corresponda.
-- Consecuencia para los controladores: **ninguna función que hoy use `findUnique({ where: { id } })`
-  necesita cambiar su código** — la reescritura y el filtro de tenant son transparentes. Lo único
-  necesario es que la llamada ocurra dentro del contexto de tenant (lo garantiza el middleware, §2.3).
+En ambos casos, si el `where` del llamador ya trae un `conjuntoId` **distinto** del contexto, la extensión
+**lanza** (el llamador nunca decide el tenant). Si no hay contexto, **lanza** (falla cerrado).
 
 **Efecto en las funciones reales citadas:** `getFoto`, `schedule`, `checkin` (las dos lecturas por `id`)
 y los `findUnique` por `id` de `auth.controller.js` / `bonos.controller.js` quedan **cubiertos
-automáticamente**: solo devuelven el registro si pertenece al conjunto activo; si el `id` es de otro
-conjunto, obtienen `null` / lanzan, sin fuga entre conjuntos.
+automáticamente y sin cambiar su código**: solo devuelven/actualizan el registro si pertenece al conjunto
+activo; si el `id` es de otro conjunto, obtienen `null` (o el `update` no encuentra la fila y Prisma lanza
+`P2025`), sin fuga entre conjuntos. Solo hace falta que la llamada corra dentro del contexto de tenant (lo
+garantiza el middleware, §2.3).
 
-> **Nota `findUnique` por otras claves únicas (p. ej. `email`, `codigoInvitacion`).** La reescritura
-> aplica igual a `findUnique({ where: { email } })` sobre `User` (modelo con tenant) **cuando hay
-> contexto de tenant**: pasa a `findFirst({ where: { email, conjuntoId: activo } })`; como `email` es
-> `@unique` **global**, buscar por email dentro de una request autenticada solo encuentra al usuario si
-> está en el conjunto activo — coherente con el aislamiento. La búsqueda de `Conjunto` por
-> `codigoInvitacion` **no** se ve afectada porque `Conjunto` no es modelo con tenant (§2.3, exención
-> estructural).
+> **Nota `findUnique` por otras claves únicas (p. ej. `email`).** Con contexto de tenant, un
+> `findUnique({ where: { email } })` sobre `User` pasa a `{ where: { email, conjuntoId: activo } }`; como
+> `email` es `@unique` **global**, dentro de una request autenticada solo encuentra al usuario si está en
+> el conjunto activo — coherente con el aislamiento. La búsqueda de `Conjunto` por `codigoInvitacion`
+> **no** se ve afectada porque `Conjunto` no es modelo con tenant (§2.3, exención estructural). Los
+> lookups por `email` **sin** sesión (login, forgotPassword) usan `GLOBAL_LOOKUP` — ver §3.6.
 >
 > **Caso límite del login (`findUnique({ where: { email } })` sin conjunto activo).** El `login` busca al
 > usuario por email **antes** de que exista JWT y, por tanto, sin un conjunto activo — igual que el
@@ -554,6 +551,30 @@ autoridad es el backend).
 - **La activación del aislamiento es orden de despliegue, no un flag:** el código con falla-cerrado no
   llega a producción hasta que el backfill está verificado (§5.2, Fase 4); no existe interruptor de
   ejecución que active/desactive el aislamiento, para no reintroducir un "olvido silencioso".
+
+### 3.6.2. Flujos SIN sesión y cómo resuelve cada uno el conjunto
+
+Todo endpoint que toca un modelo con tenant **antes** de que exista un JWT válido es un "flujo sin
+sesión": no puede depender del middleware de tenant. Estos son todos, y cómo resuelve cada uno el
+conjunto sin abrir agujeros en el aislamiento:
+
+| Flujo | Toca modelo con tenant | Cómo resuelve el conjunto |
+|---|---|---|
+| **`register`** | `User.create` | Valida el `codigoInvitacion` → resuelve `Conjunto` (modelo **sin** tenant, exento) → abre `runWithTenant({ conjuntoId })` y crea el `User` dentro. El conjunto viene del código, no de `data`. (§3.4) |
+| **`login`** | `User.findUnique({ email })` | Lookup pre-tenant vía **`buscarUsuarioPorEmailSinTenant()`** (único punto que abre `GLOBAL_LOOKUP`). Tras verificar contraseña, emite el JWT (§3.6). |
+| **`forgotPassword`** | `User.findUnique({ email })` | Igual que login: **`buscarUsuarioPorEmailSinTenant()`**. Los `PasswordResetToken` que crea/consulta son de un modelo **sin** tenant (no requieren contexto). |
+| **`resetPassword`** | `User.update` | El `PasswordResetToken.findFirst` (sin tenant) resuelve el `record`; luego **`resolverConjuntoIdPorUsuario(record.userId)`** (bootstrap `$queryRaw`) da el conjunto y el `user.update` corre dentro de `runWithTenant`. Si no hay conjunto resoluble → **400**. |
+
+Notas transversales:
+- **`GLOBAL_LOOKUP`** se abre **solo** dentro de `buscarUsuarioPorEmailSinTenant()` (login y
+  forgotPassword la invocan; nadie más abre el scope). Invariante §2.3.1.
+- **`resolverConjuntoIdPorUsuario()`** (bootstrap `$queryRaw`) la usan el **middleware de tenant** y
+  **resetPassword**. Invariante de consultas crudas: §2.3 (bootstrap).
+- **`Conjunto`** (resolución por `codigoInvitacion` en register) queda exento por ser tabla raíz sin
+  `conjuntoId`, no por un scope especial.
+- ⚠️ **`prisma/seed.js`** (creación de la cuenta de operador) es también un flujo sin sesión que toca
+  `User` sin contexto. Con la extensión activa lanzaría. Su ajuste corresponde a la Fase F/backfill
+  (el operador pasa a pertenecer a un conjunto); se anota aquí para no olvidarlo.
 
 ---
 
@@ -830,6 +851,12 @@ vieja sigue funcionando; el aislamiento se enciende solo al final.
 >   exactamente una vez en el repositorio (dentro de esa función). (§2.3.1)
 > - **Un único cliente Prisma extendido.** No debe existir un segundo `PrismaClient` sin la extensión de
 >   tenant. (§2.3.1, §6.1)
+> - **Consultas crudas contenidas.** `$queryRaw`, `$executeRaw`, `$queryRawUnsafe` y `$executeRawUnsafe`
+>   aparecen **solo** en `resolverConjuntoIdPorUsuario()` (`config/tenantBootstrap.js`); cualquier otra se
+>   salta la extensión y sería una vía sin aislamiento. (§2.3 bootstrap)
+> - **`WhereUniqueInput` sin `AND`.** El conjunto se combina en el primer nivel del `where` único
+>   (`{ ...where, conjuntoId }`); el `AND` es solo para `WhereInput`. No se reescribe `findUnique` a
+>   `findFirst`. (§2.3.1)
 > - **`fotoUrl`** sigue excluido de `GET /packages` y `GET /packages/mine`. (§2.5)
 > - **`BONOS_HABILITADOS`/`bonosHabilitados`** en `false` por defecto para conjuntos nuevos. (§4)
 > - **WhatsApp manual `wa.me`**, sin Twilio/WhatsApp Business API. (§4.3)
