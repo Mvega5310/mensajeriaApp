@@ -11,7 +11,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { conFiltroConjunto, forzarConjuntoEnData } from '../tenantExtension.js';
+import {
+  conFiltroConjunto,
+  whereUnicoConConjunto,
+  forzarConjuntoEnData,
+} from '../tenantExtension.js';
+
+// --- conFiltroConjunto (WhereInput -> AND) ---
 
 test('conFiltroConjunto añade el filtro cuando no hay where', () => {
   assert.deepEqual(conFiltroConjunto(undefined, 'c1'), { conjuntoId: 'c1' });
@@ -23,11 +29,36 @@ test('conFiltroConjunto combina con AND sin pisar el where del llamador', () => 
   assert.deepEqual(out, { AND: [{ estado: 'ENTREGADO' }, { conjuntoId: 'c1' }] });
 });
 
-test('forzarConjuntoEnData fija conjuntoId desde el contexto', () => {
-  assert.deepEqual(forzarConjuntoEnData({ nombre: 'x' }, 'c1'), {
-    nombre: 'x',
+// --- whereUnicoConConjunto (WhereUniqueInput -> spread plano) ---
+
+test('whereUnicoConConjunto pone conjuntoId en el primer nivel', () => {
+  assert.deepEqual(whereUnicoConConjunto({ id: 'p1' }, 'c1'), { id: 'p1', conjuntoId: 'c1' });
+});
+
+test('whereUnicoConConjunto tolera where undefined', () => {
+  assert.deepEqual(whereUnicoConConjunto(undefined, 'c1'), { conjuntoId: 'c1' });
+});
+
+test('whereUnicoConConjunto NUNCA produce AND (clave única en primer nivel)', () => {
+  const out = whereUnicoConConjunto({ id: 'p1' }, 'c1');
+  assert.equal('AND' in out, false);
+});
+
+test('whereUnicoConConjunto acepta conjuntoId igual al del contexto', () => {
+  assert.deepEqual(whereUnicoConConjunto({ id: 'p1', conjuntoId: 'c1' }, 'c1'), {
+    id: 'p1',
     conjuntoId: 'c1',
   });
+});
+
+test('whereUnicoConConjunto RECHAZA un conjuntoId distinto en el where', () => {
+  assert.throws(() => whereUnicoConConjunto({ id: 'p1', conjuntoId: 'OTRO' }, 'c1'), /conjuntoId distinto/);
+});
+
+// --- forzarConjuntoEnData ---
+
+test('forzarConjuntoEnData fija conjuntoId desde el contexto', () => {
+  assert.deepEqual(forzarConjuntoEnData({ nombre: 'x' }, 'c1'), { nombre: 'x', conjuntoId: 'c1' });
 });
 
 test('forzarConjuntoEnData tolera data undefined', () => {
@@ -35,10 +66,7 @@ test('forzarConjuntoEnData tolera data undefined', () => {
 });
 
 test('forzarConjuntoEnData ACEPTA conjuntoId igual al del contexto', () => {
-  assert.deepEqual(forzarConjuntoEnData({ conjuntoId: 'c1', x: 1 }, 'c1'), {
-    conjuntoId: 'c1',
-    x: 1,
-  });
+  assert.deepEqual(forzarConjuntoEnData({ conjuntoId: 'c1', x: 1 }, 'c1'), { conjuntoId: 'c1', x: 1 });
 });
 
 test('forzarConjuntoEnData RECHAZA un conjuntoId distinto en data', () => {

@@ -26,26 +26,50 @@ import { Prisma } from '@prisma/client';
 import { getContext, SCOPE } from './tenantContext.js';
 import { esModeloConTenant } from './tenantModels.js';
 
-// Lecturas por filtro que aceptan `where` y se filtran por tenant en sitio
-// (sin reescribir la operación).
-const LECTURAS_POR_FILTRO = new Set([
+// Operaciones cuyo `where` es un WhereInput (admite AND, campos no únicos).
+// Aquí combinamos con AND sin pisar las condiciones del llamador.
+const OPS_WHERE_FILTRO = new Set([
   'findMany',
   'findFirst',
   'findFirstOrThrow',
   'count',
   'aggregate',
   'groupBy',
+  'updateMany',
+  'deleteMany',
 ]);
 
-// Escrituras/borrados que aceptan `where`.
-const ESCRITURAS_CON_WHERE = new Set(['update', 'updateMany', 'delete', 'deleteMany']);
+// Operaciones cuyo `where` es un WhereUniqueInput. Prisma 5 NO admite `AND`
+// aquí: el campo único debe estar en el primer nivel. Además, desde Prisma 5.0
+// se pueden incluir campos NO únicos (como conjuntoId) en el mismo nivel, así
+// que `findUnique({ where: { id, conjuntoId } })` funciona y devuelve null si el
+// conjunto no coincide — por eso YA NO reescribimos findUnique -> findFirst.
+const OPS_WHERE_UNICO = new Set([
+  'findUnique',
+  'findUniqueOrThrow',
+  'update',
+  'delete',
+  'upsert',
+]);
 
-// Combina el where del llamador con el filtro de conjunto, sin pisar sus
-// condiciones.
+// Combina un WhereInput con el filtro de conjunto usando AND (no pisa las
+// condiciones del llamador). Para findMany/updateMany/etc.
 export function conFiltroConjunto(where, conjuntoId) {
   const filtro = { conjuntoId };
   if (where === undefined || where === null) return filtro;
   return { AND: [where, filtro] };
+}
+
+// Combina un WhereUniqueInput con el conjunto en el PRIMER NIVEL (spread plano),
+// como exige Prisma 5 para las claves únicas. Si el llamador ya trae un
+// conjuntoId distinto, lanza: el llamador NUNCA decide el tenant (R1.2).
+export function whereUnicoConConjunto(where, conjuntoId) {
+  if (where && typeof where === 'object' && 'conjuntoId' in where && where.conjuntoId !== conjuntoId) {
+    throw new Error(
+      'Aislamiento de tenant: el where trae un conjuntoId distinto del contexto activo.'
+    );
+  }
+  return { ...(where ?? {}), conjuntoId };
 }
 
 // Fuerza data.conjuntoId desde el contexto. Rechaza que el llamador fije un
@@ -74,10 +98,9 @@ export function forzarConjuntoEnData(data, conjuntoId) {
  * @param {string} p.operation  operación (findMany, create, ...)
  * @param {object} p.args       argumentos originales
  * @param {(a:object)=>Promise<any>} p.query  ejecuta la operación original
- * @param {object} p.client     cliente extendido (para reescritura)
  * @param {()=>(object|undefined)} [p.leerContexto]  fuente del contexto (test)
  */
-export async function aplicarAislamiento({ model, operation, args, query, client, leerContexto = getContext }) {
+export async function aplicarAislamiento({ model, operation, args, query, leerContexto = getContext }) {
   // Modelos sin tenant (Conjunto, PasswordResetToken): pasan tal cual y no
   // requieren contexto. Es lo que permite las lecturas pre-tenant (resolver
   // Conjunto por codigoInvitacion, etc.).
@@ -105,46 +128,43 @@ export async function aplicarAislamiento({ model, operation, args, query, client
   const { conjuntoId } = ctx;
   const nextArgs = { ...args };
 
-  // 1) findUnique / findUniqueOrThrow -> findFirst / findFirstOrThrow.
-  //    Se redirige al método del modelo en el cliente extendido (client[model]
-  //    existe en tiempo de ejecución).
-  if (operation === 'findUnique' || operation === 'findUniqueOrThrow') {
-    const destino = operation === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
-    nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
-    const delegate = client[model] ?? client[lowerFirst(model)];
-    return delegate[destino](nextArgs);
-  }
+  // 1) Operaciones con WhereUniqueInput (findUnique, findUniqueOrThrow, update,
+  //    delete, upsert): el conjunto va en el PRIMER NIVEL del where (spread),
+  //    NO en un AND. Prisma 5 admite campos no únicos ahí, así que findUnique
+  //    por id devuelve null si el conjunto no coincide (sin reescribir a
+  //    findFirst).
+  if (OPS_WHERE_UNICO.has(operation)) {
+    nextArgs.where = whereUnicoConConjunto(nextArgs.where, conjuntoId);
 
-  // 2) Lecturas por filtro.
-  if (LECTURAS_POR_FILTRO.has(operation)) {
-    nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
+    // update y upsert traen data que hay que sujetar al conjunto.
+    if (operation === 'update' && nextArgs.data !== undefined) {
+      nextArgs.data = forzarConjuntoEnData(nextArgs.data, conjuntoId);
+    }
+    if (operation === 'upsert') {
+      if (nextArgs.create !== undefined) {
+        nextArgs.create = forzarConjuntoEnData(nextArgs.create, conjuntoId);
+      }
+      if (nextArgs.update !== undefined) {
+        nextArgs.update = forzarConjuntoEnData(nextArgs.update, conjuntoId);
+      }
+    }
     return query(nextArgs);
   }
 
-  // 3) Escrituras/borrados con where.
-  if (ESCRITURAS_CON_WHERE.has(operation)) {
+  // 2) Operaciones con WhereInput (findMany, findFirst, count, aggregate,
+  //    groupBy, updateMany, deleteMany): combinamos con AND.
+  if (OPS_WHERE_FILTRO.has(operation)) {
     nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
+    // updateMany trae data que también hay que sujetar al conjunto.
     if (nextArgs.data !== undefined) {
       nextArgs.data = forzarConjuntoEnData(nextArgs.data, conjuntoId);
     }
     return query(nextArgs);
   }
 
-  // 4) Creaciones: conjuntoId SIEMPRE desde el contexto.
+  // 3) Creaciones: conjuntoId SIEMPRE desde el contexto.
   if (operation === 'create' || operation === 'createMany') {
     nextArgs.data = forzarConjuntoEnData(nextArgs.data, conjuntoId);
-    return query(nextArgs);
-  }
-
-  // 5) upsert: filtro en where + conjuntoId forzado en create/update.
-  if (operation === 'upsert') {
-    nextArgs.where = conFiltroConjunto(nextArgs.where, conjuntoId);
-    if (nextArgs.create !== undefined) {
-      nextArgs.create = forzarConjuntoEnData(nextArgs.create, conjuntoId);
-    }
-    if (nextArgs.update !== undefined) {
-      nextArgs.update = forzarConjuntoEnData(nextArgs.update, conjuntoId);
-    }
     return query(nextArgs);
   }
 
@@ -168,14 +188,10 @@ export function tenantExtension() {
       query: {
         $allModels: {
           async $allOperations({ model, operation, args, query }) {
-            return aplicarAislamiento({ model, operation, args, query, client });
+            return aplicarAislamiento({ model, operation, args, query });
           },
         },
       },
     })
   );
-}
-
-function lowerFirst(s) {
-  return s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
 }
