@@ -572,9 +572,10 @@ Notas transversales:
   **resetPassword**. Invariante de consultas crudas: §2.3 (bootstrap).
 - **`Conjunto`** (resolución por `codigoInvitacion` en register) queda exento por ser tabla raíz sin
   `conjuntoId`, no por un scope especial.
-- ⚠️ **`prisma/seed.js`** (creación de la cuenta de operador) es también un flujo sin sesión que toca
-  `User` sin contexto. Con la extensión activa lanzaría. Su ajuste corresponde a la Fase F/backfill
-  (el operador pasa a pertenecer a un conjunto); se anota aquí para no olvidarlo.
+- **`prisma/seed.js`** (creación de la cuenta de operador) es también un flujo sin sesión que toca
+  `User` sin contexto. **Corregido** (revisión de Fase B): crea/reutiliza un `Conjunto` local por slug,
+  genera su `codigoInvitacion`, resuelve el operador con `buscarUsuarioPorEmailSinTenant()` y lo crea
+  dentro de `runWithTenant({ conjuntoId, role: 'OPERATOR' })`. Es idempotente.
 
 ---
 
