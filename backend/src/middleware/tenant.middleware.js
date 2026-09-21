@@ -13,34 +13,12 @@
 // - Falla cerrado: si el usuario no existe o no tiene conjuntoId resoluble ->
 //   401 y NO continúa. No hay "modo sin tenant".
 //
-// NOTA DE DISEÑO (hueco no cubierto por design.md, resuelto aquí y pendiente de
-// validación): la lectura de bootstrap del tenant es un problema de "huevo y
-// gallina" — necesitamos leer User.conjuntoId por `sub`, pero User está bajo la
-// extensión, que exige contexto que todavía no existe. NO usamos GLOBAL_LOOKUP
-// (ese scope está reservado en exclusiva a buscarUsuarioPorEmailSinTenant()) ni
-// un segundo PrismaClient sin extender (invariante: un solo cliente). En su
-// lugar leemos solo la columna conjuntoId con $queryRaw parametrizado por id:
-// $queryRaw no atraviesa la capa de modelos de la extensión, así que no dispara
-// el falla-cerrado, sigue siendo el MISMO cliente extendido, y es una lectura
-// mínima (una columna, por PK) con parámetros ligados (sin inyección).
+// La lectura de bootstrap del tenant (resolverConjuntoIdPorUsuario) vive ahora
+// en config/tenantBootstrap.js, porque también la usa resetPassword. Ver la
+// nota de diseño y la invariante de $queryRaw en ese módulo.
 
-import { Prisma } from '@prisma/client';
-import { prisma } from '../config/db.js';
 import { runWithTenant } from '../config/tenantContext.js';
-
-/**
- * Resuelve el conjuntoId de un usuario por su id, sin depender del contexto de
- * tenant (lectura de bootstrap). Devuelve string | null.
- */
-export async function resolverConjuntoIdPorUsuario(userId) {
-  // $queryRaw con parámetro ligado: no pasa por la extensión de modelos y es
-  // seguro frente a inyección.
-  const filas = await prisma.$queryRaw(
-    Prisma.sql`SELECT "conjuntoId" FROM "User" WHERE "id" = ${userId} LIMIT 1`
-  );
-  const fila = Array.isArray(filas) ? filas[0] : undefined;
-  return fila?.conjuntoId ?? null;
-}
+import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
 
 export async function requireTenant(req, res, next) {
   const sub = req.user?.sub;
