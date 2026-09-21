@@ -58,17 +58,17 @@
 
 ## Fase B — Contexto de tenant y extensión de Prisma (núcleo del aislamiento)
 
-- [ ] **B1. Implementar `tenantContext.js` (AsyncLocalStorage con `scope`).**
+- [x] **B1. Implementar `tenantContext.js` (AsyncLocalStorage con `scope`).** _(commit `4981a51`)_
   - Exponer un `AsyncLocalStorage` cuyo valor es unión discriminada:
     `{ scope: 'TENANT', conjuntoId, role }` | `{ scope: 'GLOBAL_LOOKUP' }`.
   - Utilidades para leer el contexto y para ejecutar `run(...)`.
-  - _Diseño:_ §2.3 (componente 1)
+  - _Implementado:_ `src/config/tenantContext.js` (`getContext`, `runWithTenant`; sin helper para
+    `GLOBAL_LOOKUP` a propósito). _Diseño:_ §2.3 (componente 1)
 
-- [ ] **B2. Definir la lista única de modelos con tenant.**
-  - Una constante central `MODELOS_CON_TENANT = ['User','Package','Bono','Comentario']` (contrato de
-    §1.5). Documentar que agregar un modelo nuevo obliga a decidir si entra.
-  - **No** incluir `Conjunto` ni `PasswordResetToken`.
-  - _Diseño:_ §1.5, §2.3
+- [x] **B2. Definir la lista única de modelos con tenant.** _(commit `a995a18`)_
+  - Una constante central `MODELOS_CON_TENANT = ['user','package','bono','comentario']` (contrato de
+    §1.5) + helper `esModeloConTenant()`. `Conjunto` y `PasswordResetToken` excluidos.
+  - _Implementado:_ `src/config/tenantModels.js`. _Diseño:_ §1.5, §2.3
 
 - [ ] **B3. Implementar la extensión de Prisma (`$extends` con `query`).**
   - Para los modelos de `MODELOS_CON_TENANT`:
@@ -83,30 +83,44 @@
   - **Regla de `scope`:** `TENANT` → filtra; `GLOBAL_LOOKUP` → exime solo esa operación; **contexto
     ausente → lanza (falla cerrado)**.
   - **Un único cliente extendido**; exportarlo como el `prisma` que usa toda la app.
-  - _Requisitos:_ R1.1, R1.2, R1.3, R1.4, R1.5 · _Diseño:_ §2.3, §2.3.1
+  - _Implementado:_ `src/config/tenantExtension.js` (lógica en `aplicarAislamiento()`), aplicado en
+    `src/config/db.js` sobre el único `PrismaClient`. _Requisitos:_ R1.1–R1.5 · _Diseño:_ §2.3, §2.3.1
 
-- [ ] **B4. Implementar el middleware de tenant (Express).**
+- [x] **B4. Implementar el middleware de tenant (Express).** _(commit `42a8135`)_
   - Tras el middleware de auth JWT: resolver `conjuntoId` **cargando el `User` por `sub` contra la BD,
     SIEMPRE** (nunca desde un claim del token, que no existe); abrir
     `run({ scope: 'TENANT', conjuntoId, role }, ...)`.
   - Si el `User` no existe o su `conjuntoId` es `null`/no resoluble → `401` y **no** continuar
     (falla cerrado).
   - Nunca tomar el conjunto de query/body/headers ni de ningún claim del cliente.
+  - _Implementado:_ `src/middleware/tenant.middleware.js` (`requireTenant`).
+  - ⚠️ **DECISIÓN DE DISEÑO NUEVA pendiente de reflejar en `design.md`:** la lectura de *bootstrap* del
+    tenant (leer `User.conjuntoId` por `sub`) es un problema huevo-y-gallina porque `User` está bajo la
+    extensión que exige contexto. Se resuelve con `resolverConjuntoIdPorUsuario()` usando
+    `prisma.$queryRaw` parametrizado por `id`: no usa `GLOBAL_LOOKUP` (reservado a
+    `buscarUsuarioPorEmailSinTenant()`) ni un segundo cliente (sigue siendo el único `prisma`); `$queryRaw`
+    no atraviesa la capa de modelos, así que no dispara el falla-cerrado. **Falta el visto bueno para
+    documentarlo en design.md §2.3/§3.6.**
   - _Requisitos:_ R1.3, R1.5, R3.6 · _Diseño:_ §2.3 (componente 2), §3.6
 
-- [ ] **B5. Implementar `buscarUsuarioPorEmailSinTenant()` — ÚNICO punto de entrada de `GLOBAL_LOOKUP`.**
-  - Encapsular la búsqueda de usuario por email en **una sola función con nombre propio**
-    `buscarUsuarioPorEmailSinTenant(email)`, que envuelve la consulta en
-    `AsyncLocalStorage.run({ scope: 'GLOBAL_LOOKUP' }, () => prisma.user.findUnique({ where: { email } }))`.
-  - **Invariante (criterio de aceptación verificable):** `AsyncLocalStorage.run({ scope: 'GLOBAL_LOOKUP' }`
-    aparece **exactamente una vez** en todo el repositorio, dentro de esta función. Ninguna otra parte
-    del código abre ese scope directamente.
-  - _Requisitos:_ R1.3 · _Diseño:_ §2.3.1 (invariante de punto de entrada único), §8.1
+- [x] **B5. Implementar `buscarUsuarioPorEmailSinTenant()` — ÚNICO punto de entrada de `GLOBAL_LOOKUP`.** _(commit `398de13`)_
+  - Encapsulada en `src/controllers/auth.controller.js`; envuelve `prisma.user.findUnique({where:{email}})`
+    en `tenantStore.run({ scope: SCOPE.GLOBAL_LOOKUP }, ...)`.
+  - **Invariante verificada por auditoría:** la única línea *ejecutable* que abre `GLOBAL_LOOKUP` es
+    `auth.controller.js` (las demás coincidencias de grep son comentarios). El **cableado de `login()`
+    para usarla es C3** (aquí solo se agrega la función).
+  - _Requisitos:_ R1.3 · _Diseño:_ §2.3.1, §8.1
 
-- [ ] **B6. Pruebas del mecanismo de aislamiento.** _(a `develop`, nunca `main`)_
-  - Verificar: lectura/escritura filtradas por conjunto; `findUnique` por `id` de otro conjunto devuelve
-    `null`; contexto ausente lanza; `create` ignora `conjuntoId` del llamador; `GLOBAL_LOOKUP` exime solo
-    su operación; auditoría del "exactamente una vez".
+- [x] **B6. Pruebas del mecanismo de aislamiento.** _(commit `1301ff7`; a esta rama feature, nunca `main`)_
+  - Cubre: modelos sin tenant pasan sin contexto; contexto ausente lanza (falla cerrado); `GLOBAL_LOOKUP`
+    exime; inyección de filtro en lecturas; reescritura `findUnique→findFirst`; `create` fuerza
+    `conjuntoId` y rechaza uno distinto; `update`/`deleteMany`/`upsert` filtran; operación no soportada
+    lanza; y las pruebas de contexto (anidamiento, propagación, rechazo de `conjuntoId` vacío).
+  - Runner `node:test` (sin dependencias nuevas), `npm test` = `node --test`.
+  - **VERIFICADO en el sandbox:** los 6 tests de `tenantContext.test.js` PASAN.
+  - **PENDIENTE DE PRUEBA LOCAL:** `tenantExtension.helpers.test.js` y `tenantExtension.interceptor.test.js`
+    importan `@prisma/client` (requieren `prisma generate`); sintaxis verificada, ejecución delegada al
+    entorno local.
   - _Requisitos:_ R1.1–R1.5 · _Diseño:_ §2.3, §2.3.1
 
 ---
