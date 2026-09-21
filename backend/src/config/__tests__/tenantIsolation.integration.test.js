@@ -13,19 +13,48 @@
 //   node --test src/config/__tests__/tenantIsolation.integration.test.js
 //   docker rm -f kan8-pg
 //
-// Si DATABASE_URL no está definida, la suite se OMITE (skip) para no fallar en
-// entornos sin base de datos (como el sandbox).
+// La suite se OMITE (skip) con un mensaje claro si DATABASE_URL no está definida
+// O si apunta a un host que NO es localhost/127.0.0.1/::1. Como crea y borra
+// datos, esta guarda evita ejecutarla por error contra una base remota o de
+// producción configurada en .env.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const hayDB = !!process.env.DATABASE_URL;
+// GUARDA DE SEGURIDAD: esta prueba CREA y BORRA datos. db.js carga dotenv, así
+// que sin protección podría correr contra la base configurada en .env (incluida
+// producción). Solo se ejecuta si DATABASE_URL apunta a localhost / 127.0.0.1.
+function hostDeDatabaseUrl(url) {
+  if (!url) return null;
+  try {
+    // postgresql://user:pass@HOST:port/db -> el constructor URL da hostname.
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
 
-// Import dinámico: solo cargamos Prisma si hay DB (evita el coste de importar
-// @prisma/client cuando se va a omitir).
+const dbUrl = process.env.DATABASE_URL;
+const dbHost = hostDeDatabaseUrl(dbUrl);
+const HOSTS_LOCALES = new Set(['localhost', '127.0.0.1', '::1']);
+const esLocal = !!dbHost && HOSTS_LOCALES.has(dbHost);
+const razonSkip = !dbUrl
+  ? 'DATABASE_URL no definida'
+  : !esLocal
+    ? `DATABASE_URL apunta a un host NO local (${dbHost}); esta prueba crea/borra datos y solo corre contra localhost/127.0.0.1`
+    : null;
+const omitir = razonSkip !== null;
+
+if (omitir) {
+  // Mensaje visible al ejecutar, para que no parezca que "pasó" silenciosamente.
+  console.warn(`[tenantIsolation.integration] OMITIDA: ${razonSkip}`);
+}
+
+// Import dinámico: solo cargamos Prisma si vamos a correr (evita el coste de
+// importar @prisma/client cuando se va a omitir).
 let prisma, runWithTenant, resolverConjuntoIdPorUsuario, buscarUsuarioPorEmailSinTenant;
 
-test('setup: importar módulos y limpiar datos de prueba', { skip: !hayDB }, async () => {
+test('setup: importar módulos y limpiar datos de prueba', { skip: omitir && razonSkip }, async () => {
   ({ prisma } = await import('../db.js'));
   ({ runWithTenant } = await import('../tenantContext.js'));
   ({ resolverConjuntoIdPorUsuario } = await import('../tenantBootstrap.js'));
@@ -76,7 +105,7 @@ async function limpiar() {
 // Estado compartido entre pruebas.
 const ctx = {};
 
-test('crear dos conjuntos, cada uno con su usuario y su paquete', { skip: !hayDB }, async () => {
+test('crear dos conjuntos, cada uno con su usuario y su paquete', { skip: omitir && razonSkip }, async () => {
   const A = await crearConjunto(SLUG_A, 'itest-cod-A');
   const B = await crearConjunto(SLUG_B, 'itest-cod-B');
   ctx.A = A.id;
@@ -124,7 +153,7 @@ test('crear dos conjuntos, cada uno con su usuario y su paquete', { skip: !hayDB
   });
 });
 
-test('findUnique por id de un paquete de OTRO conjunto -> null', { skip: !hayDB }, async () => {
+test('findUnique por id de un paquete de OTRO conjunto -> null', { skip: omitir && razonSkip }, async () => {
   // Desde el contexto de A, buscar el paquete de B por su id debe dar null.
   await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, async () => {
     const encontrado = await prisma.package.findUnique({ where: { id: ctx.pB } });
@@ -132,7 +161,7 @@ test('findUnique por id de un paquete de OTRO conjunto -> null', { skip: !hayDB 
   });
 });
 
-test('findUnique por id del propio conjunto -> encuentra', { skip: !hayDB }, async () => {
+test('findUnique por id del propio conjunto -> encuentra', { skip: omitir && razonSkip }, async () => {
   await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, async () => {
     const encontrado = await prisma.package.findUnique({ where: { id: ctx.pA } });
     assert.ok(encontrado);
@@ -140,7 +169,7 @@ test('findUnique por id del propio conjunto -> encuentra', { skip: !hayDB }, asy
   });
 });
 
-test('update por id de un paquete de OTRO conjunto -> no afecta filas', { skip: !hayDB }, async () => {
+test('update por id de un paquete de OTRO conjunto -> no afecta filas', { skip: omitir && razonSkip }, async () => {
   // update sobre WhereUniqueInput con conjunto que no coincide: Prisma no
   // encuentra la fila y lanza P2025 (Record to update not found).
   await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, async () => {
@@ -155,7 +184,7 @@ test('update por id de un paquete de OTRO conjunto -> no afecta filas', { skip: 
   });
 });
 
-test('update por id del propio conjunto -> funciona', { skip: !hayDB }, async () => {
+test('update por id del propio conjunto -> funciona', { skip: omitir && razonSkip }, async () => {
   await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, async () => {
     const actualizado = await prisma.package.update({
       where: { id: ctx.pA },
@@ -165,7 +194,7 @@ test('update por id del propio conjunto -> funciona', { skip: !hayDB }, async ()
   });
 });
 
-test('findMany solo devuelve los paquetes del conjunto activo', { skip: !hayDB }, async () => {
+test('findMany solo devuelve los paquetes del conjunto activo', { skip: omitir && razonSkip }, async () => {
   await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, async () => {
     const paquetes = await prisma.package.findMany({});
     assert.ok(paquetes.every((p) => p.conjuntoId === ctx.A));
@@ -174,7 +203,7 @@ test('findMany solo devuelve los paquetes del conjunto activo', { skip: !hayDB }
   });
 });
 
-test('operación sobre User SIN contexto -> lanza (falla cerrado)', { skip: !hayDB }, async () => {
+test('operación sobre User SIN contexto -> lanza (falla cerrado)', { skip: omitir && razonSkip }, async () => {
   await assert.rejects(prisma.user.findMany({}), /sin contexto de conjunto/);
   await assert.rejects(
     prisma.user.create({
@@ -191,7 +220,7 @@ test('operación sobre User SIN contexto -> lanza (falla cerrado)', { skip: !hay
   );
 });
 
-test('buscarUsuarioPorEmailSinTenant encuentra usuarios de cualquier conjunto', { skip: !hayDB }, async () => {
+test('buscarUsuarioPorEmailSinTenant encuentra usuarios de cualquier conjunto', { skip: omitir && razonSkip }, async () => {
   // Sin contexto de tenant (GLOBAL_LOOKUP interno): debe resolver aunque el
   // usuario esté en A o en B.
   const a = await buscarUsuarioPorEmailSinTenant('a@itest.local');
@@ -200,13 +229,13 @@ test('buscarUsuarioPorEmailSinTenant encuentra usuarios de cualquier conjunto', 
   assert.equal(b.id, ctx.uB);
 });
 
-test('resolverConjuntoIdPorUsuario devuelve el conjunto correcto', { skip: !hayDB }, async () => {
+test('resolverConjuntoIdPorUsuario devuelve el conjunto correcto', { skip: omitir && razonSkip }, async () => {
   assert.equal(await resolverConjuntoIdPorUsuario(ctx.uA), ctx.A);
   assert.equal(await resolverConjuntoIdPorUsuario(ctx.uB), ctx.B);
   assert.equal(await resolverConjuntoIdPorUsuario('inexistente'), null);
 });
 
-test('flujo forgotPassword: crea token para el usuario correcto', { skip: !hayDB }, async () => {
+test('flujo forgotPassword: crea token para el usuario correcto', { skip: omitir && razonSkip }, async () => {
   // Simula lo esencial de forgotPassword: lookup por email + crear token
   // (PasswordResetToken es sin tenant, no requiere contexto).
   const user = await buscarUsuarioPorEmailSinTenant('a@itest.local');
@@ -217,7 +246,7 @@ test('flujo forgotPassword: crea token para el usuario correcto', { skip: !hayDB
   assert.equal(rec.userId, ctx.uA);
 });
 
-test('flujo resetPassword: update de User dentro del contexto resuelto', { skip: !hayDB }, async () => {
+test('flujo resetPassword: update de User dentro del contexto resuelto', { skip: omitir && razonSkip }, async () => {
   // Simula lo esencial de resetPassword: resolver conjunto por userId del token
   // y actualizar User dentro de runWithTenant.
   const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash: 'itest-hash' } });
@@ -239,7 +268,7 @@ test('flujo resetPassword: update de User dentro del contexto resuelto', { skip:
   });
 });
 
-test('teardown: limpiar datos de prueba', { skip: !hayDB }, async () => {
+test('teardown: limpiar datos de prueba', { skip: omitir && razonSkip }, async () => {
   await limpiar();
   await prisma.$disconnect();
 });
