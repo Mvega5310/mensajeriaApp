@@ -40,11 +40,32 @@ En `.env`, cambia `DATABASE_URL="file:./dev.db"` y en
 ```
 npm install
 npx prisma migrate dev --name init   # crea prisma/dev.db y aplica el esquema
-npm run seed                          # crea la cuenta de operador desde OPERATOR_* en .env
+npm run seed                          # crea el Conjunto local + la cuenta de operador
 npm run dev                           # http://localhost:4000
 ```
 Antes de comitear, vuelve a poner `provider = "postgresql"` en el schema
 (los `.db`/migraciones de SQLite están en `.gitignore`, nunca se suben).
+
+> **Nota (multi-conjunto, KAN-8):** con el aislamiento por conjunto activo,
+> `npm run seed` ahora, de forma **idempotente** (se puede correr varias veces
+> sin duplicar):
+> 1. busca o crea un `Conjunto` local (slug tomado de `SEED_CONJUNTO_SLUG`,
+>    por defecto `local`) y genera su `codigoInvitacion`;
+> 2. **imprime en consola el código de invitación y el enlace de registro**
+>    (`FRONTEND_URL/registro?c=<código>`) — úsalo para registrar residentes de
+>    prueba;
+> 3. crea la cuenta de operador (`OPERATOR_*` del `.env`) **dentro** de ese
+>    conjunto.
+>
+> Variables opcionales del seed en `.env`: `SEED_CONJUNTO_SLUG`,
+> `SEED_CONJUNTO_NOMBRE`, `SEED_OPERADOR_WHATSAPP`, `SEED_OPERADOR_DOMICILIO`,
+> `SEED_PUNTO_RECEPCION`.
+>
+> El seed usa el aislamiento real: resuelve el operador con
+> `buscarUsuarioPorEmailSinTenant()` y lo crea dentro de
+> `runWithTenant({ conjuntoId, role: 'OPERATOR' })`, sin pasar `conjuntoId` en
+> `data`. Como la lógica de tenant usa consultas propias de PostgreSQL, para
+> ejercer el aislamiento conviene desarrollar contra Postgres (no SQLite).
 
 **Frontend**
 ```

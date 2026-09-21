@@ -8,12 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  SCOPE,
-  tenantStore,
-  getContext,
-  runWithTenant,
-} from '../tenantContext.js';
+import { SCOPE, getContext, runWithTenant } from '../tenantContext.js';
 
 test('getContext() es undefined fuera de todo run()', () => {
   assert.equal(getContext(), undefined);
@@ -55,10 +50,12 @@ test('contextos anidados no se filtran entre sí', () => {
   });
 });
 
-test('GLOBAL_LOOKUP solo debería abrirse manualmente (aquí, para probar la exención)', () => {
-  // Nota: en producción este scope SOLO lo abre buscarUsuarioPorEmailSinTenant().
-  // Aquí lo abrimos directamente solo para verificar que el store lo refleja.
-  tenantStore.run({ scope: SCOPE.GLOBAL_LOOKUP }, () => {
-    assert.equal(getContext().scope, SCOPE.GLOBAL_LOOKUP);
-  });
+// La exención GLOBAL_LOOKUP se prueba en tenantExtension.interceptor.test.js
+// (test "GLOBAL_LOOKUP exime"). Aquí NO abrimos ese scope con tenantStore.run:
+// la invariante §2.3.1 exige que `run({ scope: GLOBAL_LOOKUP })` aparezca en un
+// solo punto del repo (buscarUsuarioPorEmailSinTenant). Solo comprobamos que la
+// constante existe.
+test('SCOPE expone TENANT y GLOBAL_LOOKUP', () => {
+  assert.equal(SCOPE.TENANT, 'TENANT');
+  assert.equal(SCOPE.GLOBAL_LOOKUP, 'GLOBAL_LOOKUP');
 });
