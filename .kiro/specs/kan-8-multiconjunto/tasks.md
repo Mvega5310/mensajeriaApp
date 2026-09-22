@@ -153,10 +153,21 @@
     `requireAuth` no lleva `requireTenant` después; rutas pre-tenant de auth como excepción explícita.
   - _Requisitos:_ R1.3, R1.5
 
-- [ ] **C5. Frontend — flujo de registro por enlace/QR.**
-  - Leer `?c=<codigoInvitacion>` de la URL, enviarlo a `register`; mostrar estado de error si falta/es
-    inválido.
+- [x] **C5. Frontend — flujo de registro por enlace/QR.** _(commit `b1a9178`; rev C pt 1)_
+  - `Register.jsx` lee `?c=` (`useSearchParams`) y lo envía como `codigoInvitacion`. Si no hay `c`,
+    muestra el campo "Código de invitación" (trim, acepta mayús/minús) con nota de que lo entrega el
+    operador — esto cubre los flyers KAN-3 sin `?c=`. Ante error, muestra el mensaje y conserva el resto
+    del formulario. Sin código/conjunto por defecto (ni env ni fijo).
+  - ⚠️ **Verificación en navegador PENDIENTE (local):** los 3 caminos (con `?c=` válido / sin código a
+    mano / código inválido). No ejecutable en el sandbox (sin navegador; `npm install` del frontend se
+    cuelga por la red). Patrón idéntico a `ResetPassword.jsx` (ya en producción).
   - _Requisitos:_ R3.2, R3.3, R3.4 · _Diseño:_ §3.3, §6.8
+
+- [x] **C-http. Prueba HTTP de extremo a extremo + separación de `app.js`.** _(commit anterior; rev C pt 2)_
+  - `src/app.js` (`createApp`) separado de `index.js` (solo `listen`). Prueba `http.integration.test.js`
+    con `app.listen(0)` + `fetch` nativo (sin deps nuevas), misma guarda de localhost: register→login→
+    `/packages/mine`; operador de A no ve paquetes de B por `/packages` ni `/packages/:id/foto` (404);
+    `/packages` nunca expone `fotoUrl`; sin token → 401.
 
 ---
 
