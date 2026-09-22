@@ -1,10 +1,16 @@
-# Puertaya Ipanema
+# Puertaya
 
-Gestión y entrega residencial puerta a puerta, operada por una sola persona
-para el **Conjunto Residencial Ipanema**. Nació de reestructurar un prototipo
-estático (ver `docs/`) tras una auditoría de seguridad y contractual que
-encontró que el control de roles y el PIN de entrega no tenían ningún
-respaldo del lado servidor.
+Gestión y entrega residencial puerta a puerta para conjuntos residenciales.
+Nació monoconjunto (**Conjunto Residencial Ipanema**, un solo operador) al
+reestructurar un prototipo estático (ver `docs/`) tras una auditoría de
+seguridad y contractual que encontró que el control de roles y el PIN de entrega
+no tenían ningún respaldo del lado servidor. Con KAN-8 soporta **multi-conjunto**
+(cada conjunto con sus residentes, operador y paquetes, aislados entre sí).
+
+> **Estado del multi-conjunto:** implementado y validado en la rama
+> `feature/kan-8-multiconjunto`, **no desplegado en producción**. El corte
+> (backfill + fase *contract* + despliegue) es la Fase F y aún no se ejecuta; en
+> producción sigue el conjunto único Ipanema hasta entonces (ver DEPLOY.md).
 
 **En producción:**
 - App: https://mensajeria-app-iota.vercel.app
@@ -274,9 +280,10 @@ conjunto de su código; los conjuntos están aislados entre sí.
 - **Fotos en almacenamiento de objetos**: hoy viven comprimidas como
   base64 en una columna de Postgres — funciona, pero no escala igual de
   bien que un bucket dedicado si el volumen crece mucho.
-- **Multi-conjunto**: toda la app asume un solo conjunto (Ipanema). Si se
-  usa en más de un conjunto residencial, hace falta un modelo de
-  "tenant" que separe los datos entre conjuntos.
+- **Multi-conjunto**: implementado (KAN-8) — modelo `Conjunto` (tenant) y
+  aislamiento estructural por `conjuntoId` vía extensión de Prisma. Validado en
+  la rama `feature/kan-8-multiconjunto`; **falta el corte a producción** (Fase F:
+  backfill de Ipanema + fase *contract* + despliegue, ver DEPLOY.md).
 - **App Store / Google Play**: la PWA (arriba) cubre "instalable" hoy. Para
   estar en las tiendas de verdad, el paso siguiente es envolver este mismo
   código con Capacitor — no es una reescritura, pero suma cuenta de Apple
