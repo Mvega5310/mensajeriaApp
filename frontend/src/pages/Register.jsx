@@ -1,16 +1,30 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { register } from '../services/auth.js';
 import PasswordField from '../components/PasswordField.jsx';
 
 const initial = { email: '', password: '', nombre: '', telefono: '', torre: 'Torre 1', apto: '', acceptedTerms: false };
 
 export default function Register() {
+  const [searchParams] = useSearchParams();
+  // Código de invitación del enlace/QR (KAN-8). Los flyers antiguos (KAN-3)
+  // apuntan a la raíz sin ?c=, así que si no viene en la URL se pide a mano.
+  // NO hay código ni conjunto por defecto: si falta, el residente debe
+  // escribir el que le entregó el operador de su conjunto.
+  const codigoDeUrl = (searchParams.get('c') || '').trim();
+
   const [fields, setFields] = useState(initial);
+  // Código escrito a mano cuando no viene en la URL.
+  const [codigoManual, setCodigoManual] = useState('');
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // El código efectivo: el de la URL si existe; si no, el escrito a mano.
+  // Se normaliza quitando espacios al inicio y al final (mayúsculas/minúsculas
+  // se envían tal cual: el backend compara el valor exacto persistido).
+  const codigoInvitacion = (codigoDeUrl || codigoManual).trim();
 
   function update(key, value) {
     setFields((f) => ({ ...f, [key]: value }));
@@ -21,7 +35,9 @@ export default function Register() {
     setError('');
     setLoading(true);
     try {
-      await register(fields);
+      // El resto del formulario se conserva en `fields`; ante un error de
+      // código no se pierde nada y el residente puede corregir el código.
+      await register({ ...fields, codigoInvitacion });
       setDone(true);
       setTimeout(() => navigate('/login', { replace: true }), 1200);
     } catch (err) {
@@ -36,13 +52,33 @@ export default function Register() {
       <div className="auth-card">
         <h1>Crear cuenta de residente</h1>
         <p className="sub">
-          Exclusivo para residentes de <strong>Conjunto Ipanema</strong>. La cuenta de operador se crea aparte.
+          Regístrate con el enlace o el código de invitación que te entregó el operador de tu conjunto.
         </p>
 
         {done ? (
           <p>Cuenta creada. Redirigiendo a iniciar sesión…</p>
         ) : (
           <form onSubmit={handleSubmit}>
+            {/* Cuando el código NO viene en la URL, se pide a mano (flyers KAN-3
+                sin ?c=). Cuando sí viene, no mostramos el campo. */}
+            {!codigoDeUrl && (
+              <div className="field">
+                <label htmlFor="codigoInvitacion">Código de invitación</label>
+                <input
+                  id="codigoInvitacion"
+                  required
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="Ej. ipanema-K7Q2M9XR4TV"
+                  value={codigoManual}
+                  onChange={(e) => setCodigoManual(e.target.value)}
+                  onBlur={(e) => setCodigoManual(e.target.value.trim())}
+                />
+                <p className="hint">Te lo entrega el operador de tu conjunto residencial.</p>
+              </div>
+            )}
+
             <div className="field">
               <label htmlFor="nombre">Nombre completo</label>
               <input id="nombre" required value={fields.nombre} onChange={(e) => update('nombre', e.target.value)} />
