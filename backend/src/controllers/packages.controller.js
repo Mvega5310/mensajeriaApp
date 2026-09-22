@@ -4,7 +4,7 @@ import { costoPara } from '../services/tariff.service.js';
 import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
 } from '../services/email.service.js';
-import { conjuntoDelContexto } from '../services/conjunto.service.js';
+import { conjuntoDelContexto, operadorDelConjuntoActual } from '../services/conjunto.service.js';
 import { claveApartamento } from '../services/apartamento.service.js';
 
 // La cortesía de primera entrega es por apartamento físico, no por
@@ -70,7 +70,9 @@ export async function createPrealert(req, res) {
   // Aviso automático — no bloquea la respuesta si falla el envío (ver
   // sendEmail en email.service.js, que ya se traga sus propios errores).
   const residente = await prisma.user.findUnique({ where: { id: req.user.sub } });
-  const operador = await prisma.user.findFirst({ where: { role: 'OPERATOR' } });
+  // Operador DEL CONJUNTO del residente (no el primero de la tabla). Si no hay
+  // operador en el conjunto, no se envía correo y no se lanza error.
+  const operador = await operadorDelConjuntoActual();
   if (operador) sendNewPackageOperatorEmail(operador.email, pkg, residente);
   sendPrealertConfirmationEmail(residente.email, pkg);
 

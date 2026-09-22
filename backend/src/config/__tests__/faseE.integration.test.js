@@ -81,10 +81,13 @@ async function login(email) {
   return (await r.json()).token;
 }
 
+let operadorDelConjuntoActual;
+
 test('setup', { skip: omitir && razonSkip }, async () => {
   ({ prisma } = await import('../db.js'));
   ({ runWithTenant } = await import('../tenantContext.js'));
   ({ createApp } = await import('../../app.js'));
+  ({ operadorDelConjuntoActual } = await import('../../services/conjunto.service.js'));
 
   await limpiar();
   const A = await crearConjunto(SLUG_A, COD_A, { bonosHabilitados: false });
@@ -107,21 +110,34 @@ test('setup', { skip: omitir && razonSkip }, async () => {
 });
 
 // ---------- E1: createPrealert notifica al operador del conjunto del residente ----------
-// Opción menos invasiva: verificar la RESOLUCIÓN del operador con la misma
-// consulta que usa createPrealert (findFirst role OPERATOR) bajo el contexto del
-// residente de Beta. La extensión la filtra por conjunto, así que devuelve el
-// operador de Beta — sin tocar email.service ni inyectar dobles en el controlador.
-test('E1: el operador notificado es el del conjunto del residente (Beta)', { skip: omitir && razonSkip }, async () => {
+// Prueba la FUNCIÓN REAL que usa createPrealert (operadorDelConjuntoActual), no
+// una copia de la consulta: si el controlador cambia su forma de resolver el
+// operador, esta prueba lo refleja. Corre bajo el contexto de un residente; la
+// extensión filtra por conjunto, así que devuelve el operador de ESE conjunto.
+test('E1: operadorDelConjuntoActual devuelve el operador del conjunto del residente', { skip: omitir && razonSkip }, async () => {
   const opDeBeta = await runWithTenant({ conjuntoId: ctx.B, role: 'RESIDENT' }, () =>
-    prisma.user.findFirst({ where: { role: 'OPERATOR' } })
+    operadorDelConjuntoActual()
   );
   assert.ok(opDeBeta, 'debe existir un operador en Beta');
   assert.equal(opDeBeta.email, 'opb@e.local');
-  // Y desde Alfa, la misma consulta da el operador de Alfa (no se cruzan).
+  // Desde Alfa da el operador de Alfa (no se cruzan).
   const opDeAlfa = await runWithTenant({ conjuntoId: ctx.A, role: 'RESIDENT' }, () =>
-    prisma.user.findFirst({ where: { role: 'OPERATOR' } })
+    operadorDelConjuntoActual()
   );
   assert.equal(opDeAlfa.email, 'opa@e.local');
+});
+
+test('E1b: sin operador en el conjunto, operadorDelConjuntoActual devuelve null (no se envía correo)', { skip: omitir && razonSkip }, async () => {
+  // Conjunto temporal sin operador.
+  const sinOp = await crearConjunto('iteste-sinop', 'iteste-cod-SINOP');
+  try {
+    const op = await runWithTenant({ conjuntoId: sinOp.id, role: 'RESIDENT' }, () =>
+      operadorDelConjuntoActual()
+    );
+    assert.equal(op, null); // createPrealert: if (operador) -> no envía, no lanza
+  } finally {
+    await prisma.conjunto.deleteMany({ where: { id: sinOp.id } });
+  }
 });
 
 // ---------- E2: cortesía de primera entrega por apartamento, aislada por conjunto ----------

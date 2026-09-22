@@ -53,4 +53,16 @@ export async function conjuntoDelContexto() {
   return conjunto;
 }
 
+/**
+ * Devuelve el operador (rol OPERATOR) del conjunto ACTIVO, o null si no hay.
+ * Corre dentro del contexto del request: la extensión filtra por conjuntoId, así
+ * que nunca devuelve el operador de otro conjunto (corrige el bug de "primer
+ * operador de toda la tabla", design.md §2.4). Es la función que usa
+ * createPrealert para decidir a quién notificar — y la que prueba E1.
+ * @returns {Promise<object|null>}
+ */
+export async function operadorDelConjuntoActual() {
+  return prisma.user.findFirst({ where: { role: 'OPERATOR' } });
+}
+
 export { COLUMNA_TARIFA };
