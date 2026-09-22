@@ -102,7 +102,11 @@ export async function register(req, res) {
 
 export async function login(req, res) {
   const { email, password } = req.body;
-  const user = await prisma.user.findUnique({ where: { email } });
+  // Flujo sin sesión: el conjunto se descubre a partir de la credencial. El
+  // lookup por email pasa por el único punto autorizado a resolver sin contexto
+  // (design.md §3.6.2). El JWT NO lleva claim de conjunto: el conjunto se
+  // resuelve por `sub` en cada request (§3.6).
+  const user = await buscarUsuarioPorEmailSinTenant(email);
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
     return res.status(401).json({ error: 'Credenciales inválidas' });
   }
