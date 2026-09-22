@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { tenantStore, SCOPE, runWithTenant } from '../config/tenantContext.js';
 import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
@@ -36,7 +37,7 @@ const PASSWORD_POLICY = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 // body de la petición. La cuenta de operador se crea aparte (ver
 // prisma/seed.js), para que nadie pueda auto-asignarse ese rol.
 export async function register(req, res) {
-  const { email, password, nombre, telefono, torre, apto, acceptedTerms } = req.body;
+  const { email, password, nombre, telefono, torre, apto, acceptedTerms, codigoInvitacion } = req.body;
   if (!email || !password || !nombre || !telefono) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
@@ -50,25 +51,53 @@ export async function register(req, res) {
     return res.status(400).json({ error: 'Debes aceptar los Términos y el Aviso de Privacidad' });
   }
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  // Flujo pre-tenant (design.md §3.4, §3.6.2): el registro ESTABLECE el tenant a
+  // partir del código de invitación, no lo asume.
+  // 1) Validar el código. Conjunto es un modelo SIN tenant, así que esta
+  //    lectura está exenta del filtro y no requiere contexto.
+  if (!codigoInvitacion) {
+    return res.status(400).json({ error: 'Se requiere un enlace de invitación válido' });
+  }
+  const conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion } });
+  if (!conjunto || !conjunto.invitacionActiva) {
+    return res.status(400).json({ error: 'Enlace de invitación inválido o vencido' });
+  }
+
+  // 2) ¿Correo ya registrado? email es @unique GLOBAL; el lookup sin sesión
+  //    pasa por el único punto autorizado a resolver por email sin contexto.
+  const existing = await buscarUsuarioPorEmailSinTenant(email);
   if (existing) return res.status(409).json({ error: 'El correo ya está registrado' });
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: {
-      email, passwordHash, role: 'RESIDENT', nombre, telefono,
-      // Normalizado server-side (no basta con que el frontend ya mande
-      // el valor "limpio" — cualquiera puede pegar directo contra la
-      // API): así la cortesía de primera entrega por apartamento (ver
-      // packages.controller.js) puede agrupar cuentas distintas del
-      // mismo apto sin que la inconsistencia de escritura lo impida.
-      torre: normalizarTorre(torre),
-      apto: normalizarApto(apto),
-      termsAcceptedAt: new Date(),
-    },
-  });
 
-  res.status(201).json({ id: user.id, email: user.email, role: user.role });
+  // 3) Crear el usuario DENTRO del contexto del conjunto validado. La extensión
+  //    fija conjuntoId desde el contexto; NO se pasa conjuntoId en data. El rol
+  //    es SIEMPRE RESIDENT (nunca sale del body).
+  try {
+    const user = await runWithTenant({ conjuntoId: conjunto.id, role: 'RESIDENT' }, () =>
+      prisma.user.create({
+        data: {
+          email, passwordHash, role: 'RESIDENT', nombre, telefono,
+          // Normalizado server-side (no basta con que el frontend ya mande
+          // el valor "limpio" — cualquiera puede pegar directo contra la
+          // API): así la cortesía de primera entrega por apartamento (ver
+          // packages.controller.js) puede agrupar cuentas distintas del
+          // mismo apto sin que la inconsistencia de escritura lo impida.
+          torre: normalizarTorre(torre),
+          apto: normalizarApto(apto),
+          termsAcceptedAt: new Date(),
+        },
+      })
+    );
+    return res.status(201).json({ id: user.id, email: user.email, role: user.role });
+  } catch (err) {
+    // Carrera entre dos registros simultáneos con el mismo email: el @unique
+    // global dispara P2002. Respondemos 409 en vez de 500.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return res.status(409).json({ error: 'El correo ya está registrado' });
+    }
+    throw err;
+  }
 }
 
 export async function login(req, res) {
