@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.routes.js';
 import packagesRoutes from './routes/packages.routes.js';
 import commentsRoutes from './routes/comments.routes.js';
 import bonosRoutes from './routes/bonos.routes.js';
+import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
 
 // Construye la app de Express SIN arrancar el servidor. index.js hace el
 // listen en producción; las pruebas de integración HTTP hacen app.listen(0)
@@ -24,6 +25,8 @@ export function createApp() {
   app.use('/api/packages', packagesRoutes);
   app.use('/api/comments', commentsRoutes);
   app.use('/api/bonos', bonosRoutes);
+  app.use('/api/conjuntos', conjuntosPublicRouter); // público (config-publica?c=)
+  app.use('/api/conjunto', conjuntoAuthRouter); // auth+tenant (/config)
 
   // Sin esto, un body demasiado grande devuelve una página HTML de Express
   // en vez de JSON, y el frontend solo puede mostrar "Error de red".
