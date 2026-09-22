@@ -43,6 +43,14 @@ sistema en uso. Desde ahora:
   producción (como una limpieza de datos) cuando el usuario las pide
   explícitamente — esas son independientes de qué rama esté commiteada.
 
+**Cambios grandes o de varios pasos → rama de tarea aparte.** Para una spec (con
+requisitos/diseño), una migración de esquema, o cualquier trabajo que tome más de
+un par de commits, se abre una rama de tarea desde `develop`
+(`feature/<nombre>`), se trabaja ahí con **un commit por paso**, y solo se
+integra a `develop` cuando está **validado en local**. Los cambios pequeños y ya
+probados siguen yendo directo a `develop`, como siempre. Referencia: la propia
+rama `feature/kan-8-multiconjunto` (KAN-8).
+
 ## Regla de oro: documentación al día
 
 Cada cambio funcional se documenta en el mismo commit que lo implementa
