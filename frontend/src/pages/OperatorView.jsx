@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { api, downloadFile } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
-import { TIERS } from '../utils/tiers.js';
+import { TIERS, tiersConCosto } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
 import { parseFotos } from '../utils/fotos.js';
 import { getConjuntoConfig } from '../services/conjunto.js';
@@ -59,6 +59,8 @@ export default function OperatorView() {
   // bonosHabilitados, tarifas, nombre y (operador) codigoInvitacion.
   const [config, setConfig] = useState(null);
   const bonosHabilitados = !!config?.bonosHabilitados;
+  const tarifas = config?.tarifas || null;
+  const tiers = tiersConCosto(tarifas); // etiquetas + montos de la config
 
   const [checkinPkg, setCheckinPkg] = useState(null);
   const [tier, setTier] = useState('ESTANDAR');
@@ -706,7 +708,7 @@ export default function OperatorView() {
               <div className="field">
                 <label>Categoría de Peso / Tamaño</label>
                 <select value={tier} onChange={(e) => setTier(e.target.value)}>
-                  {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label} - {formatCOP(t.costo)}</option>)}
+                  {tiers.map((t) => <option key={t.value} value={t.value}>{t.label}{t.costo != null ? ` - ${formatCOP(t.costo)}` : ''}</option>)}
                 </select>
               </div>
               {checkinPkg.esPrimeraEntrega ? (
@@ -722,7 +724,7 @@ export default function OperatorView() {
                 ) : (
                   <div className="tariff-box" style={{ marginBottom: 12 }}>
                     <div className="l">Tarifa calculada</div>
-                    <div className="v">{formatCOP(TIERS.find((t) => t.value === tier)?.costo)} COP</div>
+                    <div className="v">{tarifas ? `${formatCOP(tarifas[tier])} COP` : '—'}</div>
                   </div>
                 );
               })()}
@@ -820,7 +822,7 @@ export default function OperatorView() {
                 <label>Categoría de peso que cubre</label>
                 <select value={bonoForm.categoriaPeso}
                   onChange={(e) => setBonoForm({ ...bonoForm, categoriaPeso: e.target.value })}>
-                  {TIERS.map((t) => <option key={t.value} value={t.value}>{t.label} - {formatCOP(t.costo)} c/u</option>)}
+                  {tiers.map((t) => <option key={t.value} value={t.value}>{t.label}{t.costo != null ? ` - ${formatCOP(t.costo)} c/u` : ''}</option>)}
                 </select>
               </div>
               <div className="grid-2">

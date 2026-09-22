@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
-import { TIERS } from '../utils/tiers.js';
+import { TIERS, tiersConCosto } from '../utils/tiers.js';
 import { TIME_SLOTS, PAYMENT_METHODS } from '../utils/schedule.js';
 import { getConjuntoConfig } from '../services/conjunto.js';
 import { paginar } from '../utils/pagination.js';
@@ -37,8 +37,9 @@ export default function ResidentView() {
   const [enviandoComentario, setEnviandoComentario] = useState(false);
 
   const [bonos, setBonos] = useState([]);
-  // Fuente única: /conjunto/config. false hasta que cargue.
+  // Fuente única: /conjunto/config. false / null hasta que cargue.
   const [bonosHabilitados, setBonosHabilitados] = useState(false);
+  const [tarifas, setTarifas] = useState(null);
 
   const [detailPkg, setDetailPkg] = useState(null);
   const [detailFotoLoading, setDetailFotoLoading] = useState(false);
@@ -86,10 +87,13 @@ export default function ResidentView() {
     setComentarios(await api('/comments/mine'));
   }
 
-  // Config del conjunto (fuente única de bonosHabilitados). Se carga una vez.
+  // Config del conjunto (fuente única de bonosHabilitados y tarifas). Una vez.
   useEffect(() => {
     getConjuntoConfig()
-      .then((cfg) => setBonosHabilitados(!!cfg.bonosHabilitados))
+      .then((cfg) => {
+        setBonosHabilitados(!!cfg.bonosHabilitados);
+        setTarifas(cfg.tarifas || null);
+      })
       .catch(() => {});
   }, []);
 
@@ -239,7 +243,7 @@ export default function ResidentView() {
           </div>
           <div className="tariff-box" style={{ marginBottom: 12 }}>
             <div className="l">Tarifa estimada</div>
-            <div className="v">{formatCOP(TIERS.find((t) => t.value === form.categoriaPeso)?.costo)} COP</div>
+            <div className="v">{tarifas ? `${formatCOP(tarifas[form.categoriaPeso])} COP` : '—'}</div>
           </div>
 
           <div className="field">
