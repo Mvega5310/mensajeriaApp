@@ -177,26 +177,56 @@
 
 ---
 
-## Fase D — Configuración por conjunto
+## Fase D — Configuración por conjunto (alcance ampliado, revisión Fase D)
 
-- [ ] **D1. `services/tariff.service.js` — tarifas desde el conjunto.**
-  - Reemplazar la constante fija como fuente de verdad por una función que devuelve las tarifas del
-    `Conjunto` activo; conservar los valores actuales solo como defaults documentados.
-  - _Requisitos:_ R2.2, R2.3 · _Diseño:_ §4.2, §6.7
+> El frontend tenía datos fijos que romperían el multi-conjunto. Alcance ampliado: **una sola fuente**
+> para tarifas y bonos, dos endpoints de config, QR de invitación con código, y retiro de todos los
+> textos fijos de Ipanema. Ver design.md §4 (actualizado).
 
-- [ ] **D2. Endpoint `GET /conjuntos/:slug/config-publica` (nuevo).**
-  - Devolver solo campos presentacionales (`nombre`, `operadorNombre`, `operadorWhatsapp`,
-    `operadorDomicilio`, `puntoRecepcion`). No exponer tarifas/flags innecesarios.
-  - _Requisitos:_ R2.4 · _Diseño:_ §4.3, §6.9
+- [ ] **D1. Endpoints de configuración (reemplaza el D2 por-slug).**
+  - **`GET /conjuntos/config-publica?c=<codigo>`** (público): aplica `normalizarCodigoInvitacion`;
+    devuelve solo `{ nombre, operadorNombre, operadorWhatsapp, operadorDomicilio, puntoRecepcion }`;
+    código inválido/inactivo → `400` con `code: 'INVITACION_INVALIDA'`. No parsea slug del prefijo.
+  - **`GET /conjunto/config`** (`requireAuth`+`requireTenant`): presentacionales + `tarifas` +
+    `bonosHabilitados`; **solo `OPERATOR`** recibe además `codigoInvitacion`.
+  - _Requisitos:_ R2.4 · _Diseño:_ §4.3
 
-- [ ] **D3. Frontend — `Terms.jsx` y enlace WhatsApp desde config.**
-  - Renderizar domicilio/contacto desde la config del conjunto (no texto fijo); construir `wa.me` con
-    `operadorWhatsapp` del conjunto (manual, sin Twilio/API).
-  - _Requisitos:_ R2.4, R2.5 · _Diseño:_ §4.3, §6.8
+- [ ] **D2. Tarifas — una sola fuente.**
+  - Backend: `costoPara()` usa las tarifas del `Conjunto` del **contexto** (modelo exento, leído por el
+    `conjuntoId` del contexto); nunca del cliente.
+  - Frontend: `utils/tiers.js` conserva etiquetas, montos desde `/conjunto/config`; **ningún monto fijo**.
+  - _Requisitos:_ R2.2, R2.3 · _Diseño:_ §4.2, §4.3, §6.7
 
-- [ ] **D4. Gate de bonos por conjunto.**
-  - Respetar `bonosHabilitados` del `Conjunto` activo (por defecto `false`).
-  - _Requisitos:_ R2.6 · _Diseño:_ §4.2, §6.4
+- [ ] **D3. Bonos — una sola fuente.**
+  - Eliminar `BONOS_HABILITADOS` de `backend/src/config/features.js` y `frontend/src/utils/features.js`.
+    Única fuente: `Conjunto.bonosHabilitados` (`false` por defecto). Backend lo lee del contexto;
+    frontend de `/conjunto/config`.
+  - _Requisitos:_ R2.6 · _Diseño:_ §4.2, §4.3, §6.4
+
+- [ ] **D4. QR de invitación del operador (`OperatorView.jsx`).**
+  - Enlace `${origin}/registro?c=<codigoInvitacion>` (código de `/conjunto/config`). Mostrar también el
+    código como texto (cartelera).
+  - _Requisitos:_ R3.1 · _Diseño:_ §4.3
+
+- [ ] **D5. Quitar textos fijos de Ipanema.**
+  - `App.jsx` (barra superior), `Login.jsx` (subtítulo), `OperatorView.jsx` (panel de invitación y
+    mensaje WhatsApp de entrega), todo `Terms.jsx`. Con sesión: nombre del conjunto de la config; sin
+    sesión (login): textos neutros solo con la marca "Puertaya".
+  - _Requisitos:_ R2.4 · _Diseño:_ §4.3
+
+- [ ] **D6. `Terms.jsx` según el contexto.**
+  - Con `?c=`/código de formulario → `config-publica`; con sesión → `/conjunto/config`; sin ninguno →
+    versión genérica sin datos de operador, con nota de que los datos del responsable se ven con el
+    enlace de invitación. No inventar texto legal nuevo más allá de esa nota.
+  - _Requisitos:_ R2.4 · _Diseño:_ §4.3.1
+
+- [ ] **D7. Pruebas.**
+  - Integración: `config-publica` con código válido/inválido/inactivo; `/conjunto/config` según rol (el
+    residente NO recibe `codigoInvitacion`); dos conjuntos con tarifas distintas cobran distinto en
+    `checkin`; `bonosHabilitados=false` bloquea el uso de bonos.
+  - Verificación que busque en `frontend/src` y **falle si aparece "Ipanema" o algún monto de tarifa
+    fijo**.
+  - _Requisitos:_ R2.2, R2.4, R2.6
 
 ---
 

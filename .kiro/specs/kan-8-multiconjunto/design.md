@@ -600,35 +600,68 @@ Toda la configuración vive en columnas de `Conjunto` (§1.1): identidad (`nombr
 (`tarifaMano/Estandar/Volumen/Pesado`), contacto del operador (`operadorNombre`, `operadorWhatsapp`,
 `operadorDomicilio`, `puntoRecepcion`) y flags (`bonosHabilitados`).
 
+> **Actualización (revisión Fase D).** El diseño de los endpoints cambió respecto a la versión inicial:
+> se **descarta** el endpoint por `slug` (`GET /conjuntos/:slug/config-publica`). Motivos: el frontend no
+> tiene el `slug` durante el registro (solo el código), y un `slug` adivinable expondría el domicilio y
+> el WhatsApp de cualquier operador. En su lugar hay **dos** endpoints (§4.3). Además, tarifas y flag de
+> bonos pasan a tener **una sola fuente** (el `Conjunto`), eliminando toda constante duplicada.
+
 ### 4.2. Cómo la consume el backend
 
-- **Tarifas.** `services/tariff.service.js` deja de exportar una constante fija como fuente de verdad.
-  En su lugar expone una función que recibe el conjunto activo y devuelve el mapa de tarifas
-  `{ MANO, ESTANDAR, VOLUMEN, PESADO }` desde las columnas del `Conjunto`. La constante `TARIFAS` actual
-  se conserva únicamente como **valores por defecto** documentados (R2.3), que además coinciden con los
-  `@default(...)` del esquema. El cálculo de `costoServicio` usa las tarifas del conjunto del residente.
-- **Flag de bonos.** `bonosHabilitados` se lee del `Conjunto` activo. Reemplaza el uso global de
-  `BONOS_HABILITADOS` para las decisiones por-conjunto; por defecto `false` para conjuntos nuevos
-  (R2.6). (Si existe además una env var global, se documenta que el flag por conjunto es el que manda a
-  nivel de negocio; la env var puede quedar como interruptor maestro.)
-- **Contacto/identidad.** Los controladores que hoy dependían de datos fijos de Ipanema los toman del
+- **Tarifas (una sola fuente).** `services/tariff.service.js` deja de exportar una constante fija como
+  fuente de verdad. `costoPara(categoria)` toma las tarifas del **`Conjunto` del contexto activo**:
+  `Conjunto` es un modelo **exento** (sin `conjuntoId`), así que se lee por el `conjuntoId` del contexto
+  (`getContext()`), **nunca** de datos del cliente. Los valores actuales de `TARIFAS` solo sobreviven
+  como los `@default(...)` del esquema (R2.3). El cálculo de `costoServicio` en `checkin`/`createPrealert`
+  usa estas tarifas.
+- **Flag de bonos (una sola fuente).** Se **elimina** la constante `BONOS_HABILITADOS` de
+  `backend/src/config/features.js`. La única fuente es `Conjunto.bonosHabilitados` (por defecto `false`),
+  leída del conjunto del contexto activo. No hay env var ni interruptor maestro global.
+- **Contacto/identidad.** Los controladores que dependían de datos fijos de Ipanema los toman del
   `Conjunto` activo.
 
-### 4.3. Cómo la consume el frontend
+### 4.3. Cómo la consume el frontend — dos endpoints
 
-- Se expone un endpoint público de solo lectura para la configuración **presentacional** de un conjunto,
-  resuelto por `slug` o por el código de invitación durante el registro, p. ej.:
-  `GET /conjuntos/:slug/config-publica` → `{ nombre, operadorNombre, operadorWhatsapp,
+**a) `GET /conjuntos/config-publica?c=<codigo>` (público, pre-sesión).**
+- Aplica `normalizarCodigoInvitacion(c)` y busca el `Conjunto` por `codigoInvitacion`.
+- Devuelve **solo** campos presentacionales: `{ nombre, operadorNombre, operadorWhatsapp,
   operadorDomicilio, puntoRecepcion }`.
-  - Devuelve **solo** campos presentacionales; **no** expone tarifas internas sensibles ni flags si no
-    son necesarios para la vista (principio de mínima exposición).
-- **`Terms.jsx`** deja de tener el domicilio y el WhatsApp escritos en el JSX; los renderiza desde esta
-  config (obtenida del conjunto correspondiente).
-- **WhatsApp (restricción dura).** El frontend construye el enlace manual
-  `https://wa.me/<operadorWhatsapp>?text=<mensaje precargado>` usando `operadorWhatsapp` del conjunto.
-  **No** se integra Twilio ni WhatsApp Business API.
-- Para un usuario autenticado, la config de su propio conjunto puede venir incluida en el bootstrap de la
-  sesión (p. ej. un `GET /me` que ya devuelva su conjunto), evitando una llamada extra.
+- Con código **inválido o inactivo** → `400` con `{ error, code: 'INVITACION_INVALIDA' }` (mismo contrato
+  que `register`, para que el frontend lo detecte por `code`).
+- **No** expone tarifas ni flags. **No** parsea el `slug` a partir del prefijo del código.
+- Lo consumen el registro y `Terms.jsx` cuando hay `?c=`/código de formulario pero no hay sesión.
+
+**b) `GET /conjunto/config` (autenticado: `requireAuth` + `requireTenant`).**
+- Devuelve los campos presentacionales **más** `tarifas` (`{ MANO, ESTANDAR, VOLUMEN, PESADO }`) y
+  `bonosHabilitados`.
+- **Solo si el rol es `OPERATOR`** incluye además `codigoInvitacion` (para el QR/cartelera de invitación).
+  El residente **no** lo recibe.
+- Es la fuente de la config del propio conjunto para la app con sesión (tarifas del frontend, gate de
+  bonos, nombre del conjunto, enlace de invitación del operador).
+
+**Notas de consumo:**
+- **Tarifas en frontend (una sola fuente).** `utils/tiers.js` conserva las **etiquetas** de las
+  categorías, pero **ningún monto**: los montos salen de `/conjunto/config`. No queda ninguna tarifa fija
+  en el frontend.
+- **Bonos en frontend (una sola fuente).** Se **elimina** `frontend/src/utils/features.js`
+  (`BONOS_HABILITADOS`); el gate usa `bonosHabilitados` de `/conjunto/config`.
+- **QR de invitación (`OperatorView.jsx`).** El enlace pasa de `${origin}/registro` a
+  `${origin}/registro?c=<codigoInvitacion>`, con el código tomado de `/conjunto/config`. Se muestra
+  también el código como texto (para la cartelera).
+- **WhatsApp (restricción dura).** El enlace manual `https://wa.me/<operadorWhatsapp>?text=<mensaje>`
+  usa `operadorWhatsapp` de la config. Sin Twilio ni WhatsApp Business API.
+- **Textos de identidad.** Se retiran todos los textos fijos de "Ipanema" (App.jsx, Login.jsx,
+  OperatorView.jsx, Terms.jsx). Con sesión, el nombre del conjunto viene de `/conjunto/config`; sin
+  sesión (login), textos neutros solo con la marca "Puertaya".
+
+### 4.3.1. `Terms.jsx` según el contexto
+
+- **Con `?c=` o el código del formulario de registro** (sin sesión): datos del operador desde
+  `config-publica`.
+- **Con sesión:** datos del operador desde `/conjunto/config`.
+- **Sin ninguno de los dos:** versión **genérica**, sin datos de ningún operador, que indique que los
+  datos del responsable del tratamiento se muestran al abrir Términos desde el enlace de invitación. **No**
+  se inventa texto legal nuevo más allá de esa nota (lo revisa el equipo antes de publicar).
 
 ### 4.4. Restricciones preservadas
 
@@ -636,6 +669,8 @@ Toda la configuración vive en columnas de `Conjunto` (§1.1): identidad (`nombr
   (R2.7).
 - `bonosHabilitados = false` por defecto (R2.6).
 - WhatsApp manual `wa.me` (R2.5).
+- `config-publica` nunca expone tarifas ni flags; `codigoInvitacion` solo va al `OPERATOR` en
+  `/conjunto/config` (mínima exposición).
 
 ---
 
@@ -816,17 +851,25 @@ vieja sigue funcionando; el aislamiento se enciende solo al final.
 
 ### 6.8. Frontend
 
-- **`Terms.jsx`** — deja de tener domicilio y WhatsApp fijos; los renderiza desde la config del conjunto
-  (`GET /conjuntos/:slug/config-publica` o el bootstrap de sesión). (R2.4)
+- **`Terms.jsx`** — sin domicilio/WhatsApp fijos; los renderiza según el contexto (config-publica con
+  código, `/conjunto/config` con sesión, o versión genérica). (R2.4, §4.3.1)
 - **Flujo de registro** — lee `?c=<codigoInvitacion>` de la URL y lo envía a `register`; muestra estado
-  de error si falta o es inválido. (R3.2–R3.4)
-- **Construcción del enlace de WhatsApp** — usa `operadorWhatsapp` del conjunto para el `wa.me` manual.
-  (R2.5)
+  de error si falta o es inválido (detección por `code: 'INVITACION_INVALIDA'`). (R3.2–R3.4)
+- **`utils/tiers.js`** — solo etiquetas; montos desde `/conjunto/config` (ningún monto fijo). (R2.2)
+- **`utils/features.js`** — **eliminado**; el gate de bonos usa `bonosHabilitados` de `/conjunto/config`.
+  (R2.6)
+- **`OperatorView.jsx`** — QR/enlace `registro?c=<codigoInvitacion>` + código como texto; WhatsApp de
+  entrega desde config. (R3.1, R2.5)
+- **`App.jsx`/`Login.jsx`** — sin textos fijos de Ipanema; nombre del conjunto de la config (con sesión)
+  o marca neutra "Puertaya" (sin sesión). (R2.4)
 
-### 6.9. Endpoint nuevo (config pública)
+### 6.9. Endpoints nuevos (config por conjunto)
 
-- **`GET /conjuntos/:slug/config-publica` (nuevo)** — devuelve solo campos presentacionales del conjunto
-  para el frontend (§4.3). No expone datos internos innecesarios.
+- **`GET /conjuntos/config-publica?c=<codigo>` (nuevo, público)** — normaliza el código; devuelve solo
+  `{ nombre, operadorNombre, operadorWhatsapp, operadorDomicilio, puntoRecepcion }`; inválido/inactivo →
+  `400` `code: 'INVITACION_INVALIDA'`. No parsea slug. (§4.3)
+- **`GET /conjunto/config` (nuevo, `requireAuth`+`requireTenant`)** — presentacionales + `tarifas` +
+  `bonosHabilitados`; `codigoInvitacion` solo para `OPERATOR`. (§4.3)
 
 ---
 
