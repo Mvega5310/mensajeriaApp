@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
+import { requireTenant } from '../middleware/tenant.middleware.js';
 import {
   createPrealert,
   listMine,
@@ -14,6 +15,7 @@ import {
 const router = Router();
 
 router.use(requireAuth);
+router.use(requireTenant);
 
 router.post('/', requireRole('RESIDENT'), createPrealert);
 router.get('/mine', requireRole('RESIDENT'), listMine);
