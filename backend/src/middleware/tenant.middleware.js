@@ -41,10 +41,12 @@ export async function requireTenant(req, res, next) {
 
   // Abre el contexto TENANT para el resto de la cadena. El role viene del JWT
   // ya verificado (solo se usa para consultas, no para autorizar aquí).
+  // runWithTenant ahora devuelve SIEMPRE una promesa (envuelve el callback en
+  // async), así que encadenamos .catch(next) para no dejar rechazos sin manejar.
   runWithTenant({ conjuntoId, role: req.user.role }, () => {
     // Guardamos el conjunto resuelto por si algún controlador lo necesita
     // explícitamente (p. ej. para leer configuración del propio Conjunto).
     req.conjuntoId = conjuntoId;
     next();
-  });
+  }).catch(next);
 }

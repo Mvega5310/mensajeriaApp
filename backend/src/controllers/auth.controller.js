@@ -16,8 +16,11 @@ import { normalizarTorre, normalizarApto } from '../services/apartamento.service
 // EXACTAMENTE UNA VEZ en todo el repositorio, y es aquí. Ninguna otra función
 // puede abrir este scope; todo lookup pre-tenant por email pasa por aquí.
 export function buscarUsuarioPorEmailSinTenant(email) {
-  return tenantStore.run({ scope: SCOPE.GLOBAL_LOOKUP }, () =>
-    prisma.user.findUnique({ where: { email } })
+  // El await va DENTRO del run(): PrismaPromise es perezosa y, sin await aquí,
+  // el scope GLOBAL_LOOKUP se cerraría antes de que la query corra (mismo motivo
+  // que runWithTenant, design.md §2.3).
+  return tenantStore.run({ scope: SCOPE.GLOBAL_LOOKUP }, async () =>
+    await prisma.user.findUnique({ where: { email } })
   );
 }
 

@@ -53,7 +53,14 @@ export function runWithTenant({ conjuntoId, role }, fn) {
     // la request antes de llegar aquí.
     throw new Error('runWithTenant requiere un conjuntoId no vacío');
   }
-  return tenantStore.run({ scope: SCOPE.TENANT, conjuntoId, role }, fn);
+  // El callback se envuelve en async + await: las consultas de Prisma son
+  // PrismaPromise PEREZOSAS (la query se ejecuta en .then(), no al crearse). Si
+  // el callback devolviera la promesa sin await, run() terminaría y el contexto
+  // (AsyncLocalStorage) se cerraría ANTES de que la query corra; al hacer el
+  // await afuera, la extensión no vería contexto y lanzaría (falla cerrado). El
+  // await DEBE quedar dentro de run() — por eso está aquí, en el helper, y no en
+  // cada call site. (design.md §2.3)
+  return tenantStore.run({ scope: SCOPE.TENANT, conjuntoId, role }, async () => await fn());
 }
 
 // NOTA sobre GLOBAL_LOOKUP: este módulo NO expone un helper para abrir ese
