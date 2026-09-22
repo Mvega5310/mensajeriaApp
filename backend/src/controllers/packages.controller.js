@@ -44,7 +44,7 @@ export async function createPrealert(req, res) {
 
   let costoServicio;
   try {
-    costoServicio = costoPara(categoriaPeso || 'ESTANDAR');
+    costoServicio = await costoPara(categoriaPeso || 'ESTANDAR');
   } catch {
     return res.status(400).json({ error: 'Categoría de peso inválida' });
   }
@@ -168,7 +168,7 @@ export async function checkin(req, res) {
   });
   if (!actual) return res.status(404).json({ error: 'Paquete no encontrado' });
 
-  const costoServicio = costoPara(categoriaPeso);
+  const costoServicio = await costoPara(categoriaPeso);
 
   // Si este es el primer paquete pre-alertado por cualquier cuenta de
   // este mismo apartamento físico, es la entrega de cortesía por

@@ -1,5 +1,5 @@
 import { prisma } from '../config/db.js';
-import { TARIFAS } from '../services/tariff.service.js';
+import { esCategoriaValida } from '../services/tariff.service.js';
 import { BONOS_HABILITADOS } from '../config/features.js';
 
 // Operador: registra que un residente pagó por adelantado un lote de
@@ -13,7 +13,7 @@ export async function create(req, res) {
 
   const { residenteId, categoriaPeso, cantidad, precioPagado } = req.body;
 
-  if (!(categoriaPeso in TARIFAS)) {
+  if (!esCategoriaValida(categoriaPeso)) {
     return res.status(400).json({ error: 'Categoría de peso inválida' });
   }
   const cantidadNum = Number(cantidad);
