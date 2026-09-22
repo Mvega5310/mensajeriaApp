@@ -14,20 +14,29 @@ export default function Register() {
   const codigoDeUrl = (searchParams.get('c') || '').trim();
 
   const [fields, setFields] = useState(initial);
-  // Código escrito a mano cuando no viene en la URL.
+  // Código escrito a mano. Cuando NO hay ?c= arranca vacío; si un ?c= resulta
+  // inválido, se precarga aquí con el valor de la URL para poder corregirlo.
   const [codigoManual, setCodigoManual] = useState('');
+  // El campo de código se muestra si no vino en la URL, o si un ?c= falló y hay
+  // que dejar corregirlo.
+  const [mostrarCampoCodigo, setMostrarCampoCodigo] = useState(!codigoDeUrl);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // El código efectivo: el de la URL si existe; si no, el escrito a mano.
-  // El backend normaliza caja y espacios (normalizarCodigoInvitacion), así que
-  // basta con enviarlo; aquí solo recortamos extremos por prolijidad.
-  const codigoInvitacion = (codigoDeUrl || codigoManual).trim();
+  // El código efectivo: si el campo manual está visible, manda ese (es el que
+  // el residente edita, incluido el caso de corregir un ?c= inválido); si no,
+  // el de la URL. El backend normaliza caja y espacios (normalizarCodigoInvitacion).
+  const codigoInvitacion = (mostrarCampoCodigo ? codigoManual : codigoDeUrl).trim();
 
   function update(key, value) {
     setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  // El backend responde estos mensajes cuando el código falta/es inválido.
+  function esErrorDeCodigo(msg) {
+    return /invitaci[óo]n/i.test(msg || '');
   }
 
   async function handleSubmit(e) {
@@ -42,6 +51,12 @@ export default function Register() {
       setTimeout(() => navigate('/login', { replace: true }), 1200);
     } catch (err) {
       setError(err.message);
+      // Si falló por el código y venía de la URL, mostramos el campo precargado
+      // con ese valor para que el residente lo corrija sin perder lo demás.
+      if (esErrorDeCodigo(err.message) && !mostrarCampoCodigo) {
+        setCodigoManual(codigoDeUrl);
+        setMostrarCampoCodigo(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -59,9 +74,9 @@ export default function Register() {
           <p>Cuenta creada. Redirigiendo a iniciar sesión…</p>
         ) : (
           <form onSubmit={handleSubmit}>
-            {/* Cuando el código NO viene en la URL, se pide a mano (flyers KAN-3
-                sin ?c=). Cuando sí viene, no mostramos el campo. */}
-            {!codigoDeUrl && (
+            {/* Se muestra si el código NO viene en la URL (flyers KAN-3 sin ?c=)
+                o si un ?c= resultó inválido y hay que corregirlo. */}
+            {mostrarCampoCodigo && (
               <div className="field">
                 <label htmlFor="codigoInvitacion">Código de invitación</label>
                 <input
