@@ -5,6 +5,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { tenantStore, SCOPE, runWithTenant } from '../config/tenantContext.js';
 import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
+import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
 import { sendPasswordResetEmail } from '../services/email.service.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 
@@ -58,7 +59,10 @@ export async function register(req, res) {
   if (!codigoInvitacion) {
     return res.status(400).json({ error: 'Se requiere un enlace de invitación válido' });
   }
-  const conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion } });
+  // Normaliza caja y espacios para que un código tecleado a mano coincida con
+  // la forma canónica persistida (revisión C5).
+  const codigoNormalizado = normalizarCodigoInvitacion(codigoInvitacion);
+  const conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion: codigoNormalizado } });
   if (!conjunto || !conjunto.invitacionActiva) {
     return res.status(400).json({ error: 'Enlace de invitación inválido o vencido' });
   }

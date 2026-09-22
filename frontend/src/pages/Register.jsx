@@ -22,8 +22,8 @@ export default function Register() {
   const navigate = useNavigate();
 
   // El código efectivo: el de la URL si existe; si no, el escrito a mano.
-  // Se normaliza quitando espacios al inicio y al final (mayúsculas/minúsculas
-  // se envían tal cual: el backend compara el valor exacto persistido).
+  // El backend normaliza caja y espacios (normalizarCodigoInvitacion), así que
+  // basta con enviarlo; aquí solo recortamos extremos por prolijidad.
   const codigoInvitacion = (codigoDeUrl || codigoManual).trim();
 
   function update(key, value) {
