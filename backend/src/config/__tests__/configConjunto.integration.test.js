@@ -105,8 +105,8 @@ test('config-publica con código válido devuelve solo presentacionales', { skip
   const body = await res.json();
   assert.equal(body.nombre, 'Config itestd-a');
   assert.ok('operadorWhatsapp' in body && 'operadorDomicilio' in body);
-  // No expone tarifas ni flags ni código.
-  assert.ok(!('tarifas' in body) && !('bonosHabilitados' in body) && !('codigoInvitacion' in body));
+  // No expone tarifas ni flags ni código ni slug (mínima exposición pública).
+  assert.ok(!('tarifas' in body) && !('bonosHabilitados' in body) && !('codigoInvitacion' in body) && !('slug' in body));
 });
 
 test('config-publica con código inexistente -> 400 INVITACION_INVALIDA', { skip: omitir && razonSkip }, async () => {
@@ -138,6 +138,7 @@ test('/conjunto/config: OPERATOR recibe tarifas, bonos y codigoInvitacion', { sk
   assert.equal(body.tarifas.ESTANDAR, 4500);
   assert.equal(body.bonosHabilitados, false);
   assert.equal(body.codigoInvitacion, COD_A); // solo operador
+  assert.equal(body.slug, SLUG_A); // slug presentacional para nombres de archivo
 });
 
 test('/conjunto/config: RESIDENT NO recibe codigoInvitacion', { skip: omitir && razonSkip }, async () => {

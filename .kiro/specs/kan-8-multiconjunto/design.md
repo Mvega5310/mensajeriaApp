@@ -632,8 +632,9 @@ Toda la configuración vive en columnas de `Conjunto` (§1.1): identidad (`nombr
 - Lo consumen el registro y `Terms.jsx` cuando hay `?c=`/código de formulario pero no hay sesión.
 
 **b) `GET /conjunto/config` (autenticado: `requireAuth` + `requireTenant`).**
-- Devuelve los campos presentacionales **más** `tarifas` (`{ MANO, ESTANDAR, VOLUMEN, PESADO }`) y
-  `bonosHabilitados`.
+- Devuelve los campos presentacionales **más** `slug` (presentacional: nombres de archivo/CSV, URLs de
+  soporte), `tarifas` (`{ MANO, ESTANDAR, VOLUMEN, PESADO }`) y `bonosHabilitados`.
+- `config-publica` **no** incluye `slug` (mínima exposición pública).
 - **Solo si el rol es `OPERATOR`** incluye además `codigoInvitacion` (para el QR/cartelera de invitación).
   El residente **no** lo recibe.
 - Es la fuente de la config del propio conjunto para la app con sesión (tarifas del frontend, gate de

@@ -26,6 +26,7 @@ export async function config(req, res) {
   const conjunto = await conjuntoDelContexto();
   const payload = {
     ...soloPresentacionales(conjunto),
+    slug: conjunto.slug, // presentacional: nombre de archivos (CSV), URLs de soporte
     tarifas: tarifasDe(conjunto),
     bonosHabilitados: conjunto.bonosHabilitados,
   };
