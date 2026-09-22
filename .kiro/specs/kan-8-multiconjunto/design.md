@@ -102,9 +102,11 @@ model User {
   comentarios  Comentario[]
   bonos        Bono[]
 
-  // NUEVO — índice para el filtro de tenant y las búsquedas por rol dentro del conjunto
-  @@index([conjuntoId])
-  @@index([conjuntoId, role])                    // acelera findMany({where:{conjuntoId, role}}) (checkin, createPrealert)
+  // NUEVO — índice de tenant. Solo el compuesto: Postgres usa su primera columna
+  // (conjuntoId) para las consultas que filtran solo por conjuntoId, así que un
+  // @@index([conjuntoId]) suelto sería redundante. Acelera además
+  // findMany({where:{conjuntoId, role}}) (checkin, createPrealert).
+  @@index([conjuntoId, role])
 }
 
 model Package {
@@ -137,9 +139,10 @@ model Package {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // NUEVO
-  @@index([conjuntoId])
-  @@index([conjuntoId, estado])                  // acelera listados por estado dentro del conjunto
+  // NUEVO — índice de tenant. Solo el compuesto (mismo criterio que User): su
+  // primera columna cubre el filtro solo por conjuntoId, así que no se agrega un
+  // @@index([conjuntoId]) suelto. Acelera los listados por estado del conjunto.
+  @@index([conjuntoId, estado])
 }
 ```
 
@@ -659,7 +662,7 @@ tres fases (migración expand → backfill de datos → migración contract).
 1. Crear tabla `Conjunto`.
 2. Agregar `conjuntoId` **nullable** a `User`, `Package`, `Bono`, `Comentario` (sin `NOT NULL`, sin FK
    obligatoria todavía o con FK que admita null).
-3. Crear los índices `@@index([conjuntoId])` (y compuestos) — pueden crearse en esta fase o tras el
+3. Crear los índices de tenant (compuestos en `User`/`Package`; simples en `Bono`/`Comentario`) — pueden crearse en esta fase o tras el
    backfill; crearlos después del backfill masivo suele ser más rápido.
 - **Punto de reversión F1:** revertir la migración (drop de columnas nullable y de la tabla `Conjunto`).
   Como las columnas son nullable y aún nadie las usa, el drop es seguro y deja el esquema idéntico al
