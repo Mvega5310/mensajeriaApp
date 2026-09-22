@@ -1,103 +1,126 @@
-// Guarda estructural de rutas (KAN-8, Fase C — revisión punto 2).
+// Guarda estructural sobre el APP REAL (KAN-8, Fase E — E6).
 // Runner: node:test. Ejecutar: npm test
 //
-// Recorre cada router de Express y FALLA si alguna capa/ruta protegida con
-// `requireAuth` no tiene `requireTenant` aplicado también. Así ninguna ruta
-// nueva puede quedar sin aislamiento por olvido.
+// Recorre TODAS las rutas montadas en createApp() (no una lista de routers a
+// mano, para que un router nuevo no quede sin revisar) y exige:
+//  - toda ruta con `requireAuth` debe tener `requireTenant` después en su cadena;
+//  - toda ruta autenticada (con requireAuth) que no lleve requireTenant, falla;
+//  - toda ruta SIN requireAuth debe estar en la lista corta y explícita de
+//    rutas pre-sesión; si aparece una nueva ruta pública no listada, falla.
 //
-// REQUIERE prisma generate: los routers importan controladores que importan
-// config/db.js (@prisma/client). Se reporta como PENDIENTE DE PRUEBA LOCAL.
-//
-// Excepción explícita: en auth.routes, `/me` es la única ruta autenticada; las
-// demás (register/login/forgot/reset) son pre-tenant y NO deben llevar
-// requireTenant.
+// REQUIERE prisma generate (createApp importa controladores -> @prisma/client).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createApp } from '../../app.js';
 
-import authRoutes from '../auth.routes.js';
-import packagesRoutes from '../packages.routes.js';
-import commentsRoutes from '../comments.routes.js';
-import bonosRoutes from '../bonos.routes.js';
-import { conjuntoAuthRouter } from '../conjunto.routes.js';
-
-// Nombres de los middlewares tal como se declaran (funciones nombradas).
 const AUTH = 'requireAuth';
 const TENANT = 'requireTenant';
 
-// Extrae, de un router de Express, la lista de "cadenas de middlewares" a
-// verificar: las capas de router.use(...) (mws globales del router) y las de
-// cada ruta (route.stack). Devuelve arrays de nombres de función.
-function cadenasDeMiddleware(router) {
-  const globales = [];
-  const porRuta = [];
+// Rutas que corren SIN sesión (pre-tenant). Lista corta y explícita: si aparece
+// una ruta pública nueva que no esté aquí, la prueba falla (hay que decidir
+// conscientemente si debe ser pública).
+const RUTAS_SIN_SESION = new Set([
+  'GET /health',
+  'POST /api/auth/register',
+  'POST /api/auth/login',
+  'POST /api/auth/forgot-password',
+  'POST /api/auth/reset-password',
+  'GET /api/conjuntos/config-publica',
+]);
 
-  for (const capa of router.stack) {
-    if (capa.route) {
-      // Ruta concreta: sus handlers están en capa.route.stack.
-      const nombres = capa.route.stack.map((s) => s.handle?.name || '');
-      porRuta.push({ path: capa.route.path, nombres });
-    } else if (capa.handle && typeof capa.handle === 'function') {
-      // Middleware global del router (router.use).
-      globales.push(capa.handle.name || '');
+// --- Aplanado del router de Express ---
+// Cada capa puede ser: una ruta (layer.route) o un router montado
+// (layer.handle.stack + layer.regexp con el prefijo). Reconstruimos el path y
+// la cadena de nombres de middleware acumulando los mws de cada nivel.
+
+function prefijoDeCapa(layer) {
+  // Extrae el prefijo textual de una capa de montaje (app.use('/api/x', router)).
+  // Express guarda una regexp; para prefijos estáticos, fast_slash o el source.
+  if (layer.regexp && layer.regexp.fast_slash) return '';
+  const m = layer.regexp && layer.regexp.source
+    ? layer.regexp.source
+        .replace('^\\/', '/')
+        .replace('\\/?(?=\\/|$)', '')
+        .replace(/\\\//g, '/')
+    : '';
+  return m === '/(?=/|$)' ? '' : m;
+}
+
+function recolectarRutas(stack, prefijo, mwHeredados, out) {
+  // Primera pasada: mws de nivel de este stack (capas sin route ni sub-router
+  // nombrado 'router'), que aplican a las rutas hermanas declaradas DESPUÉS.
+  // En Express, router.use(mw) se registra como capa previa a las rutas del
+  // router, así que acumularlos primero refleja el orden real de ejecución.
+  const mwsNivel = [];
+  for (const layer of stack) {
+    if (!layer.route && layer.name !== 'router' && layer.handle && layer.name) {
+      mwsNivel.push(layer.name);
     }
   }
-  return { globales, porRuta };
-}
+  const heredados = [...mwHeredados, ...mwsNivel];
 
-// Verifica la regla: si `requireAuth` aparece en una cadena, `requireTenant`
-// debe aparecer DESPUÉS en la cadena efectiva de esa ruta. La cadena efectiva
-// de una ruta = mws globales del router (en orden) + handlers de la ruta.
-function verificarRouter(nombre, router, { rutasPreTenant = [] } = {}) {
-  const { globales, porRuta } = cadenasDeMiddleware(router);
-
-  for (const { path, nombres } of porRuta) {
-    const cadena = [...globales, ...nombres];
-    const idxAuth = cadena.indexOf(AUTH);
-    if (idxAuth === -1) continue; // ruta pública, no exige tenant
-
-    // Excepción declarada: rutas pre-tenant conocidas.
-    if (rutasPreTenant.includes(path)) continue;
-
-    const idxTenant = cadena.indexOf(TENANT);
-    assert.ok(
-      idxTenant !== -1 && idxTenant > idxAuth,
-      `[${nombre}] la ruta '${path}' tiene ${AUTH} pero no ${TENANT} después ` +
-        `(cadena: ${cadena.filter(Boolean).join(' -> ')})`
-    );
+  // Segunda pasada: rutas concretas y sub-routers montados.
+  for (const layer of stack) {
+    if (layer.route) {
+      const rutaMws = layer.route.stack.map((s) => s.handle?.name || '');
+      const metodos = Object.keys(layer.route.methods).filter((k) => layer.route.methods[k]);
+      for (const metodo of metodos) {
+        out.push({
+          method: metodo.toUpperCase(),
+          path: prefijo + layer.route.path,
+          cadena: [...heredados, ...rutaMws],
+        });
+      }
+    } else if (layer.name === 'router' && layer.handle?.stack) {
+      recolectarRutas(layer.handle.stack, prefijo + prefijoDeCapa(layer), heredados, out);
+    }
   }
 }
 
-test('packages.routes: toda ruta autenticada lleva requireTenant', () => {
-  verificarRouter('packages', packagesRoutes);
+function rutasDelApp(app) {
+  const stack = app._router?.stack || app.router?.stack || [];
+  const out = [];
+  recolectarRutas(stack, '', [], out);
+  return out;
+}
+
+// Normaliza un path con posibles artefactos de regexp a algo legible.
+function limpiarPath(p) {
+  return p.replace(/\/+/g, '/');
+}
+
+test('E6: toda ruta con requireAuth lleva requireTenant después (app real)', () => {
+  const app = createApp();
+  const rutas = rutasDelApp(app);
+  // Sanidad: debe haber encontrado varias rutas.
+  assert.ok(rutas.length >= 5, `se esperaban varias rutas, se hallaron ${rutas.length}`);
+
+  const ofensores = [];
+  for (const r of rutas) {
+    const idxAuth = r.cadena.indexOf(AUTH);
+    if (idxAuth === -1) continue;
+    const idxTenant = r.cadena.indexOf(TENANT);
+    if (!(idxTenant !== -1 && idxTenant > idxAuth)) {
+      ofensores.push(`${r.method} ${limpiarPath(r.path)} [${r.cadena.filter(Boolean).join(' -> ')}]`);
+    }
+  }
+  assert.deepEqual(ofensores, [], `rutas con requireAuth sin requireTenant después: ${ofensores.join('; ')}`);
 });
 
-test('bonos.routes: toda ruta autenticada lleva requireTenant', () => {
-  verificarRouter('bonos', bonosRoutes);
-});
+test('E6: toda ruta pública (sin requireAuth) está en la lista de rutas sin sesión', () => {
+  const app = createApp();
+  const rutas = rutasDelApp(app);
 
-test('comments.routes: toda ruta autenticada lleva requireTenant', () => {
-  verificarRouter('comments', commentsRoutes);
-});
-
-test('conjunto.routes (auth): /config lleva requireTenant', () => {
-  verificarRouter('conjunto', conjuntoAuthRouter);
-});
-
-test('auth.routes: /me lleva requireTenant; register/login/forgot/reset son pre-tenant', () => {
-  // Las rutas pre-tenant no llevan requireAuth (así que la guarda las ignora),
-  // pero las listamos explícitamente por claridad y para documentar la excepción.
-  verificarRouter('auth', authRoutes, {
-    rutasPreTenant: ['/register', '/login', '/forgot-password', '/reset-password'],
-  });
-});
-
-test('auth.routes: /me efectivamente tiene requireAuth seguido de requireTenant', () => {
-  const { porRuta } = cadenasDeMiddleware(authRoutes);
-  const me = porRuta.find((r) => r.path === '/me');
-  assert.ok(me, 'no se encontró la ruta /me');
-  const idxAuth = me.nombres.indexOf(AUTH);
-  const idxTenant = me.nombres.indexOf(TENANT);
-  assert.ok(idxAuth !== -1, '/me debe tener requireAuth');
-  assert.ok(idxTenant === idxAuth + 1, '/me debe tener requireTenant justo después de requireAuth');
+  const inesperadas = [];
+  for (const r of rutas) {
+    if (r.cadena.includes(AUTH)) continue; // autenticada, no aplica
+    const clave = `${r.method} ${limpiarPath(r.path)}`;
+    if (!RUTAS_SIN_SESION.has(clave)) inesperadas.push(clave);
+  }
+  assert.deepEqual(
+    inesperadas,
+    [],
+    `rutas públicas no declaradas en RUTAS_SIN_SESION (decidir si deben ser públicas): ${inesperadas.join('; ')}`
+  );
 });
