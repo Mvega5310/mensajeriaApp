@@ -6,6 +6,7 @@ import { prisma } from '../config/db.js';
 import { tenantStore, SCOPE, runWithTenant } from '../config/tenantContext.js';
 import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
+import { PASSWORD_POLICY, PASSWORD_POLICY_MSG } from '../services/password.service.js';
 import { sendPasswordResetEmail } from '../services/email.service.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 
@@ -29,10 +30,8 @@ export function buscarUsuarioPorEmailSinTenant(email) {
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
 const RESET_COOLDOWN_MS = 60 * 1000; // evita reenvíos en cadena al mismo correo
 
-// Mínimo 8 caracteres, al menos una letra y un número. Se valida aquí
-// porque el minLength/patrón del formulario es solo una ayuda visual —
-// cualquiera puede saltárselo pegando directo contra la API.
-const PASSWORD_POLICY = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+// PASSWORD_POLICY vive ahora en services/password.service.js (fuente única
+// compartida con el script de alta de conjunto).
 
 // El registro público solo crea cuentas RESIDENT — el rol nunca sale del
 // body de la petición. La cuenta de operador se crea aparte (ver
@@ -43,7 +42,7 @@ export async function register(req, res) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
   if (!PASSWORD_POLICY.test(password)) {
-    return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres, con al menos una letra y un número' });
+    return res.status(400).json({ error: PASSWORD_POLICY_MSG });
   }
   // No basta con que el checkbox exista en el formulario: si alguien pega
   // directo contra la API sin aceptar, no hay cuenta. La fecha exacta
@@ -163,7 +162,7 @@ export async function resetPassword(req, res) {
   const { token, password } = req.body;
   if (!token || !password) return res.status(400).json({ error: 'Faltan datos' });
   if (!PASSWORD_POLICY.test(password)) {
-    return res.status(400).json({ error: 'La contraseña debe tener mínimo 8 caracteres, con al menos una letra y un número' });
+    return res.status(400).json({ error: PASSWORD_POLICY_MSG });
   }
 
   // PasswordResetToken es un modelo SIN tenant: este findFirst no requiere
