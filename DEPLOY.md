@@ -143,12 +143,41 @@ interruptor de runtime que lo prenda/apague (evita el "olvido silencioso").
 > El multi-conjunto aún no está en producción; estos procedimientos aplican una
 > vez ejecutado el corte anterior.
 
-**Alta de un conjunto nuevo.** *(Pendiente: el script de alta se construye en la
-Fase F.)* Dará de alta el `Conjunto` (identidad, tarifas, contacto del operador,
-`bonosHabilitados=false`), generará su `codigoInvitacion` y creará su cuenta de
-operador dentro del contexto de ese conjunto. **`prisma/seed.js` NO se usa en
-producción** — es solo para desarrollo local; el alta real es un procedimiento
-operativo aparte (Fase F).
+**Alta de un conjunto nuevo.** Se hace con el script interactivo
+`npm run alta-conjunto` (en `backend/`). Da de alta el `Conjunto` (identidad,
+tarifas, contacto del operador, `bonosHabilitados` siempre `false`), genera su
+`codigoInvitacion` y crea la cuenta de operador dentro del contexto de ese
+conjunto. Sirve tanto para el alta de Ipanema (Fase F) como para cualquier
+conjunto futuro. **`prisma/seed.js` NO se usa en producción** — es solo para
+desarrollo local.
+
+El script apunta a la base de `DATABASE_URL`. Para producción, se corre por el
+**túnel SSH de Railway** (ver "Migraciones de Postgres" arriba: dejar el túnel en
+`127.0.0.1:55432` y exportar `DATABASE_URL` a ese túnel).
+
+Flujo recomendado:
+
+1. **Ensayo primero (`--dry-run`):** `npm run alta-conjunto -- --dry-run`. Hace
+   todas las preguntas y muestra el resumen final, pero **no escribe nada**.
+   Úsalo para revisar los datos (y ver a qué host apunta) antes de cualquier
+   ejecución real.
+2. **Alta real:** `npm run alta-conjunto`. Antes de escribir, el script:
+   - imprime el **host** de `DATABASE_URL` (sin la contraseña) y **advierte en
+     mayúsculas** si no es `localhost`/`127.0.0.1` (es decir, si va a tocar una
+     base remota);
+   - muestra un **resumen completo** de lo que va a crear (incluida la contraseña
+     en claro si fue generada) y pide confirmar;
+   - pide **reescribir el slug exacto** como segunda confirmación.
+   Solo entonces crea el conjunto. Al final imprime el **código de invitación** y
+   el **enlace de registro** (`/registro?c=<código>`), y la contraseña temporal si
+   se generó (anótala: no se vuelve a mostrar).
+3. **Idempotencia estricta:** si ya existe un conjunto con ese slug, el script
+   informa `YA EXISTÍA` y **no crea ni modifica nada** (ni el operador). Para
+   cambiar datos de un conjunto existente, edítalos directamente; el alta no
+   reescribe.
+
+`bonosHabilitados` no se pregunta: queda `false` siempre (los bonos se activan
+por una acción deliberada aparte, nunca en el alta).
 
 **Desactivar un código de invitación.** Para cerrar temporalmente el registro de
 un conjunto, poner `invitacionActiva = false` en su fila de `Conjunto` (por el
