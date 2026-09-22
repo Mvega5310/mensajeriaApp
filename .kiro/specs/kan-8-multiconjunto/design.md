@@ -263,6 +263,16 @@ profundidad" si algún día se justifica.
    - **Contexto ausente** (sin `als.run`) → **lanza (falla cerrado)**. La ausencia de contexto **nunca**
      se interpreta como permiso para leer sin filtro; solo un `scope: 'GLOBAL_LOOKUP'` explícito exime.
 
+   **Regla del `await` DENTRO de `run()` (crítica).** Las consultas de Prisma son `PrismaPromise`
+   **perezosas**: la query se ejecuta en su `.then()`, no cuando se crea el objeto. Por eso el callback
+   de `als.run(...)` **debe** hacer el `await` de la consulta **dentro** del `run` (los helpers lo
+   encapsulan como `run(ctx, async () => await fn())`). Si el callback devolviera la `PrismaPromise` sin
+   `await`, `run()` terminaría y el `AsyncLocalStorage` **cerraría el contexto antes** de que la query se
+   ejecute; al resolverse fuera, la extensión no vería contexto y **lanzaría** (falla cerrado). Esta regla
+   vive en los helpers (`runWithTenant`, `buscarUsuarioPorEmailSinTenant`), **no** en cada call site, para
+   que ningún llamador tenga que recordarla. Una prueba de regresión con un *thenable perezoso* la cubre
+   sin necesidad de Postgres.
+
 2. **Middleware de tenant (Express) — se ejecuta después del middleware de auth JWT.**
    - Lee el `sub` (subject) del JWT ya verificado.
    - Resuelve `conjuntoId` **cargando el `User` por `sub` contra la BD, SIEMPRE** (ver §3.6). El JWT

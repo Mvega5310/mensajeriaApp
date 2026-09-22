@@ -74,6 +74,26 @@ npm install
 npm run dev              # http://localhost:5173 (proxy a /api -> :4000)
 ```
 
+**Pruebas del backend (KAN-8)**
+```
+cd backend
+npm test                 # runner integrado de Node (node --test); NO usar
+                         # 'node --test <carpeta>': no funciona en Windows.
+```
+Las pruebas unitarias (contexto y extensión de tenant) corren sin base de datos.
+La prueba de integración de aislamiento (`tenantIsolation.integration.test.js`)
+**crea y borra datos**, así que solo se ejecuta si `DATABASE_URL` apunta a
+`localhost`/`127.0.0.1` (si no, se omite con un mensaje). Para correrla con un
+Postgres desechable:
+```
+docker run --rm -d --name kan8-pg -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=kan8_test -p 5433:5432 postgres:16
+export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/kan8_test"
+npx prisma migrate deploy
+npm test
+docker rm -f kan8-pg
+```
+
 Flujo: el operador inicia sesión con la cuenta creada por `npm run seed`.
 Los residentes se crean ellos mismos en `/registro` (ese formulario nunca
 puede crear una cuenta de operador — el rol lo fuerza el backend), exclusivo
