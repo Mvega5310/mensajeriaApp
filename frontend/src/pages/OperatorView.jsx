@@ -220,7 +220,11 @@ export default function OperatorView() {
     setError('');
     try {
       const hoy = new Date().toISOString().slice(0, 10);
-      await downloadFile('/packages/export', `puertaya-ipanema-paquetes-${hoy}.csv`);
+      // Nombre del archivo con el conjunto (si cargó), sin datos fijos.
+      const sufijoConjunto = config?.nombre
+        ? config.nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+        : 'conjunto';
+      await downloadFile('/packages/export', `puertaya-${sufijoConjunto}-paquetes-${hoy}.csv`);
     } catch (err) {
       setError(err.message);
     }

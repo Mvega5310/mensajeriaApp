@@ -81,7 +81,7 @@ export default function Register() {
                   autoCapitalize="off"
                   autoCorrect="off"
                   spellCheck={false}
-                  placeholder="Ej. ipanema-K7Q2M9XR4TV"
+                  placeholder="Ej. conjunto-K7Q2M9XR4TV"
                   value={codigoManual}
                   onChange={(e) => setCodigoManual(e.target.value)}
                   onBlur={(e) => setCodigoManual(e.target.value.trim())}

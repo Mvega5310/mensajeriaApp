@@ -19,6 +19,7 @@ import authRoutes from '../auth.routes.js';
 import packagesRoutes from '../packages.routes.js';
 import commentsRoutes from '../comments.routes.js';
 import bonosRoutes from '../bonos.routes.js';
+import { conjuntoAuthRouter } from '../conjunto.routes.js';
 
 // Nombres de los middlewares tal como se declaran (funciones nombradas).
 const AUTH = 'requireAuth';
@@ -77,6 +78,10 @@ test('bonos.routes: toda ruta autenticada lleva requireTenant', () => {
 
 test('comments.routes: toda ruta autenticada lleva requireTenant', () => {
   verificarRouter('comments', commentsRoutes);
+});
+
+test('conjunto.routes (auth): /config lleva requireTenant', () => {
+  verificarRouter('conjunto', conjuntoAuthRouter);
 });
 
 test('auth.routes: /me lleva requireTenant; register/login/forgot/reset son pre-tenant', () => {
