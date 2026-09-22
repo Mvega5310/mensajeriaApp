@@ -235,19 +235,18 @@
 > pruebas de integración contra dos conjuntos** y cerrar dos huecos de verificación (montaje de
 > `requireTenant` sobre el app real, y auditorías manuales convertidas en pruebas).
 
-- [ ] **E1. Integración — `createPrealert` notifica al operador del conjunto del residente.**
-  - Dos conjuntos con su operador; un residente de Beta crea pre-alerta y el aviso se dirige al operador
-    de **Beta**, no al primero de la tabla. Sin correos reales (doble del servicio o resolución del
-    operador en función testeable; se elige la menos invasiva).
+- [x] **E1. Integración — `createPrealert` notifica al operador del conjunto del residente.** _(commit `93d52ff`)_
+  - Verifica la resolución del operador (misma consulta que `createPrealert`) bajo el contexto del
+    residente: Beta→opb, Alfa→opa. Opción menos invasiva (sin tocar `email.service` ni inyectar dobles).
   - _Requisitos:_ R1.6 · _Diseño:_ §2.4, §6.2
 
-- [ ] **E2. Integración — cortesía de primera entrega por apartamento, aislada por conjunto.**
+- [x] **E2. Integración — cortesía de primera entrega por apartamento, aislada por conjunto.** _(commit 93d52ff)_
   - Residente de Alfa (Torre 1, Apto 302) usa su cortesía; el primer paquete de un residente de Beta en
     Torre 1, Apto 302 **también** sale en 0; un segundo residente de Alfa en ese apto ya **no** recibe
     cortesía. Demuestra que `checkin`/`apartamento.service` acotan el barrido al conjunto activo.
   - _Requisitos:_ R1.7 · _Diseño:_ §2.4, §6.2, §6.3
 
-- [ ] **E3. Integración HTTP — aislamiento de `schedule`/`checkin`/`confirm-delivery` y sin `fotoUrl`.**
+- [x] **E3. Integración HTTP — aislamiento de `schedule`/`checkin`/`confirm-delivery` y sin `fotoUrl`.** _(commit 93d52ff)_
   - `schedule` (residente) y `checkin`/`confirm-delivery` (operador) sobre un paquete de **otro** conjunto
     → `404`, sin cambios. Dentro del mismo conjunto, un residente no puede `schedule` el paquete de otro
     residente. `listAll` y `/packages/mine` siguen **sin** `fotoUrl`.
@@ -255,24 +254,24 @@
     (`whereUnicoConConjunto`), **no** una reescritura a `findFirst` (Prisma 5, §2.3.1).
   - _Requisitos:_ R1.8, R1.9, R1.10 · _Diseño:_ §2.3.1, §2.5, §6.2
 
-- [ ] **E4. Integración — bonos por conjunto.**
+- [x] **E4. Integración — bonos por conjunto.** _(commit 93d52ff)_
   - `GET /bonos/residente/:id` con el id de un residente de **otro** conjunto no devuelve nada; con
     `bonosHabilitados=false`, `create` → `403`.
   - _Requisitos:_ R1.8, R2.6 · _Diseño:_ §6.4
 
-- [ ] **E5. Integración — comentarios por conjunto.**
+- [x] **E5. Integración — comentarios por conjunto.** _(commit 93d52ff)_
   - El operador de Alfa no ve comentarios de Beta; un comentario creado por un residente de Beta queda en
     Beta.
   - _Requisitos:_ R1.8 · _Diseño:_ §6.5
 
-- [ ] **E6. Guarda de `requireTenant` sobre el APP real.**
+- [x] **E6. Guarda de `requireTenant` sobre el APP real.** _(commit 07e39c6)_
   - La prueba recorre **todas** las rutas montadas en `createApp()` (no una lista de routers a mano) y
     exige que toda ruta con `requireAuth` tenga `requireTenant` después. Lista corta y explícita de rutas
     sin sesión (register, login, forgot-password, reset-password, config-publica, /health); la prueba
     **falla** si aparece una ruta sin `requireAuth` que no esté en esa lista.
   - _Requisitos:_ R1.3, R1.5
 
-- [ ] **E7. Auditorías manuales → pruebas estáticas.**
+- [x] **E7. Auditorías manuales → pruebas estáticas.** _(commit 7e00e6e)_
   - Recorre `backend/src` y `backend/prisma` y falla si: `GLOBAL_LOOKUP` se abre fuera de
     `buscarUsuarioPorEmailSinTenant()`; `$queryRaw`/`$executeRaw`/`$queryRawUnsafe`/`$executeRawUnsafe`
     aparecen fuera de `resolverConjuntoIdPorUsuario()`; hay más de un `new PrismaClient(`. Excluye
