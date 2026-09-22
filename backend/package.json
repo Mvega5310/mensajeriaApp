@@ -9,7 +9,8 @@
     "start": "prisma migrate deploy && node src/index.js",
     "prisma:migrate": "prisma migrate dev",
     "test": "node --test",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "alta-conjunto": "node scripts/altaConjunto.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
