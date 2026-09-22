@@ -183,49 +183,45 @@
 > para tarifas y bonos, dos endpoints de config, QR de invitación con código, y retiro de todos los
 > textos fijos de Ipanema. Ver design.md §4 (actualizado).
 
-- [ ] **D1. Endpoints de configuración (reemplaza el D2 por-slug).**
-  - **`GET /conjuntos/config-publica?c=<codigo>`** (público): aplica `normalizarCodigoInvitacion`;
-    devuelve solo `{ nombre, operadorNombre, operadorWhatsapp, operadorDomicilio, puntoRecepcion }`;
-    código inválido/inactivo → `400` con `code: 'INVITACION_INVALIDA'`. No parsea slug del prefijo.
-  - **`GET /conjunto/config`** (`requireAuth`+`requireTenant`): presentacionales + `tarifas` +
-    `bonosHabilitados`; **solo `OPERATOR`** recibe además `codigoInvitacion`.
+- [x] **D1. Endpoints de configuración (reemplaza el D2 por-slug).** _(commit `7973ae2`)_
+  - `GET /conjuntos/config-publica?c=<codigo>` (público) y `GET /conjunto/config` (`requireAuth`+
+    `requireTenant`; `codigoInvitacion` solo `OPERATOR`). Nuevo `services/conjunto.service.js` +
+    `controllers/conjunto.controller.js` + rutas montadas en `app.js`.
   - _Requisitos:_ R2.4 · _Diseño:_ §4.3
 
-- [ ] **D2. Tarifas — una sola fuente.**
-  - Backend: `costoPara()` usa las tarifas del `Conjunto` del **contexto** (modelo exento, leído por el
-    `conjuntoId` del contexto); nunca del cliente.
-  - Frontend: `utils/tiers.js` conserva etiquetas, montos desde `/conjunto/config`; **ningún monto fijo**.
-  - _Requisitos:_ R2.2, R2.3 · _Diseño:_ §4.2, §4.3, §6.7
+- [x] **D2. Tarifas — una sola fuente.** _(backend `ff30097`; frontend `744b6af`)_
+  - Backend: `costoPara()` async lee tarifas del `Conjunto` del contexto. Frontend: `utils/tiers.js` solo
+    etiquetas + `tiersConCosto()`; montos de `/conjunto/config`. Ningún monto fijo.
+  - _Requisitos:_ R2.2, R2.3 · _Diseño:_ §4.2, §4.3
 
-- [ ] **D3. Bonos — una sola fuente.**
-  - Eliminar `BONOS_HABILITADOS` de `backend/src/config/features.js` y `frontend/src/utils/features.js`.
-    Única fuente: `Conjunto.bonosHabilitados` (`false` por defecto). Backend lo lee del contexto;
-    frontend de `/conjunto/config`.
-  - _Requisitos:_ R2.6 · _Diseño:_ §4.2, §4.3, §6.4
+- [x] **D3. Bonos — una sola fuente.** _(commit `7973ae2`)_
+  - Eliminados `backend/src/config/features.js` y `frontend/src/utils/features.js`. Backend lee
+    `Conjunto.bonosHabilitados` del contexto (bonos.create y checkin); frontend de `/conjunto/config`.
+  - _Requisitos:_ R2.6 · _Diseño:_ §4.2, §4.3
 
-- [ ] **D4. QR de invitación del operador (`OperatorView.jsx`).**
-  - Enlace `${origin}/registro?c=<codigoInvitacion>` (código de `/conjunto/config`). Mostrar también el
-    código como texto (cartelera).
+- [x] **D4. QR de invitación del operador (`OperatorView.jsx`).** _(commit `0d91142`)_
+  - Enlace `${origin}/registro?c=<codigoInvitacion>` (de `/conjunto/config`) + código como texto.
   - _Requisitos:_ R3.1 · _Diseño:_ §4.3
 
-- [ ] **D5. Quitar textos fijos de Ipanema.**
-  - `App.jsx` (barra superior), `Login.jsx` (subtítulo), `OperatorView.jsx` (panel de invitación y
-    mensaje WhatsApp de entrega), todo `Terms.jsx`. Con sesión: nombre del conjunto de la config; sin
-    sesión (login): textos neutros solo con la marca "Puertaya".
+- [x] **D5. Quitar textos fijos de Ipanema.** _(commit `f4c35e9`; CSV/placeholder en `1214ecb`)_
+  - `App.jsx` (barra: `Puertaya · <nombre>`), `Login.jsx` (neutro), `OperatorView.jsx` (WhatsApp de
+    entrega + nombre CSV). `Terms.jsx` en D6.
   - _Requisitos:_ R2.4 · _Diseño:_ §4.3
 
-- [ ] **D6. `Terms.jsx` según el contexto.**
-  - Con `?c=`/código de formulario → `config-publica`; con sesión → `/conjunto/config`; sin ninguno →
-    versión genérica sin datos de operador, con nota de que los datos del responsable se ven con el
-    enlace de invitación. No inventar texto legal nuevo más allá de esa nota.
+- [x] **D6. `Terms.jsx` según el contexto.** _(commit `fbd107e`)_
+  - `config-publica` con `?c=`; `/conjunto/config` con sesión; genérico con nota si ninguno. Sin texto
+    legal nuevo más allá de la nota. **Texto pendiente de revisión del equipo antes de publicar.**
   - _Requisitos:_ R2.4 · _Diseño:_ §4.3.1
 
-- [ ] **D7. Pruebas.**
-  - Integración: `config-publica` con código válido/inválido/inactivo; `/conjunto/config` según rol (el
-    residente NO recibe `codigoInvitacion`); dos conjuntos con tarifas distintas cobran distinto en
-    `checkin`; `bonosHabilitados=false` bloquea el uso de bonos.
-  - Verificación que busque en `frontend/src` y **falle si aparece "Ipanema" o algún monto de tarifa
-    fijo**.
+- [x] **D7. Pruebas.** _(commit `1214ecb`)_
+  - Integración `configConjunto.integration.test.js` (guarda de localhost): config-publica
+    válido/inválido/inactivo; `/conjunto/config` por rol (residente sin `codigoInvitacion`); tarifas
+    distintas → `costoPara` distinto (4500 vs 9999); `bonosHabilitados=false` → 403 en create de bono.
+  - `frontendSinFijos.test.js` (autónoma): falla si aparece "Ipanema" o montos fijos en `frontend/src`.
+    **Verde en el sandbox** (detectó y se corrigieron 2 fijos: nombre CSV y placeholder).
+  - **Verificado en sandbox:** autónomas verdes (tenantContext 7, invitacion 8, frontendSinFijos 2).
+    **Pendiente local:** integraciones + helpers/interceptor/tenantGuard (requieren `npm install` +
+    `prisma generate` + Postgres).
   - _Requisitos:_ R2.2, R2.4, R2.6
 
 ---
