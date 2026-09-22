@@ -111,7 +111,52 @@ test('bonosHabilitados queda en false sin importar qué se pase', { skip: omitir
   assert.equal(res.conjunto.bonosHabilitados, false);
 });
 
+// Slug aparte para el caso de email duplicado (no colisiona con SLUG).
+const SLUG_DUP = 'itestf-alta-dup';
+const EMAIL_EXISTENTE = 'op-existente-itestf@local';
+
+test('alta con email ya existente lanza y NO deja el conjunto creado (atomicidad)', { skip: omitir && razonSkip }, async () => {
+  // Limpieza previa del slug_dup y del email.
+  const prev = await prisma.conjunto.findUnique({ where: { slug: SLUG_DUP } });
+  if (prev) {
+    await runWithTenant({ conjuntoId: prev.id, role: 'OPERATOR' }, () => prisma.user.deleteMany({}));
+    await prisma.conjunto.deleteMany({ where: { slug: SLUG_DUP } });
+  }
+
+  // El alta base (SLUG/EMAIL) creó ya un operador con EMAIL en un test previo,
+  // pero por si este test corre aislado, garantizamos que EMAIL_EXISTENTE exista
+  // en ALGÚN conjunto: reutilizamos el conjunto base o lo creamos.
+  let base = await prisma.conjunto.findUnique({ where: { slug: SLUG } });
+  if (!base) {
+    const r = await altaDeConjunto(datos());
+    base = r.conjunto;
+  }
+  await runWithTenant({ conjuntoId: base.id, role: 'OPERATOR' }, async () => {
+    const existe = await prisma.user.findFirst({ where: { email: EMAIL_EXISTENTE } });
+    if (!existe) {
+      await prisma.user.create({
+        data: { email: EMAIL_EXISTENTE, passwordHash: 'x', role: 'RESIDENT', nombre: 'Existente', telefono: '1', termsAcceptedAt: new Date() },
+      });
+    }
+  });
+
+  // Intento de alta de un conjunto NUEVO (SLUG_DUP) con un email ya en uso.
+  await assert.rejects(
+    altaDeConjunto(datos({ slug: SLUG_DUP, nombre: 'Dup', operadorEmail: EMAIL_EXISTENTE })),
+    /ya está registrado/
+  );
+
+  // El conjunto SLUG_DUP NO debe haber quedado creado.
+  const dup = await prisma.conjunto.findUnique({ where: { slug: SLUG_DUP } });
+  assert.equal(dup, null, 'el conjunto no debe existir tras el alta fallida por email duplicado');
+});
+
 test('teardown', { skip: omitir && razonSkip }, async () => {
   await limpiar();
+  const dup = await prisma.conjunto.findUnique({ where: { slug: SLUG_DUP } });
+  if (dup) {
+    await runWithTenant({ conjuntoId: dup.id, role: 'OPERATOR' }, () => prisma.user.deleteMany({}));
+    await prisma.conjunto.deleteMany({ where: { slug: SLUG_DUP } });
+  }
   await prisma.$disconnect();
 });

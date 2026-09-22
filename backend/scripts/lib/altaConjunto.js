@@ -76,46 +76,59 @@ export async function altaDeConjunto(datos) {
     return { estado: ESTADO.YA_EXISTE, conjunto: existente, codigoInvitacion: existente.codigoInvitacion };
   }
 
-  // 2) Crear el conjunto. bonosHabilitados NO se pasa: usa el default del
-  //    esquema (false).
-  const codigoInvitacion = generarCodigoInvitacion({ prefijo: slug });
-  const conjunto = await prisma.conjunto.create({
-    data: {
-      nombre,
-      slug,
-      codigoInvitacion,
-      operadorNombre,
-      operadorWhatsapp,
-      operadorDomicilio,
-      puntoRecepcion,
-      tarifaMano,
-      tarifaEstandar,
-      tarifaVolumen,
-      tarifaPesado,
-      // bonosHabilitados: omitido a propósito -> false por default del esquema.
-    },
-  });
-
-  // 3) Crear el operador dentro del contexto del conjunto (la extensión fija
-  //    conjuntoId; NO se pasa en data). Antes, verificar que el email no exista
-  //    ya (email es @unique global) por la vía autorizada sin tenant.
+  // 2) Verificar que el email del operador NO exista, ANTES de crear nada
+  //    (email es @unique global). Si existiera y creáramos el conjunto primero,
+  //    la creación del operador fallaría dejando un conjunto huérfano que la
+  //    regla estricta YA_EXISTE volvería irrecuperable. Se resuelve por la vía
+  //    autorizada de lookup sin tenant.
   const yaExisteEmail = await buscarUsuarioPorEmailSinTenant(operadorEmail);
   if (yaExisteEmail) {
     throw new Error(`altaDeConjunto: el email ${operadorEmail} ya está registrado`);
   }
-  const passwordHash = await bcrypt.hash(operadorPassword, 10);
-  const operador = await runWithTenant({ conjuntoId: conjunto.id, role: 'OPERATOR' }, () =>
-    prisma.user.create({
+
+  const codigoInvitacion = generarCodigoInvitacion({ prefijo: slug });
+  const passwordHash = await bcrypt.hash(operadorPassword, 10); // fuera de la txn (no alargarla)
+
+  // 3) Crear conjunto + operador en UNA transacción: ninguna falla futura puede
+  //    dejar uno sin el otro. El operador necesita el conjuntoId, así que dentro
+  //    de la txn se crea primero el conjunto (con `tx`) y ese id alimenta el
+  //    contexto de tenant para crear el operador, también con `tx`.
+  //    Nota: la extensión de tenant se preserva en el cliente transaccional, así
+  //    que tx.user.create bajo runWithTenant fuerza el conjuntoId igual; y
+  //    tx.conjunto.create es modelo exento (pasa sin contexto).
+  const { conjunto, operador } = await prisma.$transaction(async (tx) => {
+    const conjuntoTx = await tx.conjunto.create({
       data: {
-        email: operadorEmail,
-        passwordHash,
-        role: 'OPERATOR',
-        nombre: operadorNombre,
-        telefono: '',
-        termsAcceptedAt: new Date(),
+        nombre,
+        slug,
+        codigoInvitacion,
+        operadorNombre,
+        operadorWhatsapp,
+        operadorDomicilio,
+        puntoRecepcion,
+        tarifaMano,
+        tarifaEstandar,
+        tarifaVolumen,
+        tarifaPesado,
+        // bonosHabilitados: omitido a propósito -> false por default del esquema.
       },
-    })
-  );
+    });
+
+    const operadorTx = await runWithTenant({ conjuntoId: conjuntoTx.id, role: 'OPERATOR' }, () =>
+      tx.user.create({
+        data: {
+          email: operadorEmail,
+          passwordHash,
+          role: 'OPERATOR',
+          nombre: operadorNombre,
+          telefono: '',
+          termsAcceptedAt: new Date(),
+        },
+      })
+    );
+
+    return { conjunto: conjuntoTx, operador: operadorTx };
+  });
 
   return { estado: ESTADO.CREADO, conjunto, operador, codigoInvitacion };
 }
