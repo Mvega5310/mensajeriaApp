@@ -87,7 +87,12 @@ export default function OperatorView() {
 
   const [qrOpen, setQrOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState(null);
-  const inviteUrl = `${window.location.origin}/registro`;
+  // Enlace de invitación con el código del conjunto (KAN-8). Sin código aún
+  // (config no cargada) queda null y no se puede abrir el QR.
+  const codigoInvitacion = config?.codigoInvitacion || null;
+  const inviteUrl = codigoInvitacion
+    ? `${window.location.origin}/registro?c=${encodeURIComponent(codigoInvitacion)}`
+    : null;
 
   const [recepcionPage, setRecepcionPage] = useState(1);
   const [repartoPage, setRepartoPage] = useState(1);
@@ -126,6 +131,7 @@ export default function OperatorView() {
   }
 
   function openQr() {
+    if (!inviteUrl) return; // aún no cargó el código del conjunto
     setQrOpen(true);
     QRCode.toDataURL(inviteUrl, { width: 320, margin: 2 }).then(setQrDataUrl);
   }
@@ -144,7 +150,7 @@ export default function OperatorView() {
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = 'puertaya-ipanema-qr.png';
+      link.download = 'puertaya-qr-registro.png';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -661,10 +667,17 @@ export default function OperatorView() {
               <button className="modal-close" onClick={() => setQrOpen(false)}>✕</button>
             </div>
             <p className="card-sub" style={{ marginBottom: 12 }}>
-              Comparte este código en carteleras o zonas comunes de Conjunto Ipanema para que los residentes se registren.
+              Comparte este código en carteleras o zonas comunes{config?.nombre ? ` de ${config.nombre}` : ''} para que los residentes se registren.
             </p>
             {qrDataUrl && (
               <img src={qrDataUrl} alt="Código QR de registro" style={{ width: '100%', borderRadius: 12, border: '1px solid var(--line)' }} />
+            )}
+            {/* Código como texto, para la cartelera (además del QR). */}
+            {codigoInvitacion && (
+              <div className="tariff-box" style={{ margin: '10px 0' }}>
+                <div className="l">Código de invitación</div>
+                <div className="v" style={{ fontFamily: 'monospace' }}>{codigoInvitacion}</div>
+              </div>
             )}
             <p className="field-hint" style={{ textAlign: 'center', margin: '10px 0 14px' }}>{inviteUrl}</p>
             {qrDataUrl && (
