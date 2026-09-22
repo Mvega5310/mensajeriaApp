@@ -122,7 +122,9 @@ export default function Register() {
               <input type="checkbox" required checked={fields.acceptedTerms}
                 onChange={(e) => update('acceptedTerms', e.target.checked)} />
               <span>
-                Acepto los <Link to="/terminos" target="_blank" rel="noreferrer">Términos y Condiciones y el Aviso de Tratamiento de Datos</Link>.
+                Acepto los <Link
+                  to={codigoInvitacion ? `/terminos?c=${encodeURIComponent(codigoInvitacion)}` : '/terminos'}
+                  target="_blank" rel="noreferrer">Términos y Condiciones y el Aviso de Tratamiento de Datos</Link>.
               </span>
             </label>
 
