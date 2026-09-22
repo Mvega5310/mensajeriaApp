@@ -1,10 +1,18 @@
-# Puertaya Ipanema
+# Puertaya
 
-App real en producción de recepción/custodia/entrega de paquetes para el
-Conjunto Residencial Ipanema, operada por Francisco Caro Yances (un solo
-operador). Repo: `Mvega5310/mensajeriaApp`. La app está por arrancar de
-verdad en el conjunto — por eso la rama de trabajo es `develop`, no `main`
-(ver regla de ramas abajo, es la más importante de este archivo).
+App de recepción/custodia/entrega de paquetes para conjuntos residenciales.
+Repo: `Mvega5310/mensajeriaApp`. Nació monoconjunto (Ipanema, operado por
+Francisco Caro Yances) y ahora soporta **multi-conjunto**: cada conjunto tiene
+sus residentes, su operador y sus paquetes, aislados entre sí (KAN-8).
+
+> **Estado del multi-conjunto (KAN-8):** implementado y validado en la rama
+> `feature/kan-8-multiconjunto`, **NO desplegado en producción**. El corte a
+> producción (backfill + fase contract + despliegue) es la Fase F y aún no se
+> ha ejecutado — ver DEPLOY.md. Producción sigue siendo, por ahora, el conjunto
+> único Ipanema con el esquema previo hasta que se ejecute ese corte.
+
+La rama de trabajo es `develop`, no `main` (ver regla de ramas abajo, es la más
+importante de este archivo).
 
 **Para features, funcionalidades y cómo levantar el proyecto en local:
 lee [README.md](README.md).** Para infraestructura, despliegue y cómo
@@ -65,9 +73,62 @@ docs/        # Prototipo original, flyer de campaña, logo — referencia histó
 ## Cosas ya decididas — no las reabras sin que el usuario lo pida
 
 - **WhatsApp es manual, no automático**: enlaces `wa.me` con mensaje precargado que el operador confirma a mano. Se descartó Twilio/WhatsApp Business API explícitamente por costo.
-- **Bonos prepago**: la funcionalidad está construida pero **apagada** detrás de un flag (`BONOS_HABILITADOS` en `backend/src/config/features.js` y `frontend/src/utils/features.js`, ambos en `false`). No se activa hasta que el operador maneje más de un residente frecuente a la vez.
+- **Bonos prepago**: la funcionalidad está construida pero **apagada por conjunto**. La única fuente es `Conjunto.bonosHabilitados` (`false` por defecto para todo conjunto nuevo). **Ya NO existe** la constante `BONOS_HABILITADOS` (se eliminó de `backend/src/config/features.js` y `frontend/src/utils/features.js`, ambos archivos borrados en KAN-8): backend lee del conjunto del contexto, frontend de `GET /conjunto/config`.
+- **Tarifas por conjunto**: las tarifas por categoría de peso salen del `Conjunto` (`tarifaMano/Estandar/Volumen/Pesado`), no de una constante fija. Backend: `costoPara()` las lee del conjunto del contexto (nunca del cliente). Frontend: `utils/tiers.js` solo tiene etiquetas; los montos vienen de `GET /conjunto/config`. No hay montos fijos en el cliente.
 - **Fotos fuera de los listados**: `GET /packages` y `GET /packages/mine` NUNCA deben incluir `fotoUrl` (pueden pesar cientos de KB en base64 cada una) — se piden aparte vía `GET /packages/:id/foto`, solo al abrir el detalle de un paquete puntual. Esto fue la causa real de una caída seria en producción (ver historial de commits) — no revertir este patrón.
 - **Sin pasarela de pagos real**: todo el cobro es manual/efectivo/transferencia, coordinado por fuera de la app.
+- **La app ya no es exclusiva de Ipanema**: no incrustar el nombre "Ipanema", el operador, su domicilio, WhatsApp ni tarifas en el código. Todo eso es configuración por conjunto (ver reglas del multi-conjunto abajo).
+
+## Reglas del multi-conjunto (no negociables)
+
+El aislamiento entre conjuntos es **estructural**: lo garantiza una extensión de
+Prisma que filtra por `conjuntoId` a partir de un contexto por-request
+(`AsyncLocalStorage`), no cada consulta a mano. Las siguientes invariantes lo
+sostienen. Cada una tiene una prueba automatizada; si tu cambio rompe una,
+**arréglalo, no relajes la prueba**.
+
+1. **Un solo `PrismaClient`.** Todo pasa por el cliente extendido de
+   `config/db.js`. Un segundo cliente sin extender sería una vía sin aislamiento,
+   invisible y silenciosa. — *Prueba:* `auditoriaInvariantes.test.js` (E7.3).
+2. **`GLOBAL_LOOKUP` solo en `buscarUsuarioPorEmailSinTenant()`.** Es la única
+   exención al filtro (login/forgot: lookup por email sin sesión). Concentrarla
+   en un punto la hace auditable de un vistazo. — *Prueba:* `auditoriaInvariantes.test.js` (E7.1).
+3. **Consultas crudas solo en `resolverConjuntoIdPorUsuario()`.**
+   `$queryRaw`/`$executeRaw`/`*Unsafe` saltan la extensión por completo; fuera de
+   ese bootstrap serían una fuga. — *Prueba:* `auditoriaInvariantes.test.js` (E7.2).
+4. **El `await` va DENTRO de `run()`, y lo garantizan los helpers.** Las
+   `PrismaPromise` son perezosas: devolver la promesa sin `await` cierra el
+   contexto antes de que la query corra y la extensión lanzaría (falla cerrado).
+   Por eso `runWithTenant`/`buscarUsuarioPorEmailSinTenant` hacen `run(ctx, async
+   () => await fn())`. No repliques el patrón a mano en cada call site. — *Prueba:*
+   `tenantContext.test.js` (regresión con thenable perezoso).
+5. **Toda ruta autenticada lleva `requireAuth` y luego `requireTenant`.** Sin el
+   segundo, el handler corre sin contexto y la extensión lanza. — *Prueba:*
+   `tenantGuard.routes.test.js` (E6, recorre el app real).
+6. **Una ruta pública nueva exige agregarla a la lista de E6, justificándolo.**
+   `tenantGuard.routes.test.js` falla si aparece una ruta sin `requireAuth` que no
+   esté en `RUTAS_SIN_SESION`. Agregarla es una decisión consciente (¿de verdad
+   debe ser accesible sin sesión?), no un descuido.
+7. **Nunca se pasa `conjuntoId` en `data`.** El conjunto de toda escritura sale
+   del contexto; un `conjuntoId` en `data` se rechaza. El llamador jamás decide el
+   tenant. — *Prueba:* `tenantExtension.helpers.test.js` / `*.interceptor.test.js`.
+8. **`Conjunto` y `PasswordResetToken` son los ÚNICOS modelos sin tenant.** El
+   resto (`User`, `Package`, `Bono`, `Comentario`) lleva `conjuntoId` y está en
+   `MODELOS_CON_TENANT` (`config/tenantModels.js`). Un modelo nuevo entra ahí a
+   propósito, o queda fuera del aislamiento. — *Prueba:* cubierto por las de la
+   extensión.
+9. **Nada de datos, montos ni nombres de conjunto fijos en el frontend.** Ni
+   "Ipanema", ni tarifas, ni domicilio/WhatsApp del operador: todo viene de
+   `GET /conjunto/config` (con sesión) o `GET /conjuntos/config-publica?c=`
+   (registro/Términos sin sesión). — *Prueba:* `frontendSinFijos.test.js`.
+
+**Regla de proceso.** Cualquier cambio que toque la extensión de tenant, el
+contexto (`AsyncLocalStorage`/helpers) o los flujos sin sesión
+(register/login/forgot/reset, seed, bootstrap) **requiere pruebas de integración
+contra Postgres real** (`*.integration.test.js`), no solo pruebas con fakes. En
+KAN-8, las pruebas con fakes NO detectaron dos errores reales: el `AND` en un
+`WhereUniqueInput` y la `PrismaPromise` perezosa que cerraba el contexto. Las dos
+las cazó la integración contra Postgres.
 
 ## Limitación conocida de este entorno
 
