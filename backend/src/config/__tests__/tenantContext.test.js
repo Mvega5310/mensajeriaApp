@@ -59,3 +59,29 @@ test('SCOPE expone TENANT y GLOBAL_LOOKUP', () => {
   assert.equal(SCOPE.TENANT, 'TENANT');
   assert.equal(SCOPE.GLOBAL_LOOKUP, 'GLOBAL_LOOKUP');
 });
+
+// Regresión del bug de PrismaPromise perezosa (revisión de Fase B):
+// un thenable que LEE el contexto cuando se EJECUTA (en then()), no cuando se
+// crea. runWithTenant debe hacer el await DENTRO de run() para que el contexto
+// siga abierto al ejecutarse. Con la versión previa (callback sin await), este
+// test veía undefined y fallaba; con la corrección, ve el contexto.
+function thenablePerezoso() {
+  return {
+    // Simula PrismaPromise: el trabajo (leer el contexto) ocurre en then(),
+    // no al construir el objeto.
+    then(resolve) {
+      // Difiere un tick para forzar que, si run() ya cerró el contexto, aquí
+      // se vea undefined.
+      queueMicrotask(() => resolve(getContext()));
+    },
+  };
+}
+
+test('runWithTenant espera thenables perezosos DENTRO del contexto', async () => {
+  const visto = await runWithTenant({ conjuntoId: 'cLazy', role: 'OPERATOR' }, () =>
+    thenablePerezoso()
+  );
+  assert.ok(visto, 'el thenable debió ver un contexto activo, no undefined');
+  assert.equal(visto.scope, SCOPE.TENANT);
+  assert.equal(visto.conjuntoId, 'cLazy');
+});
