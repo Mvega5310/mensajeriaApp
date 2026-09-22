@@ -125,29 +125,33 @@
 
 ## Fase C — Registro y login con conjunto
 
-- [ ] **C1. Código de invitación por conjunto.**
-  - Generación en backend de `codigoInvitacion` opaco/no adivinable (`crypto.randomBytes`, base32/62);
-    persistir en `Conjunto`. Soporte de revocación/regeneración (`invitacionActiva`) sin afectar a
-    residentes ya registrados.
+- [x] **C1. Código de invitación por conjunto.** _(commit `4ca914d`, en la revisión de Fase B)_
+  - `services/invitacion.service.js` → `generarCodigoInvitacion()` opaco (`crypto.randomBytes`, base32
+    sin ambiguos, prefijo por slug); persistido en `Conjunto`. `invitacionActiva` permite revocar sin
+    afectar a residentes ya registrados. Lo usan el seed y `register` (valida por `codigoInvitacion`).
   - _Requisitos:_ R3.1, R3.7 · _Diseño:_ §3.1, §3.2
 
-- [ ] **C2. `register()` en `auth.controller.js`.**
-  - Extraer y validar `codigoInvitacion`; resolver `Conjunto` (exento estructuralmente, no necesita
-    contexto). Casos: ausente → `400`; inexistente/malformado → `400`; `invitacionActiva=false` → `410`;
-    válido → crear `User` **dentro** de `run({ scope: 'TENANT', conjuntoId: conjunto.id, role: 'RESIDENT' }, ...)`,
-    **sin** pasar `conjuntoId` en `data`.
-  - _Requisitos:_ R3.1–R3.5 · _Diseño:_ §3.4, §6.6
+- [x] **C2. `register()` en `auth.controller.js`.** _(commit `a79d3e8`)_
+  - Valida `codigoInvitacion` (Conjunto exento) + `invitacionActiva`; ausente/inexistente/inactivo →
+    `400` y no crea; email existente → `409` (incl. carrera P2002); crea el `User` dentro de
+    `runWithTenant({ conjuntoId, role: 'RESIDENT' })` **sin** `conjuntoId` en `data`; conserva
+    normalización torre/apto y validaciones existentes.
+  - _Nota:_ el diseño mencionaba `410` para inactivo; se unificó en `400` ("inválido o vencido") para no
+    distinguir estados de invitación ante el cliente. _Requisitos:_ R3.1–R3.5 · _Diseño:_ §3.4, §6.6
 
-- [ ] **C3. `login()` en `auth.controller.js`.**
-  - Usar `buscarUsuarioPorEmailSinTenant()` (B5) para resolver el usuario; verificar contraseña; emitir
-    JWT con `conjuntoId` del usuario. No abrir `GLOBAL_LOOKUP` directamente.
-  - _Requisitos:_ R3.6 · _Diseño:_ §2.3.1, §6.6
+- [x] **C3. `login()` en `auth.controller.js`.** _(commit `9d9c49b`)_
+  - Usa `buscarUsuarioPorEmailSinTenant()`; verifica contraseña; emite JWT (sin claim de conjunto). No
+    abre `GLOBAL_LOOKUP` directamente. _Requisitos:_ R3.6 · _Diseño:_ §2.3.1, §6.6
 
-- [ ] **C4. JWT SIN claim de conjunto.**
-  - El payload del JWT (login y registro) lleva `sub` y `role`, **NO** `conjuntoId`. El conjunto activo se
-    resuelve siempre por `sub` contra la BD en el middleware (B4), de modo que `User.conjuntoId` es la
-    única fuente de verdad y no puede divergir de un claim obsoleto.
-  - _Requisitos:_ R3.6 · _Diseño:_ §3.6
+- [x] **C4. JWT SIN claim de conjunto.** _(cubierto por C3; sin cambios respecto a B)_
+  - El payload lleva `sub` y `role`, **no** `conjuntoId`; el conjunto se resuelve por `sub` en el
+    middleware. _Requisitos:_ R3.6 · _Diseño:_ §3.6
+
+- [x] **C-guard. Montar `requireTenant` en rutas autenticadas + prueba estructural.** _(commit `01a3315`; revisión C pt 2)_
+  - `requireTenant` tras `requireAuth` en packages/bonos/comments (`router.use`) y en `/me`. Prueba
+    `routes/__tests__/tenantGuard.routes.test.js` recorre cada router y falla si una ruta con
+    `requireAuth` no lleva `requireTenant` después; rutas pre-tenant de auth como excepción explícita.
+  - _Requisitos:_ R1.3, R1.5
 
 - [ ] **C5. Frontend — flujo de registro por enlace/QR.**
   - Leer `?c=<codigoInvitacion>` de la URL, enviarlo a `register`; mostrar estado de error si falta/es
