@@ -141,24 +141,27 @@ test('register con código válido crea el usuario en el conjunto correcto', { s
   });
 });
 
-test('register sin código no crea nada (400)', { skip: omitir && razonSkip }, async () => {
+test('register sin código no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {
   const res = resFake();
   await register(reqRegistro({ email: 'nocode@itestc.local' }), res);
   assert.equal(res.statusCode, 400);
+  assert.equal(res.body.code, 'INVITACION_INVALIDA');
 });
 
-test('register con código inexistente no crea nada (400)', { skip: omitir && razonSkip }, async () => {
+test('register con código inexistente no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {
   const res = resFake();
   await register(reqRegistro({ email: 'badcode@itestc.local', codigoInvitacion: 'NO-EXISTE' }), res);
   assert.equal(res.statusCode, 400);
+  assert.equal(res.body.code, 'INVITACION_INVALIDA');
 });
 
-test('register con código de conjunto inactivo no crea nada (400)', { skip: omitir && razonSkip }, async () => {
+test('register con código de conjunto inactivo no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {
   const inactivo = await crearConjunto('itestc-inact', 'itestc-cod-INACT', { activa: false });
   try {
     const res = resFake();
     await register(reqRegistro({ email: 'inact@itestc.local', codigoInvitacion: 'itestc-cod-INACT' }), res);
     assert.equal(res.statusCode, 400);
+    assert.equal(res.body.code, 'INVITACION_INVALIDA');
   } finally {
     await prisma.conjunto.deleteMany({ where: { id: inactivo.id } });
   }

@@ -56,15 +56,17 @@ export async function register(req, res) {
   // partir del código de invitación, no lo asume.
   // 1) Validar el código. Conjunto es un modelo SIN tenant, así que esta
   //    lectura está exenta del filtro y no requiere contexto.
+  // El campo `code` estable permite que el frontend detecte este caso sin
+  // depender del texto del mensaje (revisión C5).
   if (!codigoInvitacion) {
-    return res.status(400).json({ error: 'Se requiere un enlace de invitación válido' });
+    return res.status(400).json({ error: 'Se requiere un enlace de invitación válido', code: 'INVITACION_INVALIDA' });
   }
   // Normaliza caja y espacios para que un código tecleado a mano coincida con
   // la forma canónica persistida (revisión C5).
   const codigoNormalizado = normalizarCodigoInvitacion(codigoInvitacion);
   const conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion: codigoNormalizado } });
   if (!conjunto || !conjunto.invitacionActiva) {
-    return res.status(400).json({ error: 'Enlace de invitación inválido o vencido' });
+    return res.status(400).json({ error: 'Enlace de invitación inválido o vencido', code: 'INVITACION_INVALIDA' });
   }
 
   // 2) ¿Correo ya registrado? email es @unique GLOBAL; el lookup sin sesión

@@ -19,7 +19,13 @@ export async function api(path, { method = 'GET', body } = {}) {
     localStorage.removeItem('token');
     if (location.pathname !== '/login') location.href = '/login';
   }
-  if (!res.ok) throw new Error(data.error || 'Error de red');
+  if (!res.ok) {
+    const err = new Error(data.error || 'Error de red');
+    // Conserva el código estable de la respuesta (ej. 'INVITACION_INVALIDA')
+    // para que la UI no dependa del texto del mensaje. Sin efecto si no viene.
+    if (data.code) err.code = data.code;
+    throw err;
+  }
   return data;
 }
 

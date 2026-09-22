@@ -34,11 +34,6 @@ export default function Register() {
     setFields((f) => ({ ...f, [key]: value }));
   }
 
-  // El backend responde estos mensajes cuando el código falta/es inválido.
-  function esErrorDeCodigo(msg) {
-    return /invitaci[óo]n/i.test(msg || '');
-  }
-
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -51,9 +46,10 @@ export default function Register() {
       setTimeout(() => navigate('/login', { replace: true }), 1200);
     } catch (err) {
       setError(err.message);
-      // Si falló por el código y venía de la URL, mostramos el campo precargado
-      // con ese valor para que el residente lo corrija sin perder lo demás.
-      if (esErrorDeCodigo(err.message) && !mostrarCampoCodigo) {
+      // Detección por código estable (no por texto): si falló por el código y
+      // venía de la URL, mostramos el campo precargado con ese valor para que el
+      // residente lo corrija sin perder lo demás.
+      if (err.code === 'INVITACION_INVALIDA' && !mostrarCampoCodigo) {
         setCodigoManual(codigoDeUrl);
         setMostrarCampoCodigo(true);
       }
