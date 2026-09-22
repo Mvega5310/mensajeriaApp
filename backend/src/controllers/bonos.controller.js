@@ -1,13 +1,16 @@
 import { prisma } from '../config/db.js';
 import { esCategoriaValida } from '../services/tariff.service.js';
-import { BONOS_HABILITADOS } from '../config/features.js';
+import { conjuntoDelContexto } from '../services/conjunto.service.js';
 
 // Operador: registra que un residente pagó por adelantado un lote de
 // entregas en una categoría de peso — monto y cantidad libres, el
 // operador decide el descuento caso a caso (no hay tarifas fijas aquí,
 // a diferencia de costoPara()).
 export async function create(req, res) {
-  if (!BONOS_HABILITADOS) {
+  // Gate de bonos por conjunto: única fuente Conjunto.bonosHabilitados (del
+  // contexto de tenant), false por defecto.
+  const conjunto = await conjuntoDelContexto();
+  if (!conjunto.bonosHabilitados) {
     return res.status(403).json({ error: 'Los bonos prepago están deshabilitados por ahora' });
   }
 

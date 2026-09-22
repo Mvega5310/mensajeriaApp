@@ -4,7 +4,7 @@ import { costoPara } from '../services/tariff.service.js';
 import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
 } from '../services/email.service.js';
-import { BONOS_HABILITADOS } from '../config/features.js';
+import { conjuntoDelContexto } from '../services/conjunto.service.js';
 import { claveApartamento } from '../services/apartamento.service.js';
 
 // La cortesía de primera entrega es por apartamento físico, no por
@@ -199,7 +199,8 @@ export async function checkin(req, res) {
   // activo en esta misma categoría de peso (el más antiguo primero) — un
   // bono de otra categoría no aplica aquí (ver Bono en schema.prisma).
   let bono = null;
-  if (!esPrimeraEntrega && BONOS_HABILITADOS) {
+  const { bonosHabilitados } = await conjuntoDelContexto();
+  if (!esPrimeraEntrega && bonosHabilitados) {
     const bonos = await prisma.bono.findMany({
       where: { residenteId: actual.residenteId, categoriaPeso },
       orderBy: { createdAt: 'asc' },

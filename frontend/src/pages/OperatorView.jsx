@@ -5,7 +5,7 @@ import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
 import { parseFotos } from '../utils/fotos.js';
-import { BONOS_HABILITADOS } from '../utils/features.js';
+import { getConjuntoConfig } from '../services/conjunto.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import Pagination from '../components/Pagination.jsx';
 import PhotoGallery from '../components/PhotoGallery.jsx';
@@ -55,6 +55,10 @@ export default function OperatorView() {
   const [packages, setPackages] = useState([]);
   const [tab, setTab] = useState('reception');
   const [error, setError] = useState('');
+  // Config del propio conjunto (fuente única: /conjunto/config). Incluye
+  // bonosHabilitados, tarifas, nombre y (operador) codigoInvitacion.
+  const [config, setConfig] = useState(null);
+  const bonosHabilitados = !!config?.bonosHabilitados;
 
   const [checkinPkg, setCheckinPkg] = useState(null);
   const [tier, setTier] = useState('ESTANDAR');
@@ -107,6 +111,7 @@ export default function OperatorView() {
   useEffect(() => {
     refresh().catch((err) => setError(err.message));
     refreshComentarios().catch((err) => setError(err.message));
+    getConjuntoConfig().then(setConfig).catch(() => {});
   }, []);
 
   // Si venías desplazado hacia abajo viendo una lista larga y la
@@ -232,7 +237,7 @@ export default function OperatorView() {
     setPhotos(parseFotos(pkg.fotoUrl));
     setCheckinError('');
     setCheckinBonos([]);
-    if (BONOS_HABILITADOS) {
+    if (bonosHabilitados) {
       api(`/bonos/residente/${pkg.residenteId}`).then(setCheckinBonos).catch(() => {});
     }
   }
@@ -388,7 +393,7 @@ export default function OperatorView() {
                   href={`https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}`}
                   target="_blank" rel="noreferrer">💬 WhatsApp</a>
               </div>
-              {BONOS_HABILITADOS && (
+              {bonosHabilitados && (
                 <button className="btn btn-secondary" style={{ marginTop: 8 }}
                   onClick={(e) => { e.stopPropagation(); openBonoModal(pkg); }}>🎟️ Bono</button>
               )}

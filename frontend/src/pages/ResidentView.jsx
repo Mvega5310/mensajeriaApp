@@ -4,7 +4,7 @@ import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS } from '../utils/tiers.js';
 import { TIME_SLOTS, PAYMENT_METHODS } from '../utils/schedule.js';
-import { BONOS_HABILITADOS } from '../utils/features.js';
+import { getConjuntoConfig } from '../services/conjunto.js';
 import { paginar } from '../utils/pagination.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import PhotoGallery from '../components/PhotoGallery.jsx';
@@ -37,6 +37,8 @@ export default function ResidentView() {
   const [enviandoComentario, setEnviandoComentario] = useState(false);
 
   const [bonos, setBonos] = useState([]);
+  // Fuente única: /conjunto/config. false hasta que cargue.
+  const [bonosHabilitados, setBonosHabilitados] = useState(false);
 
   const [detailPkg, setDetailPkg] = useState(null);
   const [detailFotoLoading, setDetailFotoLoading] = useState(false);
@@ -84,12 +86,23 @@ export default function ResidentView() {
     setComentarios(await api('/comments/mine'));
   }
 
+  // Config del conjunto (fuente única de bonosHabilitados). Se carga una vez.
+  useEffect(() => {
+    getConjuntoConfig()
+      .then((cfg) => setBonosHabilitados(!!cfg.bonosHabilitados))
+      .catch(() => {});
+  }, []);
+
+  // Carga los bonos solo si el conjunto los tiene habilitados.
+  useEffect(() => {
+    if (bonosHabilitados) {
+      api('/bonos/mine').then(setBonos).catch(() => {});
+    }
+  }, [bonosHabilitados]);
+
   useEffect(() => {
     refresh().catch((err) => setError(err.message));
     refreshComentarios().catch((err) => setError(err.message));
-    if (BONOS_HABILITADOS) {
-      api('/bonos/mine').then(setBonos).catch(() => {});
-    }
 
     // El estado (ej. "Entregado") lo cambia el operador desde su propio
     // celular — sin esto, el residente solo lo vería al recargar la
@@ -283,7 +296,7 @@ export default function ResidentView() {
         </form>
       )}
 
-      {tab === 'list' && BONOS_HABILITADOS && bonos.some((b) => b.cantidadUsada < b.cantidadTotal) && (
+      {tab === 'list' && bonosHabilitados && bonos.some((b) => b.cantidadUsada < b.cantidadTotal) && (
         <div className="card" style={{ marginBottom: 14 }}>
           <p className="card-sub" style={{ marginBottom: 8 }}>🎟️ Tus entregas prepagas</p>
           {bonos.filter((b) => b.cantidadUsada < b.cantidadTotal).map((b) => (
