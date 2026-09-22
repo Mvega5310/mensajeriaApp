@@ -338,10 +338,26 @@
 
 ## Fase G — Documentación
 
-- [ ] **G1. Actualizar `README.md`/`DEPLOY.md`.**
-  - Documentar: modelo `Conjunto`, mecanismo de aislamiento (middleware + extensión + `scope`),
-    invariante de `GLOBAL_LOOKUP` / `buscarUsuarioPorEmailSinTenant()`, código de invitación, config por
-    conjunto, y procedimiento de migración por túnel SSH de Railway.
+- [x] **G1. `CLAUDE.md` actualizado.** _(commit `e306f4a`)_
+  - Corrige lo desactualizado (BONOS_HABILITADOS eliminado; tarifas del conjunto; app no exclusiva de
+    Ipanema). Nueva sección "Reglas del multi-conjunto (no negociables)": 9 invariantes con porqué +
+    prueba que la verifica. Regla de proceso: cambios a extensión/contexto/flujos sin sesión exigen
+    integración contra Postgres real.
+
+- [x] **G2. `README.md` actualizado.** _(commits `515258e`, `f0483f1`)_
+  - Flujo local con Postgres en Docker (`migrate deploy` + seed), seed de uno o dos conjuntos, `npm test`
+    y tabla de qué cubre cada archivo de pruebas. Título/intro multi-conjunto con nota de estado.
+
+- [x] **G3. `DEPLOY.md` actualizado.** _(commit `1f11f61`)_
+  - Orden obligatorio del corte (backfill verificado → fase *contract* → despliegue del código con
+    aislamiento); FK a `Conjunto` de `ON DELETE SET NULL` → `RESTRICT` en *contract*. Procedimientos
+    operativos: alta de conjunto (script en Fase F; seed no en producción), desactivar código
+    (`invitacionActiva=false`), rotar código filtrado (QR impresos dejan de funcionar).
+
+- [x] **G4. Estado no-desplegado explícito.** _(en los tres documentos)_
+  - CLAUDE/README/DEPLOY dejan claro que el multi-conjunto está implementado y validado en la rama, **no**
+    en producción hasta la Fase F.
+
   - _Diseño:_ §8, §8.1
 
 ---
