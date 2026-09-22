@@ -24,48 +24,56 @@ puertaya-ipanema/
 
 ## Arrancar en desarrollo
 
-El backend soporta dos motores: **SQLite** (cero setup, recomendado para
-desarrollo local) y **PostgreSQL** (el que usa producción). El campo
-`provider` en `backend/prisma/schema.prisma` decide cuál — el que queda
-comiteado siempre es `"postgresql"`, así que para desarrollo local se
-cambia temporalmente y se revierte antes de comitear.
+El backend usa **PostgreSQL** (el mismo motor de producción). SQLite ya no sirve
+para desarrollo desde KAN-8: la lógica de aislamiento por conjunto usa consultas
+propias de Postgres (p. ej. el bootstrap del tenant con `$queryRaw` e
+identificadores entre comillas dobles), así que para ejercer el multi-conjunto
+hay que desarrollar y probar contra Postgres. Lo más cómodo es una **instancia
+temporal en Docker** (abajo). El `provider` comiteado en
+`backend/prisma/schema.prisma` es siempre `"postgresql"`.
 
-**Backend (con SQLite local)**
+**Postgres local desechable (Docker)**
+```
+docker run --rm -d --name puertaya-pg -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=puertaya -p 5433:5432 postgres:16
+# en backend/.env:  DATABASE_URL="postgresql://postgres:postgres@localhost:5433/puertaya"
+```
+
+**Backend**
 ```
 cd backend
-cp .env.example .env
-```
-En `.env`, cambia `DATABASE_URL="file:./dev.db"` y en
-`prisma/schema.prisma` pon `provider = "sqlite"` temporalmente.
-```
+cp .env.example .env    # ajusta DATABASE_URL al Postgres local de arriba
 npm install
-npx prisma migrate dev --name init   # crea prisma/dev.db y aplica el esquema
-npm run seed                          # crea el Conjunto local + la cuenta de operador
-npm run dev                           # http://localhost:4000
+npx prisma migrate deploy   # aplica las migraciones (incluye el multi-conjunto)
+npm run seed                # crea un Conjunto local + su operador (idempotente)
+npm run dev                 # http://localhost:4000
 ```
-Antes de comitear, vuelve a poner `provider = "postgresql"` en el schema
-(los `.db`/migraciones de SQLite están en `.gitignore`, nunca se suben).
 
-> **Nota (multi-conjunto, KAN-8):** con el aislamiento por conjunto activo,
-> `npm run seed` ahora, de forma **idempotente** (se puede correr varias veces
-> sin duplicar):
-> 1. busca o crea un `Conjunto` local (slug tomado de `SEED_CONJUNTO_SLUG`,
->    por defecto `local`) y genera su `codigoInvitacion`;
+> **Seed multi-conjunto (KAN-8).** `npm run seed` es **idempotente** (se puede
+> correr varias veces sin duplicar):
+> 1. busca o crea un `Conjunto` local (slug de `SEED_CONJUNTO_SLUG`, por defecto
+>    `local`) y genera su `codigoInvitacion`;
 > 2. **imprime en consola el código de invitación y el enlace de registro**
->    (`FRONTEND_URL/registro?c=<código>`) — úsalo para registrar residentes de
->    prueba;
+>    (`FRONTEND_URL/registro?c=<código>`) — úsalo para registrar residentes;
 > 3. crea la cuenta de operador (`OPERATOR_*` del `.env`) **dentro** de ese
 >    conjunto.
 >
-> Variables opcionales del seed en `.env`: `SEED_CONJUNTO_SLUG`,
-> `SEED_CONJUNTO_NOMBRE`, `SEED_OPERADOR_WHATSAPP`, `SEED_OPERADOR_DOMICILIO`,
-> `SEED_PUNTO_RECEPCION`.
+> **Dos conjuntos para probar el aislamiento.** Corre el seed dos veces con
+> variables distintas para tener Alfa y Beta y comprobar que no se cruzan:
+> ```
+> SEED_CONJUNTO_SLUG=alfa SEED_CONJUNTO_NOMBRE="Conjunto Alfa" \
+>   OPERATOR_EMAIL=opalfa@local OPERATOR_PASSWORD=Password1 npm run seed
+> SEED_CONJUNTO_SLUG=beta SEED_CONJUNTO_NOMBRE="Conjunto Beta" \
+>   OPERATOR_EMAIL=opbeta@local OPERATOR_PASSWORD=Password1 npm run seed
+> ```
+> Variables opcionales: `SEED_CONJUNTO_SLUG`, `SEED_CONJUNTO_NOMBRE`,
+> `SEED_OPERADOR_WHATSAPP`, `SEED_OPERADOR_DOMICILIO`, `SEED_PUNTO_RECEPCION`.
 >
 > El seed usa el aislamiento real: resuelve el operador con
 > `buscarUsuarioPorEmailSinTenant()` y lo crea dentro de
 > `runWithTenant({ conjuntoId, role: 'OPERATOR' })`, sin pasar `conjuntoId` en
-> `data`. Como la lógica de tenant usa consultas propias de PostgreSQL, para
-> ejercer el aislamiento conviene desarrollar contra Postgres (no SQLite).
+> `data`. **No usar el seed en producción** (el alta real de un conjunto es un
+> procedimiento operativo — ver DEPLOY.md).
 
 **Frontend**
 ```
@@ -80,24 +88,37 @@ cd backend
 npm test                 # runner integrado de Node (node --test); NO usar
                          # 'node --test <carpeta>': no funciona en Windows.
 ```
-Las pruebas unitarias (contexto y extensión de tenant) corren sin base de datos.
-La prueba de integración de aislamiento (`tenantIsolation.integration.test.js`)
-**crea y borra datos**, así que solo se ejecuta si `DATABASE_URL` apunta a
-`localhost`/`127.0.0.1` (si no, se omite con un mensaje). Para correrla con un
-Postgres desechable:
-```
-docker run --rm -d --name kan8-pg -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=kan8_test -p 5433:5432 postgres:16
-export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/kan8_test"
-npx prisma migrate deploy
-npm test
-docker rm -f kan8-pg
-```
+Las pruebas **unitarias/estáticas** corren sin base de datos. Las de
+**integración** (`*.integration.test.js`) **crean y borran datos**, así que solo
+se ejecutan si `DATABASE_URL` apunta a `localhost`/`127.0.0.1`/`::1` (si no, se
+omiten con un mensaje). Con el Postgres local de Docker (arriba) más
+`npx prisma migrate deploy`, `npm test` las incluye.
+
+Qué cubre cada archivo (en `backend/src/**/__tests__/`):
+
+| Archivo | Tipo | Qué verifica |
+|---|---|---|
+| `tenantContext.test.js` | unitaria | contexto `AsyncLocalStorage`, `runWithTenant`, y la regresión del thenable perezoso (el `await` dentro de `run()`). |
+| `tenantExtension.helpers.test.js` | unitaria¹ | helpers de la extensión: filtro `AND`, `where` único plano, `conjuntoId` nunca desde `data`. |
+| `tenantExtension.interceptor.test.js` | unitaria¹ | lógica del interceptor por operación (lecturas/escrituras/creación/upsert, falla-cerrado, `GLOBAL_LOOKUP`). |
+| `invitacion.service.test.js` | unitaria | generación y normalización del código de invitación. |
+| `frontendSinFijos.test.js` | estática | falla si aparece "Ipanema" o montos de tarifa fijos en `frontend/src`. |
+| `auditoriaInvariantes.test.js` | estática | un solo `PrismaClient`; `GLOBAL_LOOKUP` y consultas crudas solo en su función. |
+| `tenantGuard.routes.test.js` | estructural¹ | recorre el app real: toda ruta autenticada lleva `requireAuth`+`requireTenant`; rutas públicas declaradas. |
+| `tenantIsolation.integration.test.js` | integración | aislamiento CRUD entre dos conjuntos (findUnique/update/findMany, falla-cerrado). |
+| `registroLogin.integration.test.js` | integración | registro por código, login en dos conjuntos, 409 email cross-conjunto. |
+| `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
+| `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
+| `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
+
+¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
+`npm install`, que lo dispara) aunque no toquen la base de datos.
 
 Flujo: el operador inicia sesión con la cuenta creada por `npm run seed`.
-Los residentes se crean ellos mismos en `/registro` (ese formulario nunca
-puede crear una cuenta de operador — el rol lo fuerza el backend), exclusivo
-para residentes de Conjunto Ipanema.
+Los residentes se crean ellos mismos en `/registro?c=<código>` con el código de
+invitación de su conjunto (ese formulario nunca puede crear una cuenta de
+operador — el rol lo fuerza el backend). Cada residente queda asociado al
+conjunto de su código; los conjuntos están aislados entre sí.
 
 ## Funcionalidades
 
