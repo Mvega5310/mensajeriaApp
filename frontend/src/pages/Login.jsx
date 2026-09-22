@@ -27,7 +27,7 @@ export default function Login() {
   return (
     <div className="auth-shell">
       <div className="auth-card">
-        <p className="sub" style={{ marginTop: 0 }}>Ingresa a tu cuenta de residente u operador de Conjunto Ipanema.</p>
+        <p className="sub" style={{ marginTop: 0 }}>Ingresa a tu cuenta de residente u operador de Puertaya.</p>
 
         <form onSubmit={handleSubmit}>
           <div className="field">

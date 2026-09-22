@@ -9,6 +9,7 @@ import ResidentView from './pages/ResidentView.jsx';
 import OperatorView from './pages/OperatorView.jsx';
 import { getRole, isAuthenticated, logout } from './services/auth.js';
 import { api } from './services/api.js';
+import { getConjuntoConfig } from './services/conjunto.js';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import useTheme from './hooks/useTheme.js';
 import Logo from './puertaya-brand/Logo.jsx';
@@ -33,12 +34,15 @@ function PublicPage({ children }) {
 
 function Home() {
   const [me, setMe] = useState(null);
+  const [conjuntoNombre, setConjuntoNombre] = useState('');
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
   const [theme, setTheme] = useTheme();
   const role = getRole();
 
   useEffect(() => {
     api('/auth/me').then(setMe).catch(() => {});
+    // Nombre del conjunto para la barra superior (con sesión). Fuente: config.
+    getConjuntoConfig().then((cfg) => setConjuntoNombre(cfg.nombre || '')).catch(() => {});
   }, []);
 
   return (
@@ -47,7 +51,7 @@ function Home() {
         <div className="topbar-brand">
           <Logo variant="icono" size={30} mode={theme} />
           <div>
-            <strong>Puertaya Ipanema</strong>
+            <strong>Puertaya{conjuntoNombre ? ` · ${conjuntoNombre}` : ''}</strong>
             {me && <span className="topbar-user"> — {me.nombre} ({role === 'OPERATOR' ? 'Operador' : 'Residente'})</span>}
           </div>
         </div>

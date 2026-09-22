@@ -797,7 +797,7 @@ export default function OperatorView() {
                   Si quieres, envíale un agradecimiento por WhatsApp:
                 </p>
                 <a className="btn btn-whatsapp" style={{ marginTop: 14 }}
-                  href={`https://wa.me/57${pinPkg.residente.telefono}?text=${encodeURIComponent(`¡Hola ${pinPkg.residente.nombre}! Tu paquete de ${pinPkg.proveedor} ya fue entregado. ¡Gracias por confiar en Puertaya Ipanema! 🙌`)}`}
+                  href={`https://wa.me/57${pinPkg.residente.telefono}?text=${encodeURIComponent(`¡Hola ${pinPkg.residente.nombre}! Tu paquete de ${pinPkg.proveedor} ya fue entregado. ¡Gracias por confiar en ${config?.nombre || 'Puertaya'}! 🙌`)}`}
                   target="_blank" rel="noreferrer">💬 Enviar agradecimiento por WhatsApp</a>
                 <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={closePinModal}>Cerrar</button>
               </>
