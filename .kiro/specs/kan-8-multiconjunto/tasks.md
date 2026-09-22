@@ -158,9 +158,15 @@
     muestra el campo "Código de invitación" (trim, acepta mayús/minús) con nota de que lo entrega el
     operador — esto cubre los flyers KAN-3 sin `?c=`. Ante error, muestra el mensaje y conserva el resto
     del formulario. Sin código/conjunto por defecto (ni env ni fijo).
+  - **Normalización del código (rev C5 pt1, commit `331480b`):** `normalizarCodigoInvitacion()` en
+    `invitacion.service.js` (quita espacios; minúsculas antes del último guion, mayúsculas después; sin
+    guion → todo mayúsculas). `register()` la aplica antes de buscar el `Conjunto`. Confirmado que
+    `generarCodigoInvitacion()` ya produce esa forma canónica. 8/8 pruebas unitarias (autónomas) pasan.
+  - **Corregir `?c=` inválido (rev C5 pt2, commit `fca51ec`):** si un `?c=` de la URL falla, se muestra el
+    campo precargado con ese valor para corregirlo, conservando el resto del formulario.
   - ⚠️ **Verificación en navegador PENDIENTE (local):** los 3 caminos (con `?c=` válido / sin código a
-    mano / código inválido). No ejecutable en el sandbox (sin navegador; `npm install` del frontend se
-    cuelga por la red). Patrón idéntico a `ResetPassword.jsx` (ya en producción).
+    mano / código inválido) + el de corrección de `?c=` inválido. No ejecutable en el sandbox (sin
+    navegador; `npm install` del frontend se cuelga por la red). Patrón idéntico a `ResetPassword.jsx`.
   - _Requisitos:_ R3.2, R3.3, R3.4 · _Diseño:_ §3.3, §6.8
 
 - [x] **C-http. Prueba HTTP de extremo a extremo + separación de `app.js`.** _(commit anterior; rev C pt 2)_
