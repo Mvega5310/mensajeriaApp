@@ -1,4 +1,4 @@
-# Desplegar Puertaya Ipanema — Railway (backend + Postgres) + Vercel (frontend) + Resend (correo)
+# Desplegar Puertaya — Railway (backend + Postgres) + Vercel (frontend) + Resend (correo)
 
 ## Estado actual del despliegue
 
@@ -98,7 +98,70 @@ railway ssh keys add
    node prisma/seed.js
    ```
    (con `DATABASE_URL` apuntando al túnel y `OPERATOR_*` en el entorno o en `.env`).
+   > **Tras el corte multi-conjunto (KAN-8), esto cambia:** `prisma/seed.js` deja
+   > de usarse en producción. El alta de un conjunto y su operador pasa a ser el
+   > procedimiento operativo por conjunto (ver "Procedimientos operativos por
+   > conjunto" más abajo; el script de alta se construye en la Fase F).
 7. **Settings → Networking → Generate Domain** para obtener la URL pública del backend.
+
+### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
+
+> **Estado:** el multi-conjunto está implementado y validado en la rama
+> `feature/kan-8-multiconjunto`, **NO desplegado**. Esta sección fija el ORDEN del
+> corte; la ejecución paso a paso (la Fase F) se planea y detalla aparte, y se
+> revisa antes de tocar producción. **No ejecutar nada de esto todavía.**
+
+El esquema ya trae `conjuntoId` **nullable** en `User`/`Package`/`Bono`/
+`Comentario` (fase *expand*, migración `add_conjunto_multitenant`). El corte
+completa la transición en este orden **estricto** — cada paso no empieza hasta
+que el anterior está verificado:
+
+1. **Backfill verificado.** Crear el `Conjunto` "Ipanema" con su config
+   (tarifas actuales, WhatsApp/domicilio, `bonosHabilitados=false`) y su
+   `codigoInvitacion`; asignar ese `conjuntoId` a **todos** los `User`, `Package`,
+   `Bono`, `Comentario` existentes. Verificar que `COUNT(*) WHERE conjuntoId IS
+   NULL = 0` en las cuatro tablas antes de continuar. (Fase F.)
+2. **Fase *contract*.** Solo con el backfill verificado: volver `conjuntoId`
+   **`NOT NULL`** en las cuatro tablas, y cambiar las claves foráneas a `Conjunto`
+   de **`ON DELETE SET NULL` a `ON DELETE RESTRICT`**. El motivo es que un
+   `SET NULL` permitiría que borrar un conjunto dejara usuarios/paquetes sin
+   conjunto (huérfanos) — justo lo que el aislamiento no debe permitir jamás;
+   `RESTRICT` hace que no se pueda borrar un conjunto con datos.
+   > La migración *expand* actual usa `ON DELETE SET NULL` **a propósito**,
+   > porque durante el backfill la columna es nullable. El cambio a `RESTRICT` es
+   > parte de *contract*, no antes.
+3. **Despliegue del código con aislamiento.** Recién ahora se despliega el código
+   que activa la extensión de tenant + `requireTenant` (Fases B–E). Desplegarlo
+   antes del backfill rompería a los usuarios legítimos (la extensión falla
+   cerrado ante `conjuntoId` nulo).
+
+La activación del aislamiento es **orden de despliegue, no un flag**: no hay
+interruptor de runtime que lo prenda/apague (evita el "olvido silencioso").
+
+### Procedimientos operativos por conjunto
+
+> El multi-conjunto aún no está en producción; estos procedimientos aplican una
+> vez ejecutado el corte anterior.
+
+**Alta de un conjunto nuevo.** *(Pendiente: el script de alta se construye en la
+Fase F.)* Dará de alta el `Conjunto` (identidad, tarifas, contacto del operador,
+`bonosHabilitados=false`), generará su `codigoInvitacion` y creará su cuenta de
+operador dentro del contexto de ese conjunto. **`prisma/seed.js` NO se usa en
+producción** — es solo para desarrollo local; el alta real es un procedimiento
+operativo aparte (Fase F).
+
+**Desactivar un código de invitación.** Para cerrar temporalmente el registro de
+un conjunto, poner `invitacionActiva = false` en su fila de `Conjunto` (por el
+túnel SSH, `UPDATE "Conjunto" SET "invitacionActiva" = false WHERE "slug" =
+'<slug>';`). Los residentes ya registrados **no** se ven afectados (su
+`conjuntoId` ya está fijado); solo se bloquean registros nuevos con ese código.
+
+**Rotar un código de invitación filtrado.** Generar un `codigoInvitacion` nuevo
+para el conjunto y actualizarlo en su fila. **Advertencia:** los QR y enlaces
+impresos con el código anterior **dejan de funcionar** — hay que reimprimir la
+cartelera/flyers con el enlace nuevo (`/registro?c=<código nuevo>`). Los
+residentes ya registrados no se ven afectados. Regenerar el código no borra
+histórico ni cambia a quién pertenecen los datos.
 
 ## 2. Correo transaccional: Resend + dominio propio
 
@@ -167,4 +230,7 @@ Si algo no conecta, lo primero a revisar es `CORS_ORIGIN` en Railway y
 - WhatsApp automático (Twilio u otro proveedor) — decisión consciente de
   dejarlo fuera por el costo; el botón manual de WhatsApp sigue funcionando.
 - Mover fotos de custodia a almacenamiento de objetos en vez de base64 en Postgres.
-- Soporte multi-conjunto (hoy todo asume un solo conjunto: Ipanema).
+- Soporte multi-conjunto: **implementado y validado** en la rama
+  `feature/kan-8-multiconjunto` (KAN-8). Pendiente en producción: ejecutar el
+  corte (backfill + fase *contract* + despliegue del código con aislamiento) —
+  ver "Corte a producción del multi-conjunto" arriba.
