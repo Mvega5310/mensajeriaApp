@@ -1,23 +1,63 @@
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { isAuthenticated } from '../services/auth.js';
+import { getConjuntoConfig, getConfigPublica } from '../services/conjunto.js';
 
+// Términos según el contexto (KAN-8, Fase D — design.md §4.3.1):
+// - con ?c=<codigo> (sin sesión): datos del operador desde config-publica;
+// - con sesión: desde /conjunto/config;
+// - sin ninguno: versión genérica, sin datos de operador, con una nota.
+// No se inventa texto legal nuevo más allá de esa nota.
 export default function Terms() {
+  const [searchParams] = useSearchParams();
+  const codigo = (searchParams.get('c') || '').trim();
+
+  // Datos del operador/conjunto (null = aún sin resolver / genérico).
+  const [op, setOp] = useState(null);
+
+  useEffect(() => {
+    if (isAuthenticated()) {
+      getConjuntoConfig().then(setOp).catch(() => setOp(null));
+    } else if (codigo) {
+      getConfigPublica(codigo).then(setOp).catch(() => setOp(null));
+    }
+  }, [codigo]);
+
+  const hayOperador = !!op;
+  const nombreConjunto = op?.nombre || null;
+  const opNombre = op?.operadorNombre || null;
+  const opDomicilio = op?.operadorDomicilio || null;
+  const opWhatsapp = op?.operadorWhatsapp || null;
+
+  // Marca para encabezado: nombre del conjunto si hay, si no la marca neutra.
+  const marca = nombreConjunto ? `Puertaya · ${nombreConjunto}` : 'Puertaya';
+
   return (
     <div className="legal-shell">
-      <Link to="/registro" className="legal-back">← Volver al registro</Link>
+      <Link to={codigo ? `/registro?c=${encodeURIComponent(codigo)}` : '/registro'} className="legal-back">← Volver al registro</Link>
       <h1>Términos y Condiciones y Aviso de Tratamiento de Datos Personales</h1>
-      <p className="updated">Última actualización: agosto de 2026 · Puertaya Ipanema</p>
+      <p className="updated">Última actualización: agosto de 2026 · {marca}</p>
 
-    { /* <div className="callout">
-        Este documento es un borrador de referencia, no una asesoría legal completa.
-        Antes de operar con vecinos reales y dinero de terceros, se recomienda que un
-        abogado lo revise y lo ajuste a la identidad legal y las condiciones reales del operador.
-      </div>*/}
+      {!hayOperador && (
+        <div className="callout">
+          Los datos del responsable del servicio (operador, domicilio y contacto) se muestran al abrir
+          estos Términos desde el enlace de invitación de tu conjunto o cuando inicias sesión.
+        </div>
+      )}
 
       <h2>1. Quién presta el servicio</h2>
-      <p>
-        Puertaya Ipanema es operado de forma independiente por <strong>Francisco Caro Yances</strong>,
-        domiciliado en <strong>Ipanema Torre 1, Ap. 302</strong>, contacto <strong>3006248062</strong>.
-      </p>
+      {hayOperador ? (
+        <p>
+          {marca} es operado de forma independiente por <strong>{opNombre}</strong>,
+          domiciliado en <strong>{opDomicilio}</strong>, contacto <strong>{opWhatsapp}</strong>.
+        </p>
+      ) : (
+        <p>
+          El servicio es operado de forma independiente por el responsable de cada conjunto. Sus datos
+          (nombre, domicilio y contacto) se muestran al abrir estos Términos desde el enlace de
+          invitación o al iniciar sesión.
+        </p>
+      )}
 
       <h2>2. Qué hace el servicio</h2>
       <p>
@@ -27,9 +67,9 @@ export default function Terms() {
         el tamaño/peso del paquete, visible en la aplicación antes de confirmar la recepción.
       </p>
       <p>
-        Este servicio opera exclusivamente para residentes del <strong>Conjunto Residencial Ipanema</strong>.
-        Toda pre-alerta, recepción y entrega registrada en esta aplicación corresponde a paquetes de ese
-        conjunto — no se reciben ni entregan paquetes de otras direcciones.
+        Este servicio opera exclusivamente para residentes del conjunto residencial{nombreConjunto ? <> <strong>{nombreConjunto}</strong></> : ''} al
+        que pertenece tu registro. Toda pre-alerta, recepción y entrega registrada en esta aplicación
+        corresponde a paquetes de ese conjunto — no se reciben ni entregan paquetes de otras direcciones.
       </p>
 
       <h2>3. Datos personales que recogemos y para qué (Ley 1581 de 2012)</h2>
@@ -45,7 +85,7 @@ export default function Terms() {
       <p>
         <strong>Tus derechos:</strong> puedes solicitar en cualquier momento acceder a tus datos,
         corregirlos, o pedir que se eliminen (derechos de acceso, rectificación, cancelación y
-        oposición), escribiendo al <strong>3006248062 (WhatsApp)</strong>. Si eliminas tu
+        oposición){opWhatsapp ? <>, escribiendo al <strong>{opWhatsapp} (WhatsApp)</strong></> : ' escribiendo al contacto del operador'}. Si eliminas tu
         cuenta, tus datos se conservan solo el tiempo necesario para resolver disputas de paquetes
         en curso y luego se eliminan.
       </p>
@@ -76,7 +116,7 @@ export default function Terms() {
         directamente al operador (o a quien la transportadora indique) cuando esta se presenta —
         el operador nunca adelanta dinero propio. Si no transfieres a tiempo mientras la
         transportadora espera, el paquete queda pendiente para una nueva ronda de reparto, con el
-        riesgo de que sea devuelto al remitente según las políticas de esa transportadora, ajenas a Puertaya Ipanema.
+        riesgo de que sea devuelto al remitente según las políticas de esa transportadora, ajenas al operador.
       </p>
       <p>
         La tarifa del servicio de entrega es independiente de ese cobro contra entrega, y se paga
@@ -106,7 +146,8 @@ export default function Terms() {
 
       <h2>9. Contacto</h2>
       <p>
-        Preguntas, quejas o solicitudes sobre tus datos personales: <strong>3006248062 (WhatsApp)</strong>.
+        Preguntas, quejas o solicitudes sobre tus datos personales:{' '}
+        {opWhatsapp ? <strong>{opWhatsapp} (WhatsApp)</strong> : 'el contacto del operador, visible al abrir estos Términos desde el enlace de invitación o al iniciar sesión'}.
       </p>
     </div>
   );
