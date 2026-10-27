@@ -3,6 +3,8 @@
 // conjunto está fijo en el código: el nombre y los datos salen de `conjunto`.
 // Tono: español, tuteo, sin emoji ni exclamaciones.
 
+import { ETIQUETAS_CATEGORIA } from '../../domain/whatsapp.js';
+
 const ENTIDADES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
 /** Escapa un valor para ponerlo en HTML (texto o atributo entre comillas). */
@@ -30,15 +32,24 @@ function envolver(conjunto, cuerpo) {
   return `${cuerpo}\n<p style="color:#666;font-size:12px">Puertaya &middot; ${escaparHtml(nombreConjunto(conjunto))}</p>`;
 }
 
+// El correo va al RESIDENTE, así que SÍ lleva el PIN (el WhatsApp que arma el
+// operador no). Saludo una sola vez: el texto se compone aquí, no se reusa el de
+// WhatsApp (que ya empieza con "Hola X,").
 export function plantillaLlegada({ residente, paquete, conjunto, aviso }) {
-  const texto = aviso?.texto ?? '';
+  const cat = ETIQUETAS_CATEGORIA[paquete?.categoriaPeso];
   const lugar = conjunto?.puntoRecepcion
     ? `<p>Puedes recogerlo en ${escaparHtml(conjunto.puntoRecepcion)}.</p>` : '';
+  const pin = paquete?.pin
+    ? `<p>Tu PIN de entrega es <strong>${escaparHtml(paquete.pin)}</strong>. Dáselo a quien te entrega el paquete.</p>` : '';
+  const enlace = aviso?.enlace
+    ? `<p>Mira tus paquetes y pide la entrega aquí: ${autoenlazar(escaparHtml(aviso.enlace))}</p>` : '';
   return {
     asunto: limpiarAsunto(`Llegó tu paquete: ${nombreConjunto(conjunto)}`),
     html: envolver(conjunto, `
       <p>${saludo(residente?.nombre)}</p>
-      <p>${autoenlazar(escaparHtml(texto))}</p>
+      <p>Llegó tu paquete a portería${cat ? ` (${escaparHtml(cat)})` : ''}.</p>
+      ${pin}
+      ${enlace}
       ${paquete?.proveedor ? `<p>Proveedor: ${escaparHtml(paquete.proveedor)}</p>` : ''}
       ${lugar}
     `),

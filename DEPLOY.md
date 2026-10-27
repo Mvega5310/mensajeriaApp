@@ -59,6 +59,11 @@ git push
    falla justo después de cambiar variables, lo primero es leer ese mensaje en
    Railway → Deployments → Logs.
 
+   **En Railway, `NODE_ENV` es obligatoria:** si existe `RAILWAY_ENVIRONMENT` (o
+   `RAILWAY_ENVIRONMENT_NAME`) y falta `NODE_ENV`, el arranque falla con "Define
+   NODE_ENV=production en Railway…" (así nunca se activa por error el almacén de
+   fotos `fake` ni el notificador `fake` en un despliegue real).
+
    La exigencia de 32 caracteres en `JWT_SECRET` solo se aplica si
    `NODE_ENV=production`. Añade esa variable en el servicio del backend
    (no la asumas: sin ella el servidor trata el entorno como desarrollo).
@@ -246,6 +251,24 @@ emitidos siguen valiendo).
   distinguirían de los de reset).
 - Usa `FRONTEND_URL` para armar `/acceso/<token>`. Sin variables nuevas.
 
+### Migración `add_cortesia_apartamento` (revisión F2)
+
+Crea la tabla `CortesiaApartamento` (`conjuntoId`, `claveApto`, `paqueteId`; único
+`[conjuntoId, claveApto]` y único `paqueteId`): insertar su fila es la reserva de la
+cortesía de primera entrega del apartamento, y serializa recepciones paralelas.
+
+- Migración **aditiva** (`20261101120000_add_cortesia_apartamento`), `prisma migrate
+  deploy` normal; verificada con `prisma migrate diff` (sin drift). La FK a `Package`
+  es `DEFERRABLE INITIALLY DEFERRED` (editada a mano en el SQL: la reserva se inserta
+  antes que el paquete nuevo, dentro de la misma transacción).
+- **Sin backfill necesario:** los apartamentos con paquetes ya cobrados se detectan
+  por estado (`EN_RECEPCION`/`PROGRAMADO`/`ENTREGADO`) y no llegan a reservar.
+- **Rollback:** `backend/prisma/manual/rollback_add_cortesia_apartamento.sql` (con
+  `psql`). Solo borra la reserva; el cobro real vive en `Package`/`PaqueteEvento`.
+- La clave de apartamento ahora normaliza la torre ("T2" = "TORRE 2"); no hay claves
+  persistidas anteriores, así que no requiere migración de datos.
+- Variable obligatoria nueva en Railway: `NODE_ENV=production`.
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama
@@ -427,7 +450,7 @@ Si algo no conecta, lo primero a revisar es `CORS_ORIGIN` en Railway y
 - **413 al confirmar recepción**: una foto de cámara real sin comprimir
   supera el límite del body JSON. El frontend ya comprime a JPEG (~1280px,
   calidad 0.7) antes de enviar (`frontend/src/utils/image.js`); el backend
-  además subió su límite a 4mb como margen adicional.
+  además el JSON general es de 1 MB y solo recepción/checkin admiten ~9,6 MB (presupuesto calculado en `domain/recepcion.js`).
 - **`prisma migrate dev` con EPERM en Windows**: si nodemon tiene el backend
   corriendo en paralelo, el motor de Prisma no puede reescribir su `.dll`.
   Cierra el proceso de `npm run dev` antes de migrar, o vuelve a correr

@@ -8,8 +8,9 @@ import bonosRoutes from './routes/bonos.routes.js';
 import residentesRoutes from './routes/residentes.routes.js';
 import entregasRoutes from './routes/entregas.routes.js';
 import enlaceRoutes from './routes/enlace.routes.js';
+import { esRutaConFotos } from './routes/packages.routes.js';
 import { manejadorErrores } from './domain/errores.js';
-import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS, ENLACE_MAX_SOLICITUDES, ENLACE_VENTANA_MS } from './domain/limitador.js';
+import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS, ENLACE_MAX_SOLICITUDES, ENLACE_VENTANA_MS, PIN_ENTREGA_MAX_FALLOS, PIN_ENTREGA_VENTANA_MS } from './domain/limitador.js';
 import { crearNotificadorDesdeEntorno } from './services/notificador/index.js';
 import { crearAlmacenDesdeEntorno } from './services/almacen/index.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
@@ -35,8 +36,8 @@ export function createApp({ limitadorLogin, limitadorPinEntrega, limitadorEnlace
     app.set('trust proxy', 1);
   }
   app.locals.limitadorLogin = limitadorLogin ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
-  // Fallos de PIN en entrega por lote (T2.5): por operador, 10 / 15 min.
-  app.locals.limitadorPinEntrega = limitadorPinEntrega ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
+  // Fallos de PIN en entrega por lote (T2.5): por operador, 20 / 10 min (ver limitador.js).
+  app.locals.limitadorPinEntrega = limitadorPinEntrega ?? crearLimitadorMemoria({ max: PIN_ENTREGA_MAX_FALLOS, ventanaMs: PIN_ENTREGA_VENTANA_MS });
 
   // Solicitudes de enlace de acceso (T3.2): por correo+IP, 5 / 15 min.
   app.locals.limitadorEnlace = limitadorEnlace ?? crearLimitadorMemoria({ max: ENLACE_MAX_SOLICITUDES, ventanaMs: ENLACE_VENTANA_MS });
@@ -48,11 +49,13 @@ export function createApp({ limitadorLogin, limitadorPinEntrega, limitadorEnlace
   app.locals.almacenFotos = almacenFotos ?? crearAlmacenDesdeEntorno(process.env);
 
   app.use(cors({ origin: process.env.CORS_ORIGIN }));
-  // El límite ya no es la defensa principal contra fotos gigantes — el
-  // frontend las comprime antes de enviarlas (ver utils/image.js). Esto es
-  // solo un margen de seguridad para no devolver una página HTML genérica
-  // si algo se cuela sin comprimir.
-  app.use(express.json({ limit: '4mb' }));
+  // JSON: 1 MB para toda la API. Las DOS rutas con fotos en base64 (recepción y
+  // checkin) tienen su propio parser, más grande, montado en packages.routes.js
+  // DESPUÉS de requireAuth/requireTenant/requireRole: un anónimo no puede obligar al
+  // servidor a leer un cuerpo de ~9 MB. Aquí se omiten para no rechazarlas antes.
+  // (El frontend comprime las fotos; esto es margen de seguridad.)
+  const jsonGeneral = express.json({ limit: '1mb' });
+  app.use((req, res, next) => (esRutaConFotos(req) ? next() : jsonGeneral(req, res, next)));
 
   app.get('/health', (req, res) => res.json({ ok: true }));
   app.use('/api/auth', authRoutes);

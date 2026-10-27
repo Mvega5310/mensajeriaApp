@@ -1,38 +1,56 @@
 // Pruebas unitarias de las reglas de cobro (T1.2). Sin base de datos.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calcularCobro, esPrimeraEntrega, CATEGORIAS_VALIDAS } from '../cobro.js';
+import { calcularCobro, esPrimeraEntrega, primerasEntregas, CATEGORIAS_VALIDAS } from '../cobro.js';
 import { AppError, CODIGOS } from '../errores.js';
 
 const tarifas = { MANO: 3000, ESTANDAR: 5000, VOLUMEN: 8000, PESADO: 12000 };
 const base = { tarifas, categoria: 'ESTANDAR', esPrimeraEntrega: false, bonosHabilitados: false, creditosBono: 0 };
 
-test('esPrimeraEntrega: sin paquetes previos del apto => true', () => {
-  assert.equal(esPrimeraEntrega({ createdAt: new Date('2026-01-02'), createdAtDelApto: [] }), true);
-  assert.equal(esPrimeraEntrega({ createdAt: new Date('2026-01-02') }), true);
+const P = (id, estado, residenteId = 'r1') => ({ id, estado, residenteId });
+
+test('esPrimeraEntrega: sin paquetes del apto => true', () => {
+  assert.equal(esPrimeraEntrega({ paquetesDelApto: [] }), true);
+  assert.equal(esPrimeraEntrega({}), true);
 });
 
-test('esPrimeraEntrega: el propio paquete como único del apto => true', () => {
-  const f = new Date('2026-01-02');
-  assert.equal(esPrimeraEntrega({ createdAt: f, createdAtDelApto: [f] }), true);
+test('esPrimeraEntrega: el propio paquete no cuenta contra sí mismo', () => {
+  assert.equal(esPrimeraEntrega({ paquetesDelApto: [P('a', 'EN_RECEPCION')], excluirId: 'a' }), true);
 });
 
-test('esPrimeraEntrega: hay uno anterior (de cualquier cuenta del apto) => false', () => {
-  assert.equal(esPrimeraEntrega({
-    createdAt: new Date('2026-01-05'),
-    createdAtDelApto: [new Date('2026-01-02'), new Date('2026-01-05')],
-  }), false);
+test('esPrimeraEntrega: otro paquete ya cobrado (de cualquier cuenta del apto) => false', () => {
+  for (const estado of ['EN_RECEPCION', 'PROGRAMADO', 'ENTREGADO']) {
+    assert.equal(esPrimeraEntrega({ paquetesDelApto: [P('x', estado, 'r2')], excluirId: 'a' }), false, estado);
+  }
 });
 
-test('esPrimeraEntrega: los posteriores no cuentan; empate exacto => ambos primera', () => {
-  const f = new Date('2026-01-02');
-  assert.equal(esPrimeraEntrega({ createdAt: f, createdAtDelApto: [new Date('2026-02-01')] }), true);
-  assert.equal(esPrimeraEntrega({ createdAt: f, createdAtDelApto: [new Date(f.getTime())] }), true);
+test('esPrimeraEntrega: SIN_ASIGNAR y PREALERTADO NO gastan la cortesía (escenario de la revisión)', () => {
+  assert.equal(esPrimeraEntrega({ paquetesDelApto: [P('lunes', 'SIN_ASIGNAR', null), P('pre', 'PREALERTADO')], excluirId: 'martes' }), true);
 });
 
-test('esPrimeraEntrega acepta timestamps numéricos', () => {
-  assert.equal(esPrimeraEntrega({ createdAt: 200, createdAtDelApto: [100] }), false);
-  assert.equal(esPrimeraEntrega({ createdAt: 100, createdAtDelApto: [200] }), true);
+test('esPrimeraEntrega: un EN_RECEPCION sin dueño no cuenta (dato imposible, no cobra)', () => {
+  assert.equal(esPrimeraEntrega({ paquetesDelApto: [P('x', 'EN_RECEPCION', null)] }), true);
+});
+
+test('primerasEntregas: SIN_ASIGNAR antiguo asignado después NO es primera si otro ya se llevó la cortesía', () => {
+  const k = '2|710';
+  const set = primerasEntregas([
+    { id: 'lunes', clave: k, estado: 'EN_RECEPCION', residenteId: 'r1', motivoCobro: 'TARIFA', cobradoEn: null, createdAt: new Date('2026-01-05') },
+    { id: 'martes', clave: k, estado: 'ENTREGADO', residenteId: 'r1', motivoCobro: 'CORTESIA', cobradoEn: null, createdAt: new Date('2026-01-06') },
+  ]);
+  assert.deepEqual([...set], ['martes']);
+});
+
+test('primerasEntregas: legado sin eventos => el cobrado más antiguo; sin cobrados => ninguno', () => {
+  const k = '1|101';
+  const legado = (id, estado, f) => ({ id, clave: k, estado, residenteId: 'r', motivoCobro: null, cobradoEn: null, createdAt: new Date(f) });
+  assert.deepEqual([...primerasEntregas([legado('b', 'ENTREGADO', '2026-02-01'), legado('a', 'ENTREGADO', '2026-01-01')])], ['a']);
+  assert.equal(primerasEntregas([legado('p', 'PREALERTADO', '2026-01-01'), legado('s', 'SIN_ASIGNAR', '2026-01-01')]).size, 0);
+});
+
+test('primerasEntregas: apartamentos distintos son independientes', () => {
+  const mk = (id, clave) => ({ id, clave, estado: 'EN_RECEPCION', residenteId: 'r', motivoCobro: 'CORTESIA', cobradoEn: null, createdAt: new Date() });
+  assert.equal(primerasEntregas([mk('a', '1|1'), mk('b', '2|2')]).size, 2);
 });
 
 test('cortesía: monto 0, motivo CORTESIA, no consume bono', () => {

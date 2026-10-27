@@ -157,20 +157,22 @@ test('PIN de bloqueo por paquete: 423 aunque el PIN sea correcto', { skip }, asy
   assert.equal((await r.json()).code, 'PIN_BLOQUEADO');
 });
 
-test('PIN inexistente cuenta fallos por operador: el 11.º es 429; otro operador no se afecta', { skip }, async () => {
+test('PIN inexistente cuenta fallos por operador: el 21.º es 429; otro operador no se afecta', { skip }, async () => {
   await nuevoLimitador();
   ctx.tOp = await login('op@iteste.local');
   ctx.tOp2 = await login('op2@iteste.local');
   const a = await residente();
   await paquete(a.id, '3001');
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 20; i++) {
     const r = await verificar({ pin: '9999' });
     assert.equal(r.status, 400, `fallo ${i}`);
     assert.equal((await r.json()).code, 'PIN_INCORRECTO');
   }
   const r11 = await verificar({ pin: '9999' });
   assert.equal(r11.status, 429);
-  assert.equal((await r11.json()).code, 'DEMASIADOS_INTENTOS');
+  const j11 = await r11.json();
+  assert.equal(j11.code, 'DEMASIADOS_INTENTOS');
+  assert.match(j11.message, /^Muchos PIN incorrectos seguidos\. Espera \d+ minutos? o entrega desde Pendientes\.$/);
   assert.equal((await verificar({ pin: '3001' })).status, 429, 'bloqueado aunque acierte');
   assert.equal((await verificar({ pin: '3001' }, ctx.tOp2)).status, 200, 'otro operador sigue');
   await nuevoLimitador();

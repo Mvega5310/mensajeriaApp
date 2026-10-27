@@ -117,9 +117,9 @@ test('con residente y pre-alerta con la misma guía (normalizada): vincula ESA, 
   assert.equal(paquete.nombre, r.nombre);
   assert.equal(paquete.motivoCobro, 'TARIFA');
   assert.equal(paquete.costo, 4500);
-  assert.equal(paquete.pin, '4321'); // conserva el PIN de la pre-alerta
+  assert.ok(!('pin' in paquete), 'el operador no recibe el PIN');
   assert.ok(paquete.recibidoEn);
-  assert.ok(aviso.texto.includes('4321'));
+  assert.ok(!aviso.texto.includes('4321'), 'el aviso de WhatsApp no lleva el PIN');
   assert.equal(await contarPaquetes(), antes);
   assert.equal((await leer(vieja.id)).estado, 'PREALERTADO');
   const db = await leer(objetivo.id);
@@ -155,18 +155,18 @@ test('con residente sin pre-alerta: crea EN_RECEPCION (evento RECIBIR con deEsta
   const { paquete } = await res.json();
   assert.equal(paquete.estado, 'EN_RECEPCION');
   assert.equal(paquete.costo, 7000);
-  assert.match(paquete.pin, /^\d{4}$/);
+  assert.ok(!('pin' in paquete));
   const db = await leer(paquete.id);
+  assert.match(db.pin, /^\d{4}$/);
   assert.equal(db.proveedor, 'Sin especificar');
   assert.equal(db.guia, 'Sin Guía');
-  assert.equal(db.pin, paquete.pin);
   assert.equal(db.residenteId, r.id);
   const ev = await eventos(paquete.id);
   assert.deepEqual(ev.map((e) => [e.tipo, e.deEstado, e.aEstado]), [['RECIBIR', null, 'EN_RECEPCION']]);
   // entrega con el PIN
-  const mal = await api(`/api/packages/${paquete.id}/confirm-delivery`, { method: 'POST', token: ctx.tOp, body: { pin: paquete.pin === '0000' ? '1111' : '0000' } });
+  const mal = await api(`/api/packages/${paquete.id}/confirm-delivery`, { method: 'POST', token: ctx.tOp, body: { pin: db.pin === '0000' ? '1111' : '0000' } });
   assert.equal(mal.status, 400);
-  const ok = await api(`/api/packages/${paquete.id}/confirm-delivery`, { method: 'POST', token: ctx.tOp, body: { pin: paquete.pin } });
+  const ok = await api(`/api/packages/${paquete.id}/confirm-delivery`, { method: 'POST', token: ctx.tOp, body: { pin: db.pin } });
   assert.equal(ok.status, 200);
   assert.equal((await leer(paquete.id)).estado, 'ENTREGADO');
 });
@@ -206,7 +206,7 @@ test('sin residente: SIN_ASIGNAR con etiqueta, sin cobro, PIN guardado pero no d
   assert.equal(paquete.nombre, 'Carlos Pérez');
   assert.equal(paquete.etiquetaNombre, 'Carlos Pérez');
   assert.equal(paquete.costo, null);
-  assert.equal(paquete.pin, null);
+  assert.ok(!('pin' in paquete));
   assert.equal(aviso, null);
   const db = await leer(paquete.id);
   assert.equal(db.residenteId, null);
@@ -241,7 +241,7 @@ test('asignar: SIN_ASIGNAR -> EN_RECEPCION con cobro, evento ASIGNAR y aviso; re
   assert.equal(paquete.residenteId, r.id);
   assert.equal(paquete.costo, 4500);
   assert.equal(paquete.motivoCobro, 'TARIFA');
-  assert.match(paquete.pin, /^\d{4}$/);
+  assert.ok(!('pin' in paquete));
   assert.ok(aviso.waUrl.startsWith('https://wa.me/573001234567?text='));
   assert.deepEqual((await eventos(sin.id)).map((e) => e.tipo), ['RECIBIR_SIN_DUENO', 'ASIGNAR']);
   assert.equal((await api(`/api/packages/${sin.id}/asignar`, { method: 'PATCH', token: ctx.tOp, body: { residenteId: r.id } })).status, 409);
@@ -369,7 +369,7 @@ test('waUrl usa el prefijoPais del conjunto; sin teléfono => waUrl null (el avi
     const texto = decodeURIComponent(aviso.waUrl.split('?text=')[1]);
     assert.equal(texto, aviso.texto);
     assert.ok(texto.startsWith('Hola María, llegó tu paquete a portería (Paquete estándar).'));
-    assert.ok(texto.includes(paquete.pin));
+    assert.ok(!/PIN de entrega es /.test(texto) && !('pin' in paquete), 'sin PIN para el operador');
   } finally { await setConjunto({ prefijoPais: '57' }); }
   const sinTel = await nuevoResidente({ conPrevio: true, telefono: '' });
   const { aviso } = await (await recibir({ residenteId: sinTel.id, categoriaPeso: 'ESTANDAR' })).json();

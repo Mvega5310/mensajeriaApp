@@ -3,6 +3,7 @@
 // lleva datos personales (ni correo, ni nombre, ni teléfono): solo el tipo y el
 // código del error.
 import { textoLlegada, construirEnlace } from '../domain/whatsapp.js';
+import { urlMisPaquetes } from './enlace.service.js';
 
 export function enSegundoPlano(tipo, fn) {
   let p;
@@ -16,10 +17,16 @@ export function enSegundoPlano(tipo, fn) {
   });
 }
 
-/** Aviso (texto + enlace wa.me manual) del paquete recibido para ese residente. */
+/**
+ * Aviso del paquete recibido para ese residente: `texto` + `waUrl` (wa.me manual, SIN
+ * PIN) y `enlace` (la URL de "Mis paquetes" con el token en el fragmento; la usa el
+ * correo de llegada, que sí lleva el PIN porque va al residente). `enlace` es
+ * interno: no debe copiarse a ninguna respuesta del operador.
+ */
 export function armarAviso({ residente, paquete, conjunto }) {
-  const texto = textoLlegada({ nombre: residente.nombre, categoria: paquete.categoriaPeso, pin: paquete.pin });
-  return { texto, waUrl: construirEnlace({ prefijoPais: conjunto.prefijoPais, telefono: residente.telefono, texto }) };
+  const enlace = residente.id ? urlMisPaquetes({ residenteId: residente.id, conjuntoId: conjunto.id }) : null;
+  const texto = textoLlegada({ nombre: residente.nombre, categoria: paquete.categoriaPeso, enlace });
+  return { texto, waUrl: construirEnlace({ prefijoPais: conjunto.prefijoPais, telefono: residente.telefono, texto }), enlace };
 }
 
 /**

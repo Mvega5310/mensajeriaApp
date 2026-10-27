@@ -6,20 +6,20 @@
 //     incluye TODOS los paquetes entregables del apartamento, aunque tengan otro
 //     PIN y aunque sean de OTRO residente del mismo apartamento (cortesía y bono
 //     ya se tratan por apartamento físico). Un apartamento = claveApartamento
-//     (torre+apto); si torre/apto están incompletos, el apartamento es la cuenta sola.
+//     (torre canónica+apto: "TORRE 2" y "T2" son la misma torre); si torre/apto están incompletos, el apartamento es la cuenta sola.
 //  2. Colisión (4 dígitos): si el PIN coincide con paquetes de MÁS DE UN
 //     apartamento no se adivina: AMBIGUO + opciones para que el operador elija; el
 //     segundo dato es `residenteId` (de una opción) o `apto` ("T2 304", "304").
 //  3. Solo son entregables los estados de ESTADOS_ENTREGABLES y con residente.
 
-import { claveApartamento } from '../services/apartamento.service.js';
+import { claveDeResidente } from '../services/apartamento.service.js';
 import { etiquetaApartamento, interpretarBusqueda, tokenTorre } from './apartamento.js';
 
 export const ESTADOS_ENTREGABLES = Object.freeze(['EN_RECEPCION', 'PROGRAMADO']);
 
 /** Clave de agrupación por apartamento físico (o cuenta sola si está incompleto). */
 export function claveDeApartamento(residente) {
-  return claveApartamento(residente.torre, residente.apto) || `cuenta:${residente.id}`;
+  return claveDeResidente(residente);
 }
 
 function coincideApto(residente, texto) {
@@ -27,6 +27,20 @@ function coincideApto(residente, texto) {
   if (!q.apto) return false;
   if (residente.apto == null || String(residente.apto).replace(/\D/g, '') !== q.apto) return false;
   return q.torre === undefined || tokenTorre(residente.torre) === q.torre;
+}
+
+/**
+ * Paquetes entregables que el operador "apuntó" con `residenteId`/`apto` (sin
+ * mirar el PIN). Sirve para contar un PIN incorrecto contra el bloqueo por
+ * paquete (T1.4) cuando el operador indicó el apartamento. Sin ninguno de los
+ * dos datos devuelve [] (un PIN que no coincide con nada no se puede atribuir).
+ */
+export function candidatosPorDesempate({ entregables, residenteId, apto }) {
+  if (!residenteId && !apto) return [];
+  let lista = entregables.filter((p) => p.residente && ESTADOS_ENTREGABLES.includes(p.estado));
+  if (residenteId) lista = lista.filter((p) => p.residente.id === residenteId);
+  if (apto) lista = lista.filter((p) => coincideApto(p.residente, apto));
+  return lista;
 }
 
 /**

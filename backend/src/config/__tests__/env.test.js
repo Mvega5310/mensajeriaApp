@@ -134,3 +134,15 @@ test('T3.1: fuera de producción ENLACE_SECRET falta con aviso y se deriva de JW
   assert.equal(secretoEnlace(BASE), BASE.ENLACE_SECRET);
   assert.throws(() => secretoEnlace({ ...sinSecreto, NODE_ENV: 'production' }), /ENLACE_SECRET/);
 });
+
+test('en Railway sin NODE_ENV: falla con mensaje accionable (nunca fake por error)', () => {
+  for (const nombre of ['RAILWAY_ENVIRONMENT', 'RAILWAY_ENVIRONMENT_NAME']) {
+    assert.throws(
+      () => validarEntorno({ ...BASE, [nombre]: 'production' }),
+      (err) => /NODE_ENV=production en Railway/.test(err.message),
+    );
+  }
+  // Con NODE_ENV definida, o fuera de Railway, no es un error.
+  assert.doesNotThrow(() => validarEntorno({ ...BASE, RAILWAY_ENVIRONMENT: 'production', NODE_ENV: 'production' }));
+  assert.doesNotThrow(() => validarEntorno({ ...BASE }));
+});

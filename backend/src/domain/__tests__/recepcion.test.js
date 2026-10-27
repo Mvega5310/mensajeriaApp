@@ -96,10 +96,12 @@ test('construirEnlace: sin teléfono => null', () => {
   }
 });
 
-test('textoLlegada: primer nombre, categoría y PIN', () => {
+test('textoLlegada: primer nombre y categoría; NUNCA el PIN (el PIN va en el enlace)', () => {
   assert.equal(
-    textoLlegada({ nombre: 'Ana María Gómez', categoria: 'ESTANDAR', pin: '1234' }),
-    'Hola Ana, llegó tu paquete a portería (Paquete estándar). Tu PIN de entrega es 1234.',
+    textoLlegada({ nombre: 'Ana María Gómez', categoria: 'ESTANDAR', pin: '1234', enlace: 'https://app/p#tok' }),
+    'Hola Ana, llegó tu paquete a portería (Paquete estándar). Tu PIN de entrega está aquí: https://app/p#tok',
   );
-  assert.equal(textoLlegada({ nombre: '', categoria: 'X', pin: '1' }), 'Hola, llegó tu paquete a portería. Tu PIN de entrega es 1.');
+  const sin = textoLlegada({ nombre: '', categoria: 'X', pin: '1' });
+  assert.equal(sin, 'Hola, llegó tu paquete a portería. Consulta tu PIN de entrega en la app de Puertaya.');
+  assert.ok(!sin.includes('1234'));
 });

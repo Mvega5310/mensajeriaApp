@@ -68,3 +68,12 @@ test('selección: cuentas sin torre/apto no se agrupan entre sí', () => {
   const r = seleccionarLote({ entregables: [P('p1', '1', a), P('p2', '2', b)], pin: '1' });
   assert.deepEqual(r.lote.map((p) => p.id), ['p1']);
 });
+
+test('claveDeApartamento: "TORRE 2"/710 y "T2"/710 son el mismo apartamento (un solo lote)', async () => {
+  const { claveDeApartamento } = await import('../entregaLote.js');
+  const k = (torre, apto) => claveDeApartamento({ id: 'x', torre, apto });
+  assert.equal(k('TORRE 2', '710'), k('T2', '710'));
+  assert.equal(k('torre 2 ', 'Apto 710'), k('2', '710'));
+  assert.notEqual(k('TORRE 2', '710'), k('TORRE 3', '710'));
+  assert.equal(k(null, '710'), 'cuenta:x');
+});

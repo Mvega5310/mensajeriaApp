@@ -25,11 +25,33 @@ export function mensajeMaxFotos(max) {
   return `Puedes adjuntar hasta ${max} ${max === 1 ? 'foto' : 'fotos'}. Quita las que sobren e intenta de nuevo.`;
 }
 
-/** Valida `fotos` contra el máximo del conjunto (lo comparten recepción y checkin). */
+// Presupuesto de bytes de las fotos en el cuerpo JSON (data-URI base64). Se calcula,
+// no se adivina: máx. razonable de fotos x tope por foto decodificada (1,5 MB, el de
+// services/almacen/dataUri.js) x 1,37 (base64 + prefijo data:). Con 4 fotos son
+// ~8,2 MB. El parser JSON de las dos rutas con fotos admite ese presupuesto más un
+// margen para el resto de campos; el resto de la API se queda en 1 MB (app.js).
+export const MAX_BYTES_FOTO_DECODIFICADA = 1.5 * 1024 * 1024;
+export const MAX_FOTOS_RAZONABLE = 4;
+export const FACTOR_BASE64 = 1.37;
+export const PRESUPUESTO_FOTOS_BYTES = Math.ceil(MAX_FOTOS_RAZONABLE * MAX_BYTES_FOTO_DECODIFICADA * FACTOR_BASE64);
+export const LIMITE_JSON_FOTOS_BYTES = PRESUPUESTO_FOTOS_BYTES + 1024 * 1024;
+
+const mb = (bytes) => (bytes / (1024 * 1024)).toFixed(1).replace('.', ',');
+
+/** Valida `fotos` contra el máximo del conjunto y el presupuesto de bytes (lo comparten recepción y checkin). */
 export function validarFotos(fotos, maxFotos) {
   if (fotos === undefined || fotos === null) return [];
   if (!Array.isArray(fotos) || fotos.length > maxFotos || fotos.some((f) => typeof f !== 'string' || !f)) {
     throw invalido(mensajeMaxFotos(maxFotos), { campo: 'fotos', max: maxFotos });
+  }
+  const total = fotos.reduce((s, f) => s + f.length, 0);
+  if (total > PRESUPUESTO_FOTOS_BYTES) {
+    throw new AppError(
+      CODIGOS.CARGA_DEMASIADO_GRANDE,
+      `Las fotos pesan demasiado en total (máximo ${mb(PRESUPUESTO_FOTOS_BYTES)} MB). Quita una foto o toma otras con menos resolución e intenta de nuevo.`,
+      413,
+      { campo: 'fotos', maxBytes: PRESUPUESTO_FOTOS_BYTES },
+    );
   }
   return fotos;
 }

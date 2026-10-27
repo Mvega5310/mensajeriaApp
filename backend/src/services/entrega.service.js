@@ -7,7 +7,7 @@ import { AppError, CODIGOS } from '../domain/errores.js';
 import { EVENTOS } from '../domain/paquete.machine.js';
 import { METODOS_PAGO, esMetodoPagoValido } from '../domain/pago.js';
 import { etiquetaApartamento } from '../domain/apartamento.js';
-import { seleccionarLote, ESTADOS_ENTREGABLES } from '../domain/entregaLote.js';
+import { seleccionarLote, candidatosPorDesempate, ESTADOS_ENTREGABLES } from '../domain/entregaLote.js';
 import { firmarTokenEntrega, verificarTokenEntrega } from '../domain/tokenEntrega.js';
 import { registrarIntentoPin } from './pin.service.js';
 import { aplicarEvento } from './paquete.service.js';
@@ -26,7 +26,7 @@ const pinBloqueado = (minutos) => new AppError(
 
 /**
  * @param {{operadorId:string, pin:string, residenteId?:string, apto?:string, limitador:object, res?:object}} p
- * limitador: crearLimitadorMemoria; clave por operador. `intentar` se llama
+ * limitador: crearLimitadorMemoria; clave por operador (20 fallos / 10 min). `intentar` se llama
  * SÍNCRONO antes de cualquier await (reserva atómica).
  */
 export async function verificarPinLote({ operadorId, conjuntoId, pin, residenteId, apto, limitador, ahora = new Date() }) {
@@ -35,7 +35,7 @@ export async function verificarPinLote({ operadorId, conjuntoId, pin, residenteI
   if (!intento.permitido) {
     throw Object.assign(new AppError(
       CODIGOS.DEMASIADOS_INTENTOS,
-      `Demasiados intentos. Espera ${intento.minutosRestantes} ${intento.minutosRestantes === 1 ? 'minuto' : 'minutos'} e inténtalo de nuevo.`,
+      `Muchos PIN incorrectos seguidos. Espera ${intento.minutosRestantes} ${intento.minutosRestantes === 1 ? 'minuto' : 'minutos'} o entrega desde Pendientes.`,
       429,
       { minutosRestantes: intento.minutosRestantes },
     ), { retryAfter: intento.segundosRestantes });
@@ -48,7 +48,14 @@ export async function verificarPinLote({ operadorId, conjuntoId, pin, residenteI
   const sel = seleccionarLote({ entregables, pin, residenteId, apto });
 
   if (sel.tipo === 'NINGUNO') {
-    // Fallo ya contado por la reserva.
+    // Fallo ya contado por la reserva del operador. Si el operador indicó el
+    // apartamento (residenteId/apto), el fallo también cuenta contra el bloqueo
+    // por paquete de T1.4, igual que /confirm-delivery: así el límite por paquete
+    // rige también en lote. Sin apartamento no hay a qué paquete atribuirlo.
+    for (const p of candidatosPorDesempate({ entregables, residenteId, apto })) {
+      const r = await registrarIntentoPin(prisma, p.id, false, ahora);
+      if (r && (!r.permitido || r.bloquear)) throw pinBloqueado(r.minutosRestantes);
+    }
     throw new AppError(CODIGOS.PIN_INCORRECTO, 'PIN incorrecto. Revísalo con el residente e inténtalo de nuevo.', 400);
   }
   // El PIN existe: no es un fallo, se devuelve la reserva.
@@ -172,7 +179,8 @@ async function despuesDeEntregarLote({ notificador, residenteId, paqueteIds }) {
     });
     if (!residente?.email) return;
     const [paquetes, conjunto] = await Promise.all([
-      prisma.package.findMany({ where: { id: { in: paqueteIds } } }),
+      // Solo lo que usa el correo: nada de fotoUrl (puede pesar cientos de KB) ni PIN.
+      prisma.package.findMany({ where: { id: { in: paqueteIds } }, select: { id: true, proveedor: true, categoriaPeso: true } }),
       conjuntoDelContexto(),
     ]);
     enSegundoPlano('entrega', () => notificador.agradecerEntrega({ residente, paquetes, conjunto }));
