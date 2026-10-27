@@ -75,3 +75,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T4.5 integrada; build verde; cola 7/7. En curso: T2.8 y T4.6 (accesibilidad + cola por operador).
 - 2026-10-27: T2.8 integrada, `test:all` 444/444, build verde.
 - 2026-10-27: T4.6 integrada (build verde, cola 13/13). Railway `puertaya-refactor` creado y desplegado desde la rama; /health OK.
+- 2026-10-27: Railway: preDeploy `prisma migrate deploy && npm run seed` con conjunto DEMO; T6.1 (E2E) en curso.
