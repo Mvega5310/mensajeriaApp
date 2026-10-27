@@ -215,7 +215,7 @@ Formato de cada tarjeta: **Id · Modelo · Depende de**, seguido de qué hacer, 
 
 **T4.1 · S · T0.2** Sistema de diseño en código.
 - **Qué hacer:**
-  - Crear `frontend/src/design/tokens.css`, copiando los tokens v3 de `Main.dc.html` (ver `docs/research/colores.md`), temas `.pt` y `.pt.noche`.
+  - Crear `frontend/src/design/tokens.css`, copiando los tokens v3 de `Main.dc.html` (ver `docs/research/colores.md`), temas `.pt` y `.pt.noche`; el tema sigue a `prefers-color-scheme` y se puede forzar (preferencia por dispositivo).
   - Crear los componentes en `src/design/`: `Button` (con variantes `primario`, `secundario` y `whatsapp`), `Keypad`, `PinInput`, `PackageLabel`, `Stamp`, `Badge`, `BottomNav`, `Toast`, `Sheet`, `TopBar` y `Field`.
   - Cargar las fuentes Archivo, Atkinson Hyperlegible Next e IBM Plex Mono.
   - `useTheme` pasa a manejar día y noche. Se borra `ThemeToggle`.

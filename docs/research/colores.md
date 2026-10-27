@@ -20,19 +20,24 @@ Fecha: 2026-10-27. Se tomó esta decisión porque al usuario no le gustaron ni e
 
 | Rol | Día (por defecto) | Contraste | Noche |
 |---|---|---|---|
-| Fondo | `#F4F6F9` crema de marca | | `#0A1428` |
-| Tarjeta | `#FFFFFF` | | `#13213B` |
-| Texto | `#13294B` marino de marca | 13:1 | `#EEF2F8` |
-| Texto secundario | `#4A5872` | 6,5:1 | `#B3BFD2` |
-| **Acción (solo el botón principal)** | `#1E63C9` azul de marca, texto blanco | 5,7:1 | `#6EA0FF` |
+| Fondo | `#F4F6F9` crema de marca | | `#12151B` grafito |
+| Tarjeta | `#FFFFFF` | | `#1A1F28` |
+| Texto | `#13294B` marino de marca | 13:1 | `#E6EAF0` (14:1) |
+| Texto secundario | `#4A5872` | 6,5:1 | `#A6B0C0` (7,6:1) |
+| **Acción (solo el botón principal)** | `#1E63C9` azul de marca, texto blanco | 5,7:1 | `#86A9F0` (7,6:1) |
 | PIN | `#0C2E73` azul profundo | | `#C7D0DA` plata |
-| Cortesía, lo nuevo | `#C2410C` naranja | 5,2:1 | `#FF9A4D` |
-| WhatsApp | `#0F7A40` | 5,4:1 | `#25D366` |
-| Aviso (con ícono) | `#8A5A00` | 5,5:1 | `#F2B33D` |
-| Error | `#B42318` | 5,4:1 | `#FF6B5B` |
+| Cortesía, lo nuevo | `#C2410C` naranja | 5,2:1 | `#F0A06A` |
+| WhatsApp | `#0F7A40` | 5,4:1 | `#3DBE7A` |
+| Aviso (con ícono) | `#8A5A00` | 5,5:1 | `#E2B85C` |
+| Error | `#B42318` | 5,4:1 | `#F08A80` |
 | Marca, solo decorativo | `#17B6C4` turquesa | no se usa en texto | igual |
 
 **Qué hace que no se vea genérica:** no lleva degradados ni brillos neón. El botón principal tiene una sombra dura en azul profundo, los números van en tipografía monoespaciada como en una guía impresa y la cortesía aparece como un sello naranja inclinado. La tipografía es Atkinson Hyperlegible, pensada para baja visión, sobre una base clara y limpia.
+
+## Modo noche
+
+- **No es negro puro ni azul marino saturado.** Es grafito `#12151B`, en la línea de Material, que recomienda `#121212`. El texto es blanco suave `#E6EAF0`, no blanco puro, porque el blanco puro deslumbra y puede afectar a quienes tienen astigmatismo. Los acentos van desaturados para que no vibren ni se vean con halo. La profundidad se marca con superficies más claras, no con sombras. Fuentes: [Uxcel](https://uxcel.com/blog/12-principles-of-dark-mode-design-627), [Atmos](https://atmos.style/blog/dark-mode-ui-best-practices), [UX Planet](https://uxplanet.org/8-tips-for-dark-theme-design-8dfc2f8f7ab6) y [SEP](https://sep.com/blog/6-tips-for-designing-a-dark-mode-version-of-your-app/). Son fuentes secundarias, pero coinciden entre sí.
+- **Cuándo se activa:** sigue la configuración del teléfono (`prefers-color-scheme`) y el usuario puede forzar día o noche. La preferencia se guarda por dispositivo.
 
 **Descartadas:**
 - Kraft: no le gustó al usuario.
