@@ -134,6 +134,8 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
 | `recepcionSinPrealerta.integration.test.js` | integración | T2.1: paquete sin residente (SIN_ASIGNAR / EN_RECEPCION directo) se crea y lista con `etiquetaNombre`, checkin/entrega lo toleran (409 o TARIFA, sin 500), aislamiento, y `GET /conjunto/config` con los defaults nuevos. |
 | `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
+| `entregaLote.test.js` | unitaria | T2.5: token de entrega (firma, vencimiento, alteración) y regla de selección del lote. |
+| `entregaLote.integration.test.js` | integración | T2.5: `/entregas/verificar-pin` y `/confirmar` (lote por apartamento, `PIN_AMBIGUO`, límite por operador, token ajeno/vencido, carrera sin entregas parciales, aislamiento). |
 | `migracionRecepcion.integration.test.js` | integración | T2.1: la migración aplica sobre datos existentes en una base desechable; el rollback aborta con mensaje si hay paquetes sin residente y, sin ellos, revierte. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
@@ -446,6 +448,58 @@ conjunto o inexistente: 404.
 
 **`GET /api/packages?estado=SIN_ASIGNAR`**: filtro opcional por estado (cualquiera
 de la máquina; otro valor -> 400). Sin parámetro devuelve todos, como antes.
+
+### Entrega por lote con PIN (T2.5)
+
+Pantallas Op-Entregar / Op-Cobrar: el operador teclea el PIN, ve todo lo
+pendiente del apartamento con el total, elige Efectivo/Transferencia y
+"Entregar todo". Rutas nuevas, solo `OPERATOR` (`requireAuth` + `requireTenant`).
+`POST /api/packages/:id/confirm-delivery` (individual) sigue igual.
+
+**`POST /api/entregas/verificar-pin`** `{ "pin": "1234", "residenteId"?: "…", "apto"?: "T2 304" }` ->
+`200 { residente: { id, nombre, etiquetaApto }, paquetes: [{ id, categoriaPeso,
+transportadora, proveedor, recibidoEn, costo, motivoCobro, estado }], total,
+metodosPago: ["EFECTIVO","TRANSFERENCIA"], tokenEntrega, venceEn }`.
+Errores: 400 `DATOS_INVALIDOS` (PIN no es de 4 dígitos), 400 `PIN_INCORRECTO`
+(ningún paquete entregable lo tiene; cuenta como fallo), 409 `PIN_AMBIGUO`
+(`details.opciones: [{ residenteId, etiquetaApto }]`), 423 `PIN_BLOQUEADO`,
+429 `DEMASIADOS_INTENTOS` (con `Retry-After`).
+
+**`POST /api/entregas/confirmar`** `{ tokenEntrega, paqueteIds, metodoPago }` ->
+`200 { entregados, total, metodoPago }`. Una sola transacción: `ENTREGAR` por
+paquete (un `PaqueteEvento` cada uno, `datos: { metodoPago, lote }`) con
+`metodoPago` y `fechaEntrega`; si uno falla todo se revierte. Errores: 400
+(`metodoPago` fuera de `METODOS_PAGO`, `paqueteIds` vacío), 401 `SESION_INVALIDA`
+(token alterado, malformado o vencido), 403 `PROHIBIDO` (token de otro operador
+o conjunto, o `paqueteIds` fuera del token), 409 `TRANSICION_INVALIDA` (carrera
+o paquete ya entregado). El `total` se calcula en el servidor, no del cliente.
+
+Decisiones:
+- **Lote = apartamento.** El PIN sigue siendo por paquete; uno que coincide con un
+  paquete entregable (`EN_RECEPCION`/`PROGRAMADO`) prueba que el portador es del
+  apartamento, así que el lote trae TODOS los entregables del apartamento (otros
+  PIN, y también los de otros residentes del mismo apartamento; clave
+  `claveApartamento`). Nunca `ENTREGADO`, `PREALERTADO` ni `SIN_ASIGNAR`.
+- **Colisión de PIN** (4 dígitos = 10.000 valores): si coincide con paquetes de
+  más de un apartamento, 409 `PIN_AMBIGUO` y el operador elige; se reenvía con
+  `residenteId` o `apto`. A futuro conviene un PIN por residente/apartamento
+  (un solo código por aviso o por apto, único dentro del conjunto); no se cambió
+  aquí.
+- **Intentos por operador**, no por paquete: un PIN inexistente no tiene paquete
+  al que atribuirlo. `crearLimitadorMemoria` (clave `entrega:<operador>`), 10
+  fallos / 15 min; el 11.º es 429. Los aciertos y los 409 no gastan cupo
+  (`devolver`). Memoria del proceso (una réplica), igual que el login.
+- **Bloqueo por paquete** (T1.4): si algún paquete cuyo PIN coincidió tiene
+  `pinBloqueadoHasta` vigente, 423 aunque el PIN sea correcto. Un acierto reinicia
+  el contador de esos paquetes. Los demás paquetes del lote no se consultan.
+- **`tokenEntrega`**: `base64url(payload).base64url(HMAC-SHA256)`, vence a los 10
+  min, liga operador + conjunto + residente + ids del lote. Secreto
+  `ENTREGA_SECRET` (opcional; si falta, `JWT_SECRET`) con prefijo de dominio, así
+  un JWT nunca vale como token de entrega. Código: `domain/tokenEntrega.js`,
+  `domain/entregaLote.js`, `services/entrega.service.js`.
+- **Correo de agradecimiento**: `despuesDeEntregarLote()` en
+  `services/entrega.service.js` es el único punto post-commit (hoy vacío; T2.4 lo
+  conecta).
 
 ## Pendiente
 

@@ -6,6 +6,7 @@ import packagesRoutes from './routes/packages.routes.js';
 import commentsRoutes from './routes/comments.routes.js';
 import bonosRoutes from './routes/bonos.routes.js';
 import residentesRoutes from './routes/residentes.routes.js';
+import entregasRoutes from './routes/entregas.routes.js';
 import { manejadorErrores } from './domain/errores.js';
 import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS } from './domain/limitador.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
@@ -14,7 +15,7 @@ import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.rou
 // listen en producción; las pruebas de integración HTTP hacen app.listen(0)
 // contra un puerto efímero (ver __tests__/http.integration.test.js).
 // `limitadorLogin` es inyectable (pruebas, o un limitador con Redis más adelante).
-export function createApp({ limitadorLogin } = {}) {
+export function createApp({ limitadorLogin, limitadorPinEntrega } = {}) {
   const app = express();
 
   // Detrás del proxy de Railway, `req.ip` sería la IP del proxy para todos y el
@@ -31,6 +32,8 @@ export function createApp({ limitadorLogin } = {}) {
     app.set('trust proxy', 1);
   }
   app.locals.limitadorLogin = limitadorLogin ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
+  // Fallos de PIN en entrega por lote (T2.5): por operador, 10 / 15 min.
+  app.locals.limitadorPinEntrega = limitadorPinEntrega ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
 
   app.use(cors({ origin: process.env.CORS_ORIGIN }));
   // El límite ya no es la defensa principal contra fotos gigantes — el
@@ -45,6 +48,7 @@ export function createApp({ limitadorLogin } = {}) {
   app.use('/api/comments', commentsRoutes);
   app.use('/api/bonos', bonosRoutes);
   app.use('/api/residentes', residentesRoutes);
+  app.use('/api/entregas', entregasRoutes);
   app.use('/api/conjuntos', conjuntosPublicRouter); // público (config-publica?c=)
   app.use('/api/conjunto', conjuntoAuthRouter); // auth+tenant (/config)
 
