@@ -31,7 +31,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T2.6 | H | pendiente | | |
 | T3.1 | S | pendiente | | |
 | T3.2 | S | pendiente | | |
-| T4.1 | S | en curso | | |
+| T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
 | T4.2 | S | pendiente | | |
 | T4.3 | S | pendiente | | |
 | T4.4 | H | pendiente | | |
@@ -48,3 +48,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: paleta v3 + modo noche grafito aprobados; arranca F0.
 - 2026-10-27: T0.1 (119/119) y T0.2 (123/123) verificados por el orquestador. En paralelo: T0.3, T1.1, T1.2, T4.1.
 - 2026-10-27: T0.3, T1.1 y T1.2 integradas; `test:all` 198/198. F0 cerrada. Arranca T1.3.
+- 2026-10-27: T4.1 integrada, build verde.
