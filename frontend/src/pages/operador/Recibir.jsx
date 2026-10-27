@@ -77,7 +77,7 @@ export default function Recibir() {
             {hayConsulta && !buscando && !error && resultados.length === 0 && (
               <p className="op-vacio">No hay residentes con ese apartamento. Revisa el número.</p>
             )}
-            <button type="button" className="op-link" onClick={() => setSinDueno(true)}>No sé de quién es</button>
+            <button type="button" className="op-link" onClick={() => setSinDueno(true)}>Registrar sin dueño</button>
           </div>
           <div className="op__relleno" />
           <div className="op-teclado">

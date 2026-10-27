@@ -34,8 +34,8 @@ export default function BitacoraVista({ onVolver }) {
       </div>
 
       {b.error && <Toast tipo="error">{b.error}</Toast>}
-      <p className="op-muted" aria-live="polite">{b.cargando ? 'Cargando…' : `${b.total} paquetes`}</p>
-      {!b.cargando && !b.error && b.items.length === 0 && <p className="op-vacio">No hay paquetes con esos filtros.</p>}
+      <p className="op-muted" aria-live="polite">{b.cargando ? 'Cargando…' : `${b.total} ${b.total === 1 ? 'paquete' : 'paquetes'}`}</p>
+      {!b.cargando && !b.error && b.items.length === 0 && <p className="op-vacio">No hay paquetes con esos filtros. Cambia las fechas o el estado.</p>}
       {b.items.map((p) => (
         <div className="op-fila op-fila--lectura" key={p.id}>
           <b>
@@ -49,9 +49,9 @@ export default function BitacoraVista({ onVolver }) {
       ))}
       {b.paginas > 1 && (
         <div style={{ display: 'flex', gap: 'var(--sp-1)', alignItems: 'center' }}>
-          <Button variante="secundario" disabled={b.pagina <= 1} onClick={() => b.setPagina(b.pagina - 1)}>Anterior</Button>
+          <Button variante="secundario" disabled={b.pagina <= 1} onClick={() => b.setPagina(b.pagina - 1)}>Ver anteriores</Button>
           <span className="op-muted" style={{ whiteSpace: 'nowrap' }}>{b.pagina} de {b.paginas}</span>
-          <Button variante="secundario" disabled={b.pagina >= b.paginas} onClick={() => b.setPagina(b.pagina + 1)}>Siguiente</Button>
+          <Button variante="secundario" disabled={b.pagina >= b.paginas} onClick={() => b.setPagina(b.pagina + 1)}>Ver siguientes</Button>
         </div>
       )}
       <Button variante="secundario" onClick={onVolver}>Volver</Button>

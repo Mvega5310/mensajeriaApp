@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
@@ -29,6 +29,29 @@ import './pages/auth.css';
 // Catálogo del sistema de diseño: solo existe en desarrollo (se elimina del build).
 const DesignSystem = import.meta.env.DEV ? lazy(() => import('./design/DesignSystemPage.jsx')) : null;
 
+// Título de la pestaña por pantalla (lectores de pantalla y historial): "Pantalla · Puertayá".
+// Sin nombre de conjunto: ese dato es de configuración, no del código.
+const TITULOS = [
+  [/^\/login$/, 'Entrar'], [/^\/registro$/, 'Crear cuenta'], [/^\/recuperar$/, 'Recuperar contraseña'],
+  [/^\/restablecer$/, 'Nueva contraseña'], [/^\/terminos$/, 'Términos y condiciones'],
+  [/^\/acceso$/, 'Entrar con correo'], [/^\/acceso\/.+/, 'Entrando'],
+  [/^\/p$/, 'Abriendo tus paquetes'], [/^\/p\/.+/, 'Enlace no válido'],
+  [/^\/paquetes$/, 'Mis paquetes'], [/^\/paquetes\/entrega$/, 'Pedir entrega'], [/^\/paquetes\/avisar$/, 'Avisar un paquete'],
+  [/^\/paquetes\/historial$/, 'Historial'], [/^\/paquetes\/buzon$/, 'Escribir al operador'],
+  [/^\/op\/recibir$/, 'Recibir'], [/^\/op\/recibir\/.+/, 'Tamaño del paquete'], [/^\/op\/guardado\/.+/, 'Paquete guardado'],
+  [/^\/op\/entregar$/, 'Entregar'], [/^\/op\/entregar\/lote$/, 'Cobrar'], [/^\/op\/pendientes$/, 'Pendientes'],
+  [/^\/_ds$/, 'Sistema de diseño'],
+];
+
+function TituloDePagina() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const t = TITULOS.find(([re]) => re.test(pathname))?.[1];
+    document.title = t ? `${t} · Puertayá` : 'Puertayá';
+  }, [pathname]);
+  return null;
+}
+
 function Protected({ children }) {
   return isAuthenticated() ? children : <Navigate to="/login" replace />;
 }
@@ -41,9 +64,12 @@ function PublicPage({ children }) {
   const theme = tema === 'noche' ? 'dark' : 'light';
   return (
     <div className="pt auth-root">
-      <div className="auth-top"><ThemeToggle /></div>
-      <div className="auth-brand"><Logo variant="lockup" size={72} mode={theme} /></div>
-      {children}
+      {/* display: contents conserva el diseño en columna y da a lectores de pantalla sus regiones */}
+      <header style={{ display: 'contents' }}>
+        <div className="auth-top"><ThemeToggle /></div>
+        <div className="auth-brand"><Logo variant="lockup" size={72} mode={theme} /></div>
+      </header>
+      <main style={{ display: 'contents' }}>{children}</main>
     </div>
   );
 }
@@ -69,6 +95,7 @@ function Raiz() {
 export default function App() {
   return (
     <BrowserRouter>
+      <TituloDePagina />
       <Routes>
         <Route path="/login" element={<PublicPage><Login /></PublicPage>} />
         <Route path="/registro" element={<PublicPage><Register /></PublicPage>} />

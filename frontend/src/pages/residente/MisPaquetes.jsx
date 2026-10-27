@@ -27,7 +27,7 @@ export default function MisPaquetes() {
   return (
     <Pantalla>
       <Marca>
-        {modo === 'normal' && <Link to="/paquetes/avisar" className="res-chip-link">+ Avisar</Link>}
+        {modo === 'normal' && <Link to="/paquetes/avisar" className="res-chip-link">Avisar</Link>}
         <button type="button" className="res-chip-link" onClick={() => setMasAbierto(true)}>Más</button>
       </Marca>
       <div className="res-tit" aria-busy={estado === 'cargando'}>

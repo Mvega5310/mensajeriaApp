@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Icon, Sheet } from '../../design';
 import { TIERS } from '../../utils/tiers.js';
 import { descartar, enviarPendientes, reintentarFallido, useCola } from '../../offline/colaRecepciones.js';
@@ -15,17 +15,21 @@ export default function IndicadorCola() {
   const [abierto, setAbierto] = useState(false);
   const total = cola.pendientes.length;
   const nFallidos = cola.fallidos.length;
-  if (total + nFallidos === 0) return null;
+  const nAjenos = cola.ajenos.length;
+  // Al entrar a cualquier pantalla del operador se intenta enviar lo suyo (respeta la espera entre intentos).
+  useEffect(() => { enviarPendientes(); }, []);
+  if (total + nFallidos + nAjenos === 0) return null;
 
   const estado = cola.enviando ? 'Enviando' : cola.sinSenal ? 'Sin señal' : 'En espera';
-  const texto = total > 0 ? `${total} por enviar` : `${nFallidos} sin enviar`;
+  const soloAjenos = total + nFallidos === 0;
+  const texto = total > 0 ? `${total} por enviar` : nFallidos > 0 ? `${nFallidos} sin enviar` : `${nAjenos} de otra sesión`;
 
   return (
     <>
       <div className="op-cola" role="status">
         <button type="button" className="op-cola__btn" onClick={() => setAbierto(true)}>
           <Icon nombre={cola.sinSenal ? 'sinSenal' : 'recibir'} size={20} trazo={2.5} />
-          <span><b>{texto}</b> · {estado}</span>
+          <span><b>{texto}</b>{soloAjenos ? '' : ` · ${estado}`}</span>
           <span className="op-cola__ver">Ver</span>
         </button>
       </div>
@@ -56,6 +60,23 @@ export default function IndicadorCola() {
                   <span className="op-cola__error">{el.ultimoError}</span>
                   <span className="op-cola__acciones">
                     <Button variante="secundario" block={false} onClick={() => reintentarFallido(el.claveIdempotencia)}>Reintentar</Button>
+                    <Button variante="secundario" block={false} onClick={() => descartar(el.claveIdempotencia)}>Descartar</Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {nAjenos > 0 && (
+          <>
+            <h3 className="op-cola__sub">De otra sesión</h3>
+            <p className="op-nota">Estos registros son de otro operador. Se enviarán cuando esa persona entre de nuevo, o puedes descartarlos.</p>
+            <ul className="op-cola__lista">
+              {cola.ajenos.map((el) => (
+                <li key={el.claveIdempotencia}>
+                  <b>{titulo(el)}</b>
+                  <span className="op-muted">De otra sesión{el.operadorNombre ? ` (${el.operadorNombre})` : ''}</span>
+                  <span className="op-cola__acciones">
                     <Button variante="secundario" block={false} onClick={() => descartar(el.claveIdempotencia)}>Descartar</Button>
                   </span>
                 </li>

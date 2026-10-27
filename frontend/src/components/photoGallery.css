@@ -1,6 +1,6 @@
 /* Galería de fotos de evidencia. Solo tokens, cero hex. */
 .pg { display: flex; flex-direction: column; gap: var(--sp-1); }
-.pg__rotulo { font: 700 var(--fs-apoyo) var(--font-texto); color: var(--muted); }
+.pg__rotulo { font: 700 var(--fs-texto) var(--font-texto); color: var(--muted); }
 .pg__grid { display: grid; grid-template-columns: repeat(auto-fill, 96px); gap: var(--sp-1); }
 .pg__thumb { width: 96px; height: 96px; padding: 0; border-radius: var(--r-sm); border: 2px solid var(--line-strong); overflow: hidden; background: var(--raised); cursor: pointer; }
 .pg__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -11,4 +11,4 @@
 .pg__nav { top: 50%; transform: translateY(-50%); }
 .pg__nav--ant { left: var(--sp-1); }
 .pg__nav--sig { right: var(--sp-1); }
-.pg__cuenta { position: absolute; bottom: var(--sp-2); left: 50%; transform: translateX(-50%); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 4px 12px; font: 700 var(--fs-apoyo) var(--font-mono); }
+.pg__cuenta { position: absolute; bottom: var(--sp-2); left: 50%; transform: translateX(-50%); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 4px 12px; font: 700 var(--fs-texto) var(--font-mono); }

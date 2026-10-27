@@ -3,7 +3,14 @@
 // `node --test` (ver colaPura.test.js).
 //
 // Elemento: { claveIdempotencia, body, creadoEn, seq, intentos, ultimoError,
-//             estado: 'pendiente' | 'fallido', proximoIntento, resumen }
+//             estado: 'pendiente' | 'fallido', proximoIntento, resumen,
+//             operadorId, operadorNombre }
+//
+// Sesiones (T4.6): la Idempotency-Key es única POR OPERADOR en el backend. Si otro
+// operador entra en el mismo dispositivo y la cola reenviara con su sesión, un registro
+// que ya llegó con el operador A se duplicaría con el B. Por eso cada elemento guarda el
+// `operadorId` de quien lo encoló y SOLO se reenvía con esa misma sesión. Un elemento sin
+// `operadorId` (anterior a este cambio) se trata como de otra sesión: nunca se envía solo.
 
 export const LIMITE_ELEMENTOS = 50;
 export const LIMITE_BYTES = 40 * 1024 * 1024;
@@ -34,6 +41,13 @@ export function nuevaClave() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+/** Separa la cola entre los elementos del operador en sesión y los de otras sesiones. */
+export function separarPorOperador(items, operadorId) {
+  const propios = []; const ajenos = [];
+  for (const el of items) (operadorId && el.operadorId === operadorId ? propios : ajenos).push(el);
+  return { propios, ajenos };
+}
+
 export class ColaLlena extends Error {
   constructor(msg) { super(msg); this.name = 'ColaLlena'; this.code = 'COLA_LLENA'; }
 }
@@ -54,14 +68,14 @@ export function almacenMemoria() {
  * enviar(el) debe resolver con la respuesta (cualquier 2xx, replay incluido) o lanzar
  * un error con `status` (HTTP) o sin él (red).
  */
-export function crearCola({ almacen, enviar, ahora = () => Date.now(), onEnviado = () => {} }) {
+export function crearCola({ almacen, enviar, ahora = () => Date.now(), onEnviado = () => {}, operadorActual = () => null }) {
   let secuencia = 0;
 
   const ordenar = (lista) => lista.sort((a, b) => a.creadoEn - b.creadoEn || (a.seq ?? 0) - (b.seq ?? 0));
 
   async function listar() { return ordenar(await almacen.todos()); }
 
-  async function encolar({ claveIdempotencia, body, resumen = null }) {
+  async function encolar({ claveIdempotencia, body, resumen = null, operadorId = operadorActual(), operadorNombre = null }) {
     const lista = await listar();
     if (lista.length >= LIMITE_ELEMENTOS) {
       throw new ColaLlena(`Ya hay ${LIMITE_ELEMENTOS} registros sin enviar. Conéctate para enviarlos antes de guardar más.`);
@@ -71,7 +85,7 @@ export function crearCola({ almacen, enviar, ahora = () => Date.now(), onEnviado
       throw new ColaLlena('Hay demasiadas fotos sin enviar. Conéctate para enviarlas antes de guardar más.');
     }
     const el = {
-      claveIdempotencia, body, resumen, creadoEn: ahora(), seq: ++secuencia,
+      claveIdempotencia, body, resumen, operadorId: operadorId ?? null, operadorNombre, creadoEn: ahora(), seq: ++secuencia,
       intentos: 0, ultimoError: null, estado: 'pendiente', proximoIntento: 0,
     };
     await almacen.guardar(el);
@@ -87,6 +101,8 @@ export function crearCola({ almacen, enviar, ahora = () => Date.now(), onEnviado
     const res = { enviados: 0, fallidos: 0, detenido: null };
     for (const el of await listar()) {
       if (el.estado !== 'pendiente') continue;
+      // Solo el operador que lo encoló puede enviarlo (se evalúa en cada elemento: la sesión puede cambiar).
+      if (!operadorActual() || el.operadorId !== operadorActual()) continue;
       if (!forzar && el.proximoIntento > ahora()) { res.detenido = 'espera'; break; }
       try {
         const resp = await enviar(el);
@@ -96,7 +112,7 @@ export function crearCola({ almacen, enviar, ahora = () => Date.now(), onEnviado
       } catch (e) {
         const tipo = clasificarError(e);
         el.intentos += 1;
-        el.ultimoError = e?.message || 'No se pudo enviar';
+        el.ultimoError = e?.message || 'No pudimos enviarlo. Reintenta o descártalo.';
         if (tipo === 'cliente') {
           el.estado = 'fallido';
           await almacen.guardar(el);
@@ -115,7 +131,7 @@ export function crearCola({ almacen, enviar, ahora = () => Date.now(), onEnviado
   /** Un fallido vuelve a pendiente con la MISMA clave. */
   async function reintentar(clave) {
     const el = (await almacen.todos()).find((x) => x.claveIdempotencia === clave);
-    if (!el) return;
+    if (!el || el.operadorId !== operadorActual()) return;
     el.estado = 'pendiente'; el.proximoIntento = 0;
     await almacen.guardar(el);
   }

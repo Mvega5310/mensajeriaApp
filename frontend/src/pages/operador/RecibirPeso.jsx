@@ -61,10 +61,10 @@ export default function RecibirPeso() {
           onClick={() => inputFoto.current?.click()}
         >
           <Icon nombre="camara" size={26} trazo={2} />
-          {g.procesando ? 'Procesando' : g.fotos.length ? `Otra foto · ${g.fotos.length}/${maxFotos}` : 'Tomar foto'}
+          {g.procesando ? 'Procesando' : g.fotos.length ? `Agregar foto · ${g.fotos.length}/${maxFotos}` : 'Tomar foto'}
         </button>
         <button type="button" className="op-extra op-extra--chica" onClick={() => setGuiaAbierta(true)}>
-          {g.guia || g.transportadora ? 'Guía lista' : '+ Guía'}
+          {g.guia || g.transportadora ? 'Editar guía' : 'Agregar guía'}
         </button>
         <input
           ref={inputFoto}
@@ -102,7 +102,7 @@ export default function RecibirPeso() {
       <Sheet open={guiaAbierta} onClose={() => setGuiaAbierta(false)} title="Datos de la guía">
         <Field label="Transportadora" value={g.transportadora} onChange={(e) => g.setTransportadora(e.target.value)} maxLength={60} autoComplete="off" />
         <Field label="Número de guía" mono value={g.guia} onChange={(e) => g.setGuia(e.target.value)} maxLength={60} autoComplete="off" />
-        <Button variante="secundario" onClick={() => setGuiaAbierta(false)}>Listo</Button>
+        <Button variante="secundario" onClick={() => setGuiaAbierta(false)}>Guardar guía</Button>
       </Sheet>
     </Pantalla>
   );

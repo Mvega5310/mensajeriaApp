@@ -32,6 +32,12 @@ export default function Sheet({ open, onClose, title, children, cerrarLabel = 'C
       }
       const a = items[0];
       const z = items[items.length - 1];
+      // Si el foco se perdió fuera de la hoja (p. ej. quedó en el fondo), Tab lo devuelve adentro.
+      if (!nodo.contains(document.activeElement)) {
+        e.preventDefault();
+        (e.shiftKey ? z : a).focus();
+        return;
+      }
       if (e.shiftKey && (document.activeElement === a || document.activeElement === nodo)) {
         e.preventDefault();
         z.focus();
