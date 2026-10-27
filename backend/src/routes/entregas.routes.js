@@ -39,6 +39,7 @@ router.post('/confirmar', requireRole('OPERATOR'), asyncHandler(async (req, res)
   const { tokenEntrega, paqueteIds, metodoPago } = req.body ?? {};
   res.json(await confirmarLote({
     operadorId: req.user.sub, conjuntoId: req.conjuntoId, tokenEntrega, paqueteIds, metodoPago,
+    notificador: req.app.locals.notificador,
   }));
 }));
 

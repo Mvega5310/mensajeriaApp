@@ -16,7 +16,7 @@ if (omitir) console.warn(`[entregaLote.integration] OMITIDA: ${razonSkip}`);
 if (!omitir && !process.env.JWT_SECRET) process.env.JWT_SECRET = 'itest-secret';
 const skip = omitir && razonSkip;
 
-let prisma, runWithTenant, createApp, server, base;
+let prisma, runWithTenant, createApp, crearNotificadorFake, notificador, server, base;
 const SLUGS = ['iteste-alfa', 'iteste-beta'];
 const PWD = 'Password1';
 const ctx = {};
@@ -66,7 +66,7 @@ async function paquete(residenteId, pin, { estado = 'EN_RECEPCION', costo = 4500
 // Evita que PINes aleatorios de otras pruebas choquen: cada prueba usa PINes propios.
 const nuevoLimitador = () => { server.close(); return arrancar(); };
 async function arrancar() {
-  const app = createApp();
+  const app = createApp({ notificador });
   await new Promise((resolve) => { server = app.listen(0, () => { base = `http://127.0.0.1:${server.address().port}`; resolve(); }); });
 }
 
@@ -74,6 +74,8 @@ test('setup', { skip }, async () => {
   ({ prisma } = await import('../db.js'));
   ({ runWithTenant } = await import('../tenantContext.js'));
   ({ createApp } = await import('../../app.js'));
+  ({ crearNotificadorFake } = await import('../../services/notificador/index.js'));
+  notificador = crearNotificadorFake();
   hash = await (await import('bcryptjs')).default.hash(PWD, 4);
   await limpiar();
   const mk = (slug) => prisma.conjunto.create({
@@ -201,6 +203,21 @@ test('confirmar: entrega todo con un ENTREGAR por paquete y metodoPago', { skip 
     assert.equal(ev.length, 1);
     assert.equal(ev[0].actorId, ctx.opA.id);
   }
+});
+
+test('confirmar: un solo correo de agradecimiento con todos los paquetes del lote', { skip }, async () => {
+  const a = await residente({ apto: '602' });
+  await enA(() => prisma.user.update({ where: { id: a.id }, data: { email: 'lote602@iteste.local' } }));
+  const p1 = await paquete(a.id, '4011', { costo: 0 });
+  const p2 = await paquete(a.id, '4012', { costo: 3000 });
+  const v = await (await verificar({ pin: '4011' })).json();
+  notificador.limpiar();
+  const r = await confirmar({ tokenEntrega: v.tokenEntrega, paqueteIds: [p1.id, p2.id], metodoPago: 'TRANSFERENCIA' });
+  assert.equal(r.status, 200);
+  await new Promise((ok) => setTimeout(ok, 50));
+  const env = notificador.obtenerEnviados().filter((m) => m.tipo === 'entrega');
+  assert.equal(env.length, 1);
+  assert.equal(env[0].para, 'lote602@iteste.local');
 });
 
 test('confirmar: subconjunto de ids, validaciones de método/ids/token', { skip }, async () => {

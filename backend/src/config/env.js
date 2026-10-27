@@ -42,6 +42,12 @@ function leer(env, nombre) {
   return limpio === '' ? undefined : limpio;
 }
 
+/** Clave de Resend utilizable, o undefined. El valor de ejemplo "re_xxx..." cuenta como ausente. */
+export function claveResendValida(env = process.env) {
+  const clave = leer(env, 'RESEND_API_KEY');
+  return clave && !clave.startsWith('re_xxx') ? clave : undefined;
+}
+
 export function validarEntorno(env = process.env) {
   const problemas = [];
   const avisos = [];
@@ -109,10 +115,9 @@ export function validarEntorno(env = process.env) {
     avisos.push('FRONTEND_URL no está definida: los enlaces de los correos (registro, restablecer contraseña) quedarán rotos.');
   }
 
-  // Igual que services/email.service.js: el valor de ejemplo "re_xxx..." cuenta como ausente.
-  const resendApiKey = leer(env, 'RESEND_API_KEY');
-  const resendValida = resendApiKey && !resendApiKey.startsWith('re_xxx');
-  if (!resendValida) {
+  // Misma regla que services/notificador: el valor de ejemplo "re_xxx..." cuenta como ausente.
+  const resendApiKey = claveResendValida(env);
+  if (!resendApiKey) {
     avisos.push('RESEND_API_KEY no está definida: el correo se simula y no se envía nada.');
   }
 
@@ -136,7 +141,7 @@ export function validarEntorno(env = process.env) {
     enlaceSecret,
     corsOrigin,
     frontendUrl,
-    resendApiKey: resendValida ? resendApiKey : undefined,
+    resendApiKey,
     emailFrom: leer(env, 'EMAIL_FROM'),
     avisos,
   };

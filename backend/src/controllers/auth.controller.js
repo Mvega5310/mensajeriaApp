@@ -7,7 +7,7 @@ import { tenantStore, SCOPE, runWithTenant } from '../config/tenantContext.js';
 import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
 import { PASSWORD_POLICY, PASSWORD_POLICY_MSG } from '../services/password.service.js';
-import { sendPasswordResetEmail } from '../services/email.service.js';
+import { enSegundoPlano } from '../services/avisos.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 
@@ -173,7 +173,13 @@ export async function forgotPassword(req, res) {
   });
 
   const resetUrl = `${process.env.FRONTEND_URL}/restablecer?token=${rawToken}`;
-  await sendPasswordResetEmail(user.email, resetUrl);
+  // Conjunto es un modelo sin tenant: se lee directo (solo para el nombre en el correo).
+  const conjunto = user.conjuntoId
+    ? await prisma.conjunto.findUnique({ where: { id: user.conjuntoId } })
+    : null;
+  enSegundoPlano('recuperacion', () => req.app.locals.notificador.recuperarContrasena({
+    email: user.email, url: resetUrl, conjunto,
+  }));
 
   res.json(GENERIC_RESET_RESPONSE);
 }

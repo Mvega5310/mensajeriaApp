@@ -10,13 +10,14 @@ import entregasRoutes from './routes/entregas.routes.js';
 import enlaceRoutes from './routes/enlace.routes.js';
 import { manejadorErrores } from './domain/errores.js';
 import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS } from './domain/limitador.js';
+import { crearNotificadorDesdeEntorno } from './services/notificador/index.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
 
 // Construye la app de Express SIN arrancar el servidor. index.js hace el
 // listen en producción; las pruebas de integración HTTP hacen app.listen(0)
 // contra un puerto efímero (ver __tests__/http.integration.test.js).
 // `limitadorLogin` es inyectable (pruebas, o un limitador con Redis más adelante).
-export function createApp({ limitadorLogin, limitadorPinEntrega } = {}) {
+export function createApp({ limitadorLogin, limitadorPinEntrega, notificador } = {}) {
   const app = express();
 
   // Detrás del proxy de Railway, `req.ip` sería la IP del proxy para todos y el
@@ -35,6 +36,9 @@ export function createApp({ limitadorLogin, limitadorPinEntrega } = {}) {
   app.locals.limitadorLogin = limitadorLogin ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
   // Fallos de PIN en entrega por lote (T2.5): por operador, 10 / 15 min.
   app.locals.limitadorPinEntrega = limitadorPinEntrega ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
+
+  // Inyectable (pruebas: fake). Sin clave de Resend => fake en memoria + aviso en el log.
+  app.locals.notificador = notificador ?? crearNotificadorDesdeEntorno();
 
   app.use(cors({ origin: process.env.CORS_ORIGIN }));
   // El límite ya no es la defensa principal contra fotos gigantes — el

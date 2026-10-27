@@ -11,6 +11,8 @@ import { seleccionarLote, ESTADOS_ENTREGABLES } from '../domain/entregaLote.js';
 import { firmarTokenEntrega, verificarTokenEntrega } from '../domain/tokenEntrega.js';
 import { registrarIntentoPin } from './pin.service.js';
 import { aplicarEvento } from './paquete.service.js';
+import { enSegundoPlano } from './avisos.service.js';
+import { conjuntoDelContexto } from './conjunto.service.js';
 
 // Secreto dedicado si existe; si no, JWT_SECRET (el HMAC lleva prefijo de dominio).
 const secretoEntrega = () => process.env.ENTREGA_SECRET || process.env.JWT_SECRET;
@@ -116,7 +118,7 @@ const tokenInvalido = (vencido) => new AppError(
   401,
 );
 
-export async function confirmarLote({ operadorId, conjuntoId, tokenEntrega, paqueteIds, metodoPago, ahora = new Date() }) {
+export async function confirmarLote({ operadorId, conjuntoId, tokenEntrega, paqueteIds, metodoPago, notificador, ahora = new Date() }) {
   if (!esMetodoPagoValido(metodoPago)) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Elige el método de pago: efectivo o transferencia.', 400, { campo: 'metodoPago', validos: [...METODOS_PAGO] });
   }
@@ -154,13 +156,28 @@ export async function confirmarLote({ operadorId, conjuntoId, tokenEntrega, paqu
   // Punto único post-commit para efectos secundarios (T2.4 conecta aquí el
   // correo de agradecimiento del lote). NO lanzar desde aquí: la entrega ya
   // quedó confirmada.
-  await despuesDeEntregarLote({ conjuntoId, residenteId: t.residenteId, paqueteIds: ids, metodoPago });
+  await despuesDeEntregarLote({ notificador, residenteId: t.residenteId, paqueteIds: ids });
 
   return resultado;
 }
 
-// eslint-disable-next-line no-unused-vars
-async function despuesDeEntregarLote(_info) {
-  // Hook vacío a propósito (T2.4): p. ej. agradecerEntrega(residenteId, paqueteIds).
+// Correo de agradecimiento del lote (un solo correo con todos los paquetes).
+// Nunca lanza: la entrega ya quedó confirmada; un fallo solo queda en el log.
+async function despuesDeEntregarLote({ notificador, residenteId, paqueteIds }) {
+  if (!notificador) return;
+  try {
+    const residente = await prisma.user.findUnique({
+      where: { id: residenteId },
+      select: { nombre: true, email: true },
+    });
+    if (!residente?.email) return;
+    const [paquetes, conjunto] = await Promise.all([
+      prisma.package.findMany({ where: { id: { in: paqueteIds } } }),
+      conjuntoDelContexto(),
+    ]);
+    enSegundoPlano('entrega', () => notificador.agradecerEntrega({ residente, paquetes, conjunto }));
+  } catch (err) {
+    console.error('Aviso de entrega por lote no enviado:', err?.code ?? err?.name);
+  }
 }
 
