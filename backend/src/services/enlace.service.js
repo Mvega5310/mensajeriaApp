@@ -17,6 +17,7 @@ import { etiquetaApartamento } from '../domain/apartamento.js';
 import { franjasDe } from '../domain/conjuntoConfig.js';
 import { METODOS_PAGO } from '../domain/pago.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
+import { motivosDeCobro } from './paquete.service.js';
 
 export const SCOPE_ENLACE = 'enlace';
 export const VIGENCIA_SESION_ENLACE = '2h';
@@ -55,20 +56,12 @@ export async function vistaMisPaquetes(residenteId) {
     where: { residenteId: residente.id, estado: { in: ESTADOS_ACTIVOS } },
     select: {
       id: true, estado: true, pin: true, costoServicio: true, categoriaPeso: true, proveedor: true,
-      transportadora: true, guia: true, recibidoEn: true, franjaHoraria: true, metodoPagoServicio: true,
+      transportadora: true, guia: true, recibidoEn: true, franjaHoraria: true, metodoPagoServicio: true, modalidadEntrega: true,
       createdAt: true,
     },
     orderBy: { createdAt: 'desc' },
   });
-  const eventos = paquetes.length
-    ? await prisma.paqueteEvento.findMany({
-      where: { paqueteId: { in: paquetes.map((p) => p.id) }, tipo: { in: [EVENTOS.RECIBIR, EVENTOS.ASIGNAR] } },
-      orderBy: { creadoEn: 'desc' },
-      select: { paqueteId: true, datos: true },
-    })
-    : [];
-  const motivoPor = new Map();
-  for (const e of eventos) if (!motivoPor.has(e.paqueteId)) motivoPor.set(e.paqueteId, e.datos?.motivoCobro ?? null);
+  const motivoPor = await motivosDeCobro(paquetes.map((p) => p.id));
 
   return {
     residente: { nombre: residente.nombre, etiquetaApto: etiquetaApartamento(residente.torre, residente.apto) },
@@ -86,6 +79,7 @@ export async function vistaMisPaquetes(residenteId) {
       recibidoEn: p.recibidoEn,
       franjaHoraria: p.franjaHoraria,
       metodoPagoServicio: p.metodoPagoServicio,
+      modalidadEntrega: p.modalidadEntrega,
     })),
     franjasEntrega: franjasDe(conjunto),
     metodosPago: METODOS_PAGO,

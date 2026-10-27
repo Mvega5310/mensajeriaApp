@@ -11,7 +11,8 @@
 // contexto de tenant (invariante 4).
 
 import { AppError, CODIGOS } from '../domain/errores.js';
-import { transicionar } from '../domain/paquete.machine.js';
+import { prisma } from '../config/db.js';
+import { EVENTOS, transicionar } from '../domain/paquete.machine.js';
 
 /**
  * Aplica `evento` a un paquete existente.
@@ -77,4 +78,22 @@ export async function crearConEvento(tx, evento, { data, actorId, datos }) {
     },
   });
   return paquete;
+}
+
+/**
+ * Motivo del cobro de cada paquete (CORTESIA, BONO, TARIFA...), tomado del evento
+ * RECIBIR/ASIGNAR más reciente. Así los listados del residente no tienen que inferir
+ * "Gratis" por costo 0. Devuelve Map<paqueteId, motivo|null> (solo los que tienen evento).
+ * Debe correr dentro de un contexto de tenant.
+ */
+export async function motivosDeCobro(paqueteIds) {
+  const mapa = new Map();
+  if (!paqueteIds.length) return mapa;
+  const eventos = await prisma.paqueteEvento.findMany({
+    where: { paqueteId: { in: paqueteIds }, tipo: { in: [EVENTOS.RECIBIR, EVENTOS.ASIGNAR] } },
+    orderBy: { creadoEn: 'desc' },
+    select: { paqueteId: true, datos: true },
+  });
+  for (const e of eventos) if (!mapa.has(e.paqueteId)) mapa.set(e.paqueteId, e.datos?.motivoCobro ?? null);
+  return mapa;
 }

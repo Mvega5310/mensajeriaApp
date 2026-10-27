@@ -132,6 +132,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
+| `contratosResidente.integration.test.js` | integración | T2.8: `transportadora` en la pre-alerta, `schedule` con `modalidad` RECOGER/DOMICILIO, `motivoCobro` en `/packages/mine` y `/p/paquetes`, `GET /bonos/mine`. |
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
 | `recepcionSinPrealerta.integration.test.js` | integración | T2.1: paquete sin residente (SIN_ASIGNAR / EN_RECEPCION directo) se crea y lista con `etiquetaNombre`, checkin/entrega lo toleran (409 o TARIFA, sin 500), aislamiento, y `GET /conjunto/config` con los defaults nuevos. |
 | `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
@@ -139,7 +140,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `entregaLote.test.js` | unitaria | T2.5: token de entrega (firma, vencimiento, alteración) y regla de selección del lote. |
 | `entregaLote.integration.test.js` | integración | T2.5: `/entregas/verificar-pin` y `/confirmar` (lote por apartamento, `PIN_AMBIGUO`, límite por operador, token ajeno/vencido, carrera sin entregas parciales, aislamiento). |
 | `revisionF2.integration.test.js` | integración | Revisión F2: cortesía única (escenario lunes/martes, carrera de 5 recepciones, "T2" = "TORRE 2"), ninguna respuesta al operador lleva el PIN, bloqueo por paquete en lote, presupuesto de fotos del JSON. |
-| `enlace.integration.test.js` + `domain/__tests__/enlace.test.js` | integración + pura | T3.1: token válido/vencido/alterado/basura/otro secreto/conjunto manipulado, residente borrado, sesión limitada (schedule propio sí, ajeno 404, todas las demás rutas del app real 403), URL `/p#` en el aviso. |
+| `enlace.integration.test.js` + `domain/__tests__/enlace.test.js` | integración + pura | T3.1 (+T2.8: foto propia 200 / ajena no): token válido/vencido/alterado/basura/otro secreto/conjunto manipulado, residente borrado, sesión limitada (schedule propio sí, ajeno 404, todas las demás rutas del app real 403), URL `/p#` en el aviso. |
 | `enlaceAcceso.integration.test.js` | integración | T3.2: enlace mágico (correo existente / inexistente con respuesta idéntica, canje con JWT normal, segundo canje, vencido, propósito RESET vs ACCESO en ambos sentidos, carrera de canjes, límite 5/15 min, forgot/reset intacto). |
 | `avisos.integration.test.js` | integración | T2.4: correo de llegada con notificador `fake` (recepción, `asignar`, `checkin`; 0 en replay idempotente, sin correo o sin dueño; un notificador que lanza no tumba el 201). |
 | `notificador/__tests__/plantillas.test.js` | unitaria | T2.4: `escaparHtml`, plantillas escapadas y sin "Ipanema", selección `fake`/`resend`, `construirEnlace`. |
@@ -586,9 +587,10 @@ El aviso de llegada de WhatsApp lleva `${FRONTEND_URL}/p#<token>` (en el **fragm
   Errores: `400` sin token, `401 ENLACE_INVALIDO | ENLACE_VENCIDO`, `404` si el residente ya no existe.
   Cabeceras `Cache-Control: no-store` y `Referrer-Policy: no-referrer`.
 - **`sesion`**: JWT firmado con `JWT_SECRET`, `scope: 'enlace'`, vence en 2 h. Solo
-  sirve en `GET /api/p/paquetes` (refresca la misma vista, sin `sesion`) y
+  sirve en `GET /api/p/paquetes` (refresca la misma vista, sin `sesion`),
   `PATCH /api/packages/:id/schedule` (pedir entrega; solo paquetes propios, 404 si
-  no). `requireAuth` rechaza con **403** cualquier otra ruta (lista
+  no) y `GET /api/packages/:id/foto` (T2.8: fotos del paquete propio; el de otro
+  residente da 403/404). `requireAuth` rechaza con **403** cualquier otra ruta (lista
   `RUTAS_PERMITIDAS_ENLACE` en `middleware/auth.middleware.js`, recorrida por
   `enlace.integration.test.js` sobre el app real). `requireTenant` además exige que
   el `conjuntoId` del token coincida con el del usuario en la BD.
@@ -689,16 +691,17 @@ puede ser del token de entrega, no de la sesión).
 |---|---|---|
 | `/p` | Abrir | Enlace de WhatsApp `/p#<token>`: lee el fragmento, lo borra de la barra (`history.replaceState`), `POST /api/p/abrir` y entra a Mis paquetes sin contraseña. 401 o enlace viejo `/p/<token>` → "Este enlace ya no sirve" con salida a `/acceso`. |
 | `/paquetes` | Mis paquetes | Saludo, tarjetas (estado, foto si hay, monto o "Gratis", **PIN en grande**), **Pedir entrega** (o "Cambiar franja" si ya está programado), "Ver historial" y "+ Avisar" solo con sesión normal. Lee `GET /api/p/paquetes` (sirve con ambas sesiones) y se refresca cada 20 s. |
-| `/paquetes/entrega` | Pedir entrega | Franjas y método de pago del conjunto como chips (`radiogroup`) y **Confirmar \<franja\>**: una llamada `PATCH /packages/:id/schedule` por paquete, con error parcial claro. |
+| `/paquetes/entrega` | Pedir entrega | Franjas y método de pago del conjunto como chips (`radiogroup`) y **Confirmar \<franja\>**: una llamada `PATCH /packages/:id/schedule` por paquete, con error parcial claro. **"Prefiero recogerlo en portería"** manda `{ modalidad: 'RECOGER' }`. |
 | `/paquetes/avisar` | Avisar | 2 campos (transportadora en chips + guía opcional); "Agregar detalles" abre tienda, tamaño, contra entrega, valor declarado, PIN del proveedor y nota (`POST /packages`). |
 | `/paquetes/historial` | Historial | Entregados con fecha, monto y fotos (`GET /packages/mine`). |
+| `/paquetes/bonos` | Mis bonos | Saldo de entregas prepagas por categoría (`GET /bonos/mine`). Solo con sesión normal y si `Conjunto.bonosHabilitados`; se entra desde "Más". |
 | `/paquetes/buzon` | Buzón | Comentarios al operador (`/comments`). |
 | `/acceso`, `/acceso/:token` | Acceso | Pide enlace por correo (mensaje genérico tal cual) y canjea automático con `POST /auth/enlace/canjear`; "Entrar con contraseña" sigue como secundario (`/login`). |
 
 La **sesión del enlace** (JWT de 2 h con PINes) se guarda solo en memoria y `sessionStorage`
 (con `try/catch`), nunca en `localStorage` ni mezclada con el token de login; con ella solo se
-llaman `GET /p/paquetes` y `PATCH /packages/:id/schedule`. Por eso, con el enlace no hay fotos,
-historial ni "+ Avisar" (se ofrece "entra con tu correo").
+llaman `GET /p/paquetes`, `PATCH /packages/:id/schedule` y `GET /packages/:id/foto`. Por eso, con el enlace no hay
+historial, bonos ni "+ Avisar" (se ofrece "entra con tu correo").
 
 **CSS legado eliminado.** `index.css` y las variables `--lg-*` ya no existen: Login, Registro,
 Recuperar, Restablecer, Términos, `PasswordField` y `PhotoGallery` usan tokens y componentes del
@@ -720,3 +723,21 @@ sistema de diseño (`base.css`, `pages/auth.css`, `components/photoGallery.css`)
   estar en las tiendas de verdad, el paso siguiente es envolver este mismo
   código con Capacitor — no es una reescritura, pero suma cuenta de Apple
   Developer (USD 99/año) y de Google Play (USD 25 única vez).
+
+
+## Contratos del residente (T2.8)
+
+- `POST /api/packages` acepta `transportadora` (texto, máx. 60) y ya no exige `proveedor` si viene
+  `transportadora` (proveedor = "Sin especificar"). Sin ninguno de los dos: 400.
+- `PATCH /api/packages/:id/schedule` acepta `modalidad`: `DOMICILIO` (defecto; `franjaHoraria` +
+  `metodoPagoServicio` como siempre) o `RECOGER` ("prefiero recogerlo en portería": limpia franja y
+  pago). Se guarda en `Package.modalidadEntrega` (nullable) y **aplica PROGRAMAR** en ambos casos:
+  una sola máquina de estados, la bitácora registra `datos.modalidad` y el operador lo ve en
+  Programados con `modalidadEntrega` en `GET /api/packages` (la UI del operador lo muestra cuando
+  T4.5 lo recoja). Otro valor: 400.
+- `GET /api/packages/mine` y `GET /api/p/paquetes` devuelven `motivoCobro` (del último evento
+  RECIBIR/ASIGNAR; `null` en pre-alertas) y `modalidadEntrega` (en `/p/paquetes`, y en `/mine` como
+  campo del paquete). Los listados siguen sin `fotoUrl`.
+- `GET /api/bonos/mine` (RESIDENT, ya existía): bonos propios; el saldo es `cantidadTotal -
+  cantidadUsada` por `categoriaPeso`. El frontend solo ofrece "Mis bonos" si `GET /conjunto/config`
+  trae `bonosHabilitados`.

@@ -49,6 +49,14 @@ export default function PedirEntrega() {
     setFallo(`No pudimos programar ${fallidos.length} de ${listos.length} paquetes. ${mensaje} Toca Confirmar para intentarlo otra vez.`);
   }
 
+  async function recoger() {
+    setFallo('');
+    const { fallidos, mensaje } = await programar(listos.map((p) => p.id), null, null, 'RECOGER');
+    if (fallidos.length === 0) { navigate('/paquetes', { replace: true }); return; }
+    await recargar();
+    setFallo(`No pudimos registrar ${fallidos.length} de ${listos.length} paquetes. ${mensaje} Intenta otra vez.`);
+  }
+
   return (
     <Pantalla>
       <div style={{ display: 'flex', alignItems: 'center', padding: '12px var(--sp-1) 0' }}>
@@ -74,6 +82,7 @@ export default function PedirEntrega() {
         <Button disabled={!franjaElegida || enviando || listos.length === 0} aria-busy={enviando} onClick={confirmar}>
           {franjaElegida ? `Confirmar ${franjaElegida}` : 'Elige una franja'}
         </Button>
+        <Button variante="secundario" disabled={enviando || listos.length === 0} onClick={recoger}>Prefiero recogerlo en portería</Button>
       </div>
     </Pantalla>
   );

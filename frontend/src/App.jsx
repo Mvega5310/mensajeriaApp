@@ -11,6 +11,7 @@ import AccesoToken from './pages/residente/AccesoToken.jsx';
 import Avisar from './pages/residente/Avisar.jsx';
 import Buzon from './pages/residente/Buzon.jsx';
 import EnlaceInvalido from './pages/residente/EnlaceInvalido.jsx';
+import MisBonos from './pages/residente/MisBonos.jsx';
 import Historial from './pages/residente/Historial.jsx';
 import MisPaquetes from './pages/residente/MisPaquetes.jsx';
 import PedirEntrega from './pages/residente/PedirEntrega.jsx';
@@ -86,6 +87,7 @@ export default function App() {
         <Route path="/paquetes/entrega" element={<SoloResidente><PedirEntrega /></SoloResidente>} />
         <Route path="/paquetes/avisar" element={<SoloResidente><Avisar /></SoloResidente>} />
         <Route path="/paquetes/historial" element={<SoloResidente><Historial /></SoloResidente>} />
+        <Route path="/paquetes/bonos" element={<SoloResidente><MisBonos /></SoloResidente>} />
         <Route path="/paquetes/buzon" element={<SoloResidente><Buzon /></SoloResidente>} />
         <Route path="/op/recibir" element={<SoloOperador><Recibir /></SoloOperador>} />
         <Route path="/op/recibir/:residenteId" element={<SoloOperador><RecibirPeso /></SoloOperador>} />

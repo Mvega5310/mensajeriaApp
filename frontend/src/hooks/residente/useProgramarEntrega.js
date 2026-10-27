@@ -7,11 +7,11 @@ import { cabecerasDeSesion } from './sesionEnlace.js';
 export default function useProgramarEntrega(modo) {
   const [enviando, setEnviando] = useState(false);
 
-  async function programar(ids, franjaHoraria, metodoPagoServicio) {
+  async function programar(ids, franjaHoraria, metodoPagoServicio, modalidad = 'DOMICILIO') {
     setEnviando(true);
     const headers = cabecerasDeSesion(modo);
     const resultados = await Promise.allSettled(ids.map((id) => api(`/packages/${id}/schedule`, {
-      method: 'PATCH', body: { franjaHoraria, metodoPagoServicio }, headers, sinCierreDeSesion: modo === 'enlace',
+      method: 'PATCH', body: modalidad === 'RECOGER' ? { modalidad } : { franjaHoraria, metodoPagoServicio, modalidad }, headers, sinCierreDeSesion: modo === 'enlace',
     })));
     setEnviando(false);
     const fallidos = ids.filter((_, i) => resultados[i].status === 'rejected');
