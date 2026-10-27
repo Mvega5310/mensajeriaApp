@@ -6,7 +6,12 @@ import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Terms from './pages/Terms.jsx';
 import ResidentView from './pages/ResidentView.jsx';
-import OperatorView from './pages/OperatorView.jsx';
+import Recibir from './pages/operador/Recibir.jsx';
+import RecibirPeso from './pages/operador/RecibirPeso.jsx';
+import Guardado from './pages/operador/Guardado.jsx';
+import Entregar from './pages/operador/Entregar.jsx';
+import Cobrar from './pages/operador/Cobrar.jsx';
+import Pendientes from './pages/operador/Pendientes.jsx';
 import { getRole, isAuthenticated, logout } from './services/auth.js';
 import { api } from './services/api.js';
 import { getConjuntoConfig } from './services/conjunto.js';
@@ -33,6 +38,17 @@ function PublicPage({ children }) {
       {children}
     </>
   );
+}
+
+// Pantallas del operador (/op/*): requieren sesión y rol OPERATOR.
+function SoloOperador({ children }) {
+  if (!isAuthenticated()) return <Navigate to="/login" replace />;
+  return getRole() === 'OPERATOR' ? children : <Navigate to="/" replace />;
+}
+
+// El operador aterriza en Recibir; el residente ve su vista (T4.3 la reemplaza).
+function Raiz() {
+  return getRole() === 'OPERATOR' ? <Navigate to="/op/recibir" replace /> : <Home />;
 }
 
 function Home() {
@@ -64,7 +80,7 @@ function Home() {
           <button className="btn-link" onClick={() => setConfirmandoSalida(true)}>Salir</button>
         </div>
       </header>
-      {role === 'OPERATOR' ? <OperatorView /> : <ResidentView />}
+      <ResidentView />
 
       {confirmandoSalida && (
         <div className="modal-overlay modal-overlay-center" onClick={() => setConfirmandoSalida(false)}>
@@ -99,7 +115,14 @@ export default function App() {
         {DesignSystem && (
           <Route path="/_ds" element={<Suspense fallback={null}><DesignSystem /></Suspense>} />
         )}
-        <Route path="/" element={<Protected><Home /></Protected>} />
+        <Route path="/op/recibir" element={<SoloOperador><Recibir /></SoloOperador>} />
+        <Route path="/op/recibir/:residenteId" element={<SoloOperador><RecibirPeso /></SoloOperador>} />
+        <Route path="/op/guardado/:id" element={<SoloOperador><Guardado /></SoloOperador>} />
+        <Route path="/op/entregar" element={<SoloOperador><Entregar /></SoloOperador>} />
+        <Route path="/op/entregar/lote" element={<SoloOperador><Cobrar /></SoloOperador>} />
+        <Route path="/op/pendientes" element={<SoloOperador><Pendientes /></SoloOperador>} />
+        <Route path="/op" element={<Navigate to="/op/recibir" replace />} />
+        <Route path="/" element={<Protected><Raiz /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
