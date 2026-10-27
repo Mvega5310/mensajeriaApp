@@ -1,7 +1,19 @@
 /* Pantallas del operador. Solo tokens de design/tokens.css, cero hex. */
-.op-root { min-height: 100vh; min-height: 100dvh; display: flex; justify-content: center; }
-.op { width: 100%; max-width: 520px; min-height: inherit; display: flex; flex-direction: column; box-sizing: border-box; }
+.op-root { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.op-root > .ds-nav { order: 2; }
+.op { width: 100%; max-width: 520px; margin: 0 auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; box-sizing: border-box; }
 .op__cuerpo { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+/* Escritorio (>= 1024 px): navegación lateral a la izquierda y contenido centrado a la derecha. */
+@media (min-width: 1024px) {
+  .op-root { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .op-root--nav { grid-template-columns: 264px minmax(0, 1fr); }
+  .op-root > .ds-nav { order: 0; }
+  .op { max-width: 560px; padding: 28px 32px; }
+  .op--amplio { max-width: 1040px; }
+  .op-mas { display: none; }
+  .op-teclado { max-width: 420px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+}
 .op__pad { padding: 0 var(--sp-2); }
 .op__acciones { padding: var(--sp-1) var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: 10px; }
 .op__relleno { flex: 1; }
@@ -90,3 +102,14 @@
 .op-qr { align-self: center; width: 240px; height: 240px; border-radius: var(--r-sm); background: var(--surface); }
 .op-fila--lectura { cursor: default; flex-direction: column; align-items: stretch; gap: 6px; }
 .op-select { min-height: var(--field-h); border-radius: var(--r-sm); border: 2px solid var(--line-strong); background: var(--surface); color: var(--ink); padding: 0 var(--sp-2); font: 500 var(--fs-texto) var(--font-texto); width: 100%; }
+
+/* Pendientes: en móvil, una columna (la lista; el detalle es hoja). En escritorio, lista + panel de detalle. */
+.op-dos { min-width: 0; display: flex; flex-direction: column; }
+.op-dos__lista { min-width: 0; display: flex; flex-direction: column; }
+.op-panel { box-sizing: border-box; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3); background: var(--surface); color: var(--ink); border: 2px solid var(--ink); border-radius: var(--r-lg); }
+.op-panel__titulo { margin: 0; font: 800 24px var(--font-titulo); letter-spacing: -0.02em; overflow-wrap: anywhere; }
+@media (min-width: 1024px) {
+  .op-dos { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: var(--sp-3); align-items: start; }
+  .op-dos__lista { padding-top: 0; }
+  .op-panel { position: sticky; top: 28px; }
+}

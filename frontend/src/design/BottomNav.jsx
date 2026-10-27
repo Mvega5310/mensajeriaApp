@@ -1,11 +1,14 @@
 import Icon from './Icon.jsx';
 
-/** Barra inferior de 3 pestañas. items: [{ id, label, icono, href?, onClick?, contador? }].
+/** Barra inferior de 3 pestañas; desde 1024 px pasa a ser lateral (ver components.css).
+ *  items: [{ id, label, icono, href?, onClick?, contador? }].
  *  activo = id de la pestaña actual (aria-current="page").
- *  as: componente de enlace (p. ej. Link de react-router, recibe `to`); por defecto <a href>. */
-export default function BottomNav({ items, activo, as: Link, label = 'Navegación principal', className = '' }) {
+ *  as: componente de enlace (p. ej. Link de react-router, recibe `to`); por defecto <a href>.
+ *  marca / pie: solo se ven en escritorio (logo arriba, acciones abajo). */
+export default function BottomNav({ items, activo, as: Link, label = 'Navegación principal', className = '', marca, pie }) {
   return (
     <nav className={`ds-nav ${className}`.trim()} aria-label={label}>
+      {marca && <div className="ds-nav__marca">{marca}</div>}
       {items.map((it) => {
         const texto = it.contador != null ? `${it.label} · ${it.contador}` : it.label;
         const contenido = (
@@ -23,6 +26,7 @@ export default function BottomNav({ items, activo, as: Link, label = 'Navegació
         if (it.href) return <a key={it.id} href={it.href} {...comunes}>{contenido}</a>;
         return <button key={it.id} type="button" {...comunes}>{contenido}</button>;
       })}
+      {pie && <div className="ds-nav__pie">{pie}</div>}
     </nav>
   );
 }

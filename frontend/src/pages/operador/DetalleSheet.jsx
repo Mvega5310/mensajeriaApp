@@ -41,23 +41,41 @@ function Tarjeta({ p }) {
   );
 }
 
-/** Detalle de los paquetes de un apartamento (o de uno solo): fotos, cobro, notas y bonos. */
+/** Cuerpo del detalle: fotos, cobro, notas y bonos. Lo usan la hoja (móvil) y el panel (escritorio). */
+export function DetalleCuerpo({ detalle, config, bonos, onBonos }) {
+  const residente = detalle?.paquetes?.[0]?.residente ? detalle.paquetes[0] : null;
+  if (bonos) {
+    return <BonosVista residenteId={residente.residenteId} config={config} onVolver={() => onBonos(false)} />;
+  }
+  return (
+    <div className="op-hoja">
+      {detalle?.paquetes.map((p) => <Tarjeta key={p.id} p={p} />)}
+      {config?.bonosHabilitados && residente?.residenteId && (
+        <Button variante="secundario" icono="regalo" onClick={() => onBonos(true)}>Ver bonos</Button>
+      )}
+    </div>
+  );
+}
+
+/** Detalle en hoja modal (móvil). */
 export default function DetalleSheet({ detalle, onClose, config }) {
   const [bonos, setBonos] = useState(false);
-  const residente = detalle?.paquetes?.[0]?.residente ? detalle.paquetes[0] : null;
   const cerrar = () => { setBonos(false); onClose(); };
   return (
     <Sheet open={!!detalle} onClose={cerrar} title={bonos ? 'Bonos' : detalle?.titulo}>
-      {bonos ? (
-        <BonosVista residenteId={residente.residenteId} config={config} onVolver={() => setBonos(false)} />
-      ) : (
-        <div className="op-hoja">
-          {detalle?.paquetes.map((p) => <Tarjeta key={p.id} p={p} />)}
-          {config?.bonosHabilitados && residente?.residenteId && (
-            <Button variante="secundario" icono="regalo" onClick={() => setBonos(true)}>Ver bonos</Button>
-          )}
-        </div>
-      )}
+      <DetalleCuerpo detalle={detalle} config={config} bonos={bonos} onBonos={setBonos} />
     </Sheet>
+  );
+}
+
+/** Mismo detalle renderizado como panel fijo a la derecha (escritorio). Usar con key por apartamento. */
+export function DetallePanel({ detalle, config }) {
+  const [bonos, setBonos] = useState(false);
+  if (!detalle) return <p className="op-vacio">Elige un apartamento de la lista.</p>;
+  return (
+    <>
+      <h2 className="op-panel__titulo">{bonos ? 'Bonos' : detalle.titulo}</h2>
+      <DetalleCuerpo detalle={detalle} config={config} bonos={bonos} onBonos={setBonos} />
+    </>
   );
 }
