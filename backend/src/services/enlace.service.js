@@ -29,11 +29,16 @@ export function tokenDeResidente({ residenteId, conjuntoId }, ahora = Date.now()
   return firmar({ residenteId, conjuntoId, exp: vencimientoPorDefecto(ahora) }, secretoEnlace());
 }
 
-/** `${FRONTEND_URL}/p/<token>`; null si no hay FRONTEND_URL (se omite del texto). */
+/**
+ * `${FRONTEND_URL}/p#<token>`; null si no hay FRONTEND_URL (se omite del texto).
+ * El token va en el FRAGMENTO: el navegador no lo envía al servidor, así que no
+ * queda en los registros de Vercel/Railway ni en el Referer. El frontend lo lee y
+ * lo manda por POST /api/p/abrir.
+ */
 export function urlMisPaquetes({ residenteId, conjuntoId }) {
   const base = (process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
   if (!base) return null;
-  return `${base}/p/${tokenDeResidente({ residenteId, conjuntoId })}`;
+  return `${base}/p#${tokenDeResidente({ residenteId, conjuntoId })}`;
 }
 
 /** Vista "Mis paquetes". Debe correr DENTRO de un contexto de tenant. Sin email ni teléfono. */

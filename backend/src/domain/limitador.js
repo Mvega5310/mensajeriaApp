@@ -65,3 +65,12 @@ export const LOGIN_VENTANA_MS = 15 * 60 * 1000;
 // Solicitudes de enlace de acceso (T3.2): 5 por correo+IP cada 15 min.
 export const ENLACE_MAX_SOLICITUDES = 5;
 export const ENLACE_VENTANA_MS = 15 * 60 * 1000;
+
+// Fallos de PIN en la entrega por lote: por OPERADOR. Un portero atiende a muchos
+// apartamentos en una hora pico y se equivoca de tecla a menudo: 10 fallos / 15 min
+// (el del login) lo dejaba sin poder entregar. 20 fallos / 10 min sigue frenando la
+// fuerza bruta (el PIN tiene 4 dígitos: 20 intentos son 0,2 % de 10.000 por ventana)
+// sin paralizar la portería; además cada fallo con apartamento indicado cuenta contra
+// el bloqueo por paquete (5 fallos / 15 min, T1.4).
+export const PIN_ENTREGA_MAX_FALLOS = 20;
+export const PIN_ENTREGA_VENTANA_MS = 10 * 60 * 1000;

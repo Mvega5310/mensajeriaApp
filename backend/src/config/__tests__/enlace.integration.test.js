@@ -52,7 +52,7 @@ async function login(email) {
 const enA = (fn) => runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, fn);
 const enlaceDe = (residenteId, conjuntoId, exp = Date.now() + 3600_000, secreto = secretoEnlace()) =>
   firmar({ residenteId, conjuntoId, exp }, secreto);
-const abrir = (token) => api(`/api/p/${encodeURIComponent(token)}`);
+const abrir = (token) => api('/api/p/abrir', { method: 'POST', body: { token } });
 
 // --- recorrido de rutas del app real (mismo aplanado que E6) ---
 function recolectar(stack, prefijo, out) {
@@ -122,17 +122,32 @@ test('setup', { skip }, async () => {
   ctx.recep2 = await rec(ctx.res2.id);
 });
 
-test('el aviso de recepción trae la URL firmada /p/ del residente', { skip }, async () => {
-  const { aviso } = ctx.recep1;
+test('el aviso de recepción trae la URL firmada /p#<token> (fragmento) y NO el PIN', { skip }, async () => {
+  const { aviso, paquete } = ctx.recep1;
   assert.ok(aviso, 'hay aviso');
-  const m = aviso.texto.match(/https:\/\/app\.itest\.local\/p\/([A-Za-z0-9_.-]+)/);
+  const m = aviso.texto.match(/https:\/\/app\.itest\.local\/p#([A-Za-z0-9_.-]+)/);
   assert.ok(m, `la URL está en el texto: ${aviso.texto}`);
-  assert.ok(!aviso.texto.includes('local//p/'), 'sin doble barra');
-  assert.ok(aviso.waUrl.includes(encodeURIComponent('/p/')), 'el enlace wa.me la lleva codificada');
+  assert.ok(!aviso.texto.includes('local//p'), 'sin doble barra');
+  assert.ok(!/\/p\/[A-Za-z0-9_.-]{20,}/.test(aviso.texto), 'el token ya no va en la ruta');
+  assert.ok(aviso.waUrl.includes(encodeURIComponent('/p#')), 'el enlace wa.me la lleva codificada');
+  assert.ok(!/PIN de entrega es /.test(aviso.texto), 'el texto del aviso no lleva el PIN');
+  assert.ok(/PIN de entrega está aquí/.test(aviso.texto));
+  assert.ok(!('pin' in paquete), 'la respuesta al operador no trae pin');
+  assert.ok(!JSON.stringify(ctx.recep1).includes(`"pin"`));
   ctx.token1 = m[1];
   const r = await abrir(ctx.token1);
   assert.equal(r.status, 200);
+  assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
   assert.equal((await r.json()).residente.nombre, ctx.res1.nombre);
+});
+
+test('POST /api/p/abrir sin token => 400; GET /api/p/:token ya no abre nada', { skip }, async () => {
+  const r = await api('/api/p/abrir', { method: 'POST', body: {} });
+  assert.equal(r.status, 400);
+  assert.equal((await r.json()).code, 'DATOS_INVALIDOS');
+  const viejo = await api(`/api/p/${encodeURIComponent(ctx.token1)}`);
+  assert.ok(viejo.status >= 400, 'el token en la ruta ya no se acepta');
+  assert.ok(!(await viejo.text()).includes('"paquetes"'));
 });
 
 test('token válido: datos del residente y su conjunto, PIN visible, sin email ni teléfono', { skip }, async () => {
@@ -147,7 +162,7 @@ test('token válido: datos del residente y su conjunto, PIN visible, sin email n
   const p = j.paquetes[0];
   assert.equal(p.id, ctx.recep1.paquete.id);
   assert.equal(p.estado, 'EN_RECEPCION');
-  assert.equal(p.pin, ctx.recep1.paquete.pin);
+  assert.equal(p.pin, (await enA(() => prisma.package.findUnique({ where: { id: p.id } }))).pin);
   assert.match(p.pin, /^\d{4,6}$/);
   assert.equal(p.transportadora, 'Servientrega');
   assert.ok(p.motivoCobro);

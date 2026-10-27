@@ -8,10 +8,13 @@ export function generatePin() {
 }
 
 // El PIN se guarda en texto plano a propósito: no es una contraseña, es un
-// código de bajo valor para un traspaso físico puntual. Lo que lo protege
-// no es el hash, sino el control de acceso del backend: solo el residente
-// dueño del paquete puede leerlo (GET /packages/mine) y el operador nunca
-// recibe el valor correcto — solo puede enviar un intento para compararlo.
+// código de bajo valor para un traspaso físico puntual. Lo que lo protege es el
+// control de acceso del backend: SOLO EL RESIDENTE lo ve (en el enlace de aviso
+// /api/p, en GET /packages/mine y en el correo de llegada que se le envía). El
+// operador nunca recibe el valor: no viaja en recepción, asignar, listados ni
+// respuestas de entrega; solo teclea el intento que le dice el residente y el
+// servidor compara. (El enlace del WhatsApp pasa por su teléfono, y quien lo abra
+// ve el PIN: es el costo conocido de la decisión D1.)
 export function verifyPin(intento, pinGuardado) {
   return intento === pinGuardado;
 }

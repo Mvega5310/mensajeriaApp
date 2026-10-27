@@ -20,10 +20,10 @@ test('escaparHtml escapa & < > " \' y tolera null', () => {
 
 test('ninguna plantilla deja pasar <script> de proveedor, notas ni nombre', () => {
   const residente = { nombre: XSS, torre: XSS, apto: XSS, telefono: XSS };
-  const paquete = { proveedor: XSS, guia: XSS, notas: XSS, franjaHoraria: XSS, esContraEntregaProveedor: true, valorProductoProveedor: 5000 };
+  const paquete = { proveedor: XSS, pin: XSS, categoriaPeso: XSS, guia: XSS, notas: XSS, franjaHoraria: XSS, esContraEntregaProveedor: true, valorProductoProveedor: 5000 };
   const conj = { nombre: XSS, puntoRecepcion: XSS };
   const salidas = [
-    plantillaLlegada({ residente, paquete, conjunto: conj, aviso: { texto: XSS } }),
+    plantillaLlegada({ residente, paquete, conjunto: conj, aviso: { texto: XSS, enlace: XSS } }),
     plantillaEntrega({ residente, paquetes: [paquete], conjunto: conj }),
     plantillaEnlaceAcceso({ url: `https://x/?a="${XSS}`, conjunto: conj }),
     plantillaPrealerta({ residente, paquete, conjunto: conj }),
@@ -60,14 +60,23 @@ test('las plantillas usan el nombre del conjunto y no mencionan Ipanema', () => 
   assert.ok(salidas[0].asunto.includes('Conjunto Alfa'));
 });
 
-test('llegada: incluye el texto del aviso, enlaza las URL y nombra el punto de recepción', () => {
+test('llegada: saludo UNA vez, PIN (va al residente), enlace con # enlazado y punto de recepción', () => {
   const { html } = plantillaLlegada({
-    residente: { nombre: 'Ana Gómez' }, paquete: {}, conjunto,
-    aviso: { texto: 'Hola Ana, llegó tu paquete. Mira https://app.test/p/abc?x=1&y=2' },
+    residente: { nombre: 'Ana Gómez' }, paquete: { pin: '4821', categoriaPeso: 'ESTANDAR' }, conjunto,
+    aviso: { texto: 'ignorado', enlace: 'https://app.test/p#v1.abc?x=1&y=2' },
   });
-  assert.ok(html.includes('Hola Ana'));
-  assert.ok(html.includes('<a href="https://app.test/p/abc?x=1&amp;y=2">'));
+  assert.equal((html.match(/Hola/g) || []).length, 1, 'el saludo no se repite');
+  assert.ok(html.includes('Hola Ana,'));
+  assert.ok(html.includes('<strong>4821</strong>'), 'el correo al residente lleva su PIN');
+  assert.ok(html.includes('<a href="https://app.test/p#v1.abc?x=1&amp;y=2">'));
   assert.ok(html.includes('Portería principal'));
+  assert.ok(html.includes('Paquete estándar'));
+});
+
+test('llegada: sin PIN ni enlace no inventa nada', () => {
+  const { html } = plantillaLlegada({ residente: { nombre: 'Ana' }, paquete: {}, conjunto });
+  assert.ok(!/PIN/.test(html));
+  assert.ok(!/<a href/.test(html));
 });
 
 test('selección: sin RESEND_API_KEY o con la de ejemplo => fake y avisa una vez', () => {
@@ -102,5 +111,5 @@ test('construirEnlace: formato wa.me definitivo', () => {
   assert.equal(construirEnlace({ prefijoPais: '+57', telefono: '0300 1234567', texto: 'x' }), 'https://wa.me/573001234567?text=x');
   assert.equal(construirEnlace({ prefijoPais: '57', telefono: '', texto: 'x' }), null);
   assert.equal(construirEnlace({ prefijoPais: '57', telefono: 'abc', texto: 'x' }), null);
-  assert.ok(textoLlegada({ nombre: 'Ana Gómez', categoria: 'MANO', pin: '1234' }).includes('Hola Ana'));
+  assert.ok(textoLlegada({ nombre: 'Ana Gómez', categoria: 'MANO' }).includes('Hola Ana'));
 });

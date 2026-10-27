@@ -4,40 +4,14 @@ import { costoPara } from '../services/tariff.service.js';
 import { enSegundoPlano, enviarAvisoLlegada } from '../services/avisos.service.js';
 import { conjuntoDelContexto, operadorDelConjuntoActual } from '../services/conjunto.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
-import { claveApartamento } from '../services/apartamento.service.js';
-import { esPrimeraEntrega, esCategoriaValida } from '../domain/cobro.js';
+import { esCategoriaValida } from '../domain/cobro.js';
 import { validarFotos, mensajeMaxFotos } from '../domain/recepcion.js';
-import { resolverCobro } from '../services/cobro.service.js';
+import { resolverCobro, idsPrimeraEntrega } from '../services/cobro.service.js';
 import { EVENTOS, ESTADOS, transicionar } from '../domain/paquete.machine.js';
 import { aplicarEvento, crearConEvento } from '../services/paquete.service.js';
 import { recibirPaquete, asignarPaquete } from '../services/recepcion.service.js';
 import { subirFotos, registrarFotos, descartarSubidas, fotosDelPaquete } from '../services/fotos.service.js';
 import { decodificarDataUri } from '../services/almacen/index.js';
-
-// La cortesía de primera entrega es por apartamento físico, no por
-// cuenta — varias personas del mismo apto pueden registrarse con
-// correos distintos (ver claveApartamento). Cuando torre/apto vienen
-// incompletos no hay con qué agrupar de forma confiable, así que cada
-// cuenta incompleta cae en su propia clave (nunca se agrupa con otra
-// cuenta también incompleta, como si fueran el mismo apartamento).
-// Un paquete sin residente (T2.1: SIN_ASIGNAR) no pertenece a ningún grupo: cae
-// en el suyo propio (`paquete:<id>`) para no mezclarse con otros sin dueño.
-function claveDeGrupo(residenteId, torre, apto, paqueteId) {
-  if (!residenteId) return `paquete:${paqueteId}`;
-  return claveApartamento(torre, apto) || `cuenta:${residenteId}`;
-}
-
-// Agrupa los createdAt por apartamento físico (ver claveDeGrupo) para
-// alimentar esPrimeraEntrega() en los listados.
-function createdAtPorGrupo(paquetes) {
-  const grupos = new Map();
-  for (const p of paquetes) {
-    const clave = claveDeGrupo(p.residenteId, p.residente?.torre, p.residente?.apto, p.id);
-    if (!grupos.has(clave)) grupos.set(clave, []);
-    grupos.get(clave).push(p.createdAt);
-  }
-  return grupos;
-}
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
@@ -135,22 +109,17 @@ export async function listAll(req, res) {
     orderBy: { createdAt: 'desc' },
   });
 
-  // El primer paquete (por fecha) de cada apartamento físico (no de cada
-  // cuenta — ver claveDeGrupo) es la entrega de cortesía por afiliación
-  // (ver flyer de campaña) — se marca aquí para que el operador vea de
-  // un vistazo a quién no debe cobrarle.
-  const grupos = createdAtPorGrupo(packages);
+  // La cortesía es del PRIMER PAQUETE DEL APARTAMENTO QUE SE COBRA (no del más
+  // antiguo en crearse; ver domain/cobro.js): se marca para que el operador vea
+  // de un vistazo a quién no debe cobrarle. Coherente con resolverCobro().
+  const primeras = await idsPrimeraEntrega();
 
-  res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => {
-    const clave = claveDeGrupo(p.residenteId, p.residente?.torre, p.residente?.apto, p.id);
-    return {
-      ...p,
-      // Sin residente no hay cortesía de primera entrega. `etiquetaNombre` ya
-      // viaja en `p`: la vista lo muestra cuando `residente` es null.
-      esPrimeraEntrega: !!p.residenteId
-        && esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) }),
-    };
-  }));
+  res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => ({
+    ...p,
+    // Sin residente no hay cortesía de primera entrega. `etiquetaNombre` ya
+    // viaja en `p`: la vista lo muestra cuando `residente` es null.
+    esPrimeraEntrega: primeras.has(p.id),
+  })));
 }
 
 // Fotos aparte del listado general (ver comentario en listMine/listAll):
@@ -233,7 +202,7 @@ export async function checkin(req, res) {
     transicionar(fresco.estado, EVENTOS.RECIBIR);
 
     const r = await resolverCobro(tx, {
-      conjunto, residente: actual.residente, categoria: categoriaPeso, createdAt: actual.createdAt,
+      conjunto, residente: actual.residente, categoria: categoriaPeso, paqueteId: fresco.id,
     });
     const pkg = await aplicarEvento(tx, fresco, EVENTOS.RECIBIR, {
       actorId: req.user.sub,
@@ -324,19 +293,13 @@ export async function exportCsv(req, res) {
 
   // Igual que en listAll(): el motivo de un costo en $0 (primera entrega
   // vs. bono redimido) sirve para que el contador entienda por qué no se
-  // cobró, sin tener que adivinar. Se recalcula sobre TODOS los
-  // paquetes (sin el filtro desde/hasta), porque el primer paquete real
-  // de un apartamento puede quedar fuera del rango exportado.
-  const todos = await prisma.package.findMany({
-    select: { id: true, createdAt: true, residenteId: true, residente: { select: { torre: true, apto: true } } },
-  });
-  const grupos = createdAtPorGrupo(todos);
+  // cobró, sin tener que adivinar. Se calcula sobre TODOS los paquetes (sin el
+  // filtro desde/hasta), porque el primer paquete cobrado de un apartamento
+  // puede quedar fuera del rango exportado.
+  const primeras = await idsPrimeraEntrega();
 
   const rows = packages.map((p) => {
-    const clave = claveDeGrupo(p.residenteId, p.residente?.torre, p.residente?.apto, p.id);
-    const primera = !!p.residenteId
-      && esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) });
-    const motivoGratis = primera ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
+    const motivoGratis = primeras.has(p.id) ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
     return [
       p.id, p.fechaIngreso.toISOString(), p.residente?.torre ?? '', p.residente?.apto ?? '',
       p.residente?.nombre ?? p.etiquetaNombre ?? '',
@@ -412,7 +375,7 @@ export async function confirmDelivery(req, res) {
   if (updated.residente?.email) {
     const conjunto = await conjuntoDelContexto();
     enSegundoPlano('entrega', () => req.app.locals.notificador.agradecerEntrega({
-      residente: updated.residente, paquetes: [updated], conjunto,
+      residente: updated.residente, paquetes: [{ id: updated.id, proveedor: updated.proveedor, categoriaPeso: updated.categoriaPeso }], conjunto,
     }));
   }
 

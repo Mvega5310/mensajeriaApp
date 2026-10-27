@@ -57,6 +57,14 @@ export function validarEntorno(env = process.env) {
   const nodeEnv = nodeEnvCrudo || 'development';
   const esProduccion = nodeEnv === 'production';
 
+  // En Railway, NODE_ENV es obligatoria: sin ella se tomaría "development" y se
+  // activarían el almacén de fotos `fake` y el notificador `fake` en un despliegue
+  // real (fotos y correos que se pierden en silencio), sin confiar en el proxy.
+  const enRailway = !!(leer(env, 'RAILWAY_ENVIRONMENT') || leer(env, 'RAILWAY_ENVIRONMENT_NAME'));
+  if (enRailway && !nodeEnvCrudo) {
+    problemas.push('Falta NODE_ENV: define NODE_ENV=production en Railway (pestaña Variables del servicio). Sin ella la app arrancaría en modo desarrollo, con fotos y correos simulados.');
+  }
+
   // Obligatorias.
   const databaseUrl = leer(env, 'DATABASE_URL');
   if (!databaseUrl) {

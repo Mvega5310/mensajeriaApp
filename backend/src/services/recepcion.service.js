@@ -5,14 +5,16 @@
 //
 // Decisiones:
 //  - PIN: se genera SIEMPRE al crear el paquete (la columna es NOT NULL y la entrega
-//    lo necesita). Una pre-alerta existente conserva el PIN que ya tenía. En un
-//    SIN_ASIGNAR el PIN existe pero NO se devuelve al operador (nadie a quien avisar);
-//    se entrega junto con el aviso al asignarlo.
+//    lo necesita). Una pre-alerta existente conserva el PIN que ya tenía. El operador
+//    NUNCA recibe el PIN (ni al recibir, ni al asignar, ni en el replay idempotente,
+//    ni en el texto de WhatsApp): solo lo ve el residente, en su enlace, su app y el
+//    correo de llegada.
 //  - Cobro en SIN_ASIGNAR: todavía no hay residente, así que no hay cortesía ni bono
 //    que evaluar. Se guarda `costoServicio = 0` y la categoría; el cobro real (cortesía
 //    / bono / tarifa) se calcula en ASIGNAR, con el residente ya conocido.
 //  - Idempotencia: la clave se guarda en la MISMA transacción que el paquete.
 
+import { randomUUID } from 'node:crypto';
 import { prisma } from '../config/db.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { EVENTOS, ESTADOS, transicionar } from '../domain/paquete.machine.js';
@@ -20,14 +22,12 @@ import {
   validarRecepcion, elegirPrealerta, validarClaveIdempotencia,
   GUIA_POR_DEFECTO, PROVEEDOR_POR_DEFECTO, normalizarGuia,
 } from '../domain/recepcion.js';
-import { construirEnlace, textoLlegada } from '../domain/whatsapp.js';
 import { etiquetaApartamento } from '../domain/apartamento.js';
 import { aplicarEvento, crearConEvento } from './paquete.service.js';
 import { generatePin } from './pin.service.js';
 import { resolverCobro } from './cobro.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
-import { urlMisPaquetes } from './enlace.service.js';
-import { enviarAvisoLlegada } from './avisos.service.js';
+import { armarAviso, enviarAvisoLlegada } from './avisos.service.js';
 import { subirFotos, registrarFotos, descartarSubidas } from './fotos.service.js';
 
 export const VENTANA_IDEMPOTENCIA_MS = 24 * 60 * 60 * 1000;
@@ -74,16 +74,13 @@ async function armarRespuesta(paqueteId, conjunto) {
     motivoCobro,
     guia: p.guia,
     transportadora: p.transportadora,
-    pin: r ? p.pin : null,
     recibidoEn: p.recibidoEn,
   };
+  // El aviso de WhatsApp NO lleva el PIN (solo el residente lo ve, en el enlace).
   let aviso = null;
   if (r) {
-    const texto = textoLlegada({
-      nombre: r.nombre, categoria: p.categoriaPeso, pin: p.pin,
-      enlace: urlMisPaquetes({ residenteId: r.id, conjuntoId: conjunto.id }),
-    });
-    aviso = { texto, waUrl: construirEnlace({ prefijoPais: conjunto.prefijoPais, telefono: r.telefono, texto }) };
+    const { texto, waUrl } = armarAviso({ residente: r, paquete: p, conjunto });
+    aviso = { texto, waUrl };
   }
   return { paquete, aviso };
 }
@@ -126,8 +123,10 @@ export async function recibirPaquete({ operadorId, body, claveCabecera, notifica
           select: { id: true, guia: true, createdAt: true },
         });
         const elegida = elegirPrealerta(abiertas, datos.guia);
+        // Paquete nuevo: se le fija el id desde ya para poder reservar la cortesía.
+        const nuevoId = elegida ? null : randomUUID();
         const r = await resolverCobro(tx, {
-          conjunto, residente, categoria: datos.categoriaPeso, createdAt: elegida?.createdAt ?? ahora,
+          conjunto, residente, categoria: datos.categoriaPeso, paqueteId: elegida?.id ?? nuevoId,
         });
         const eventoDatos = {
           categoriaPeso: datos.categoriaPeso, motivoCobro: r.cobro.motivo, monto: r.cobro.monto,
@@ -154,6 +153,7 @@ export async function recibirPaquete({ operadorId, body, claveCabecera, notifica
             actorId: operadorId,
             datos: eventoDatos,
             data: {
+              id: nuevoId,
               residenteId: residente.id,
               etiquetaNombre: datos.etiquetaNombre,
               proveedor: datos.transportadora ?? PROVEEDOR_POR_DEFECTO,
@@ -221,11 +221,11 @@ async function avisarLlegadaDe(notificador, paqueteId, conjunto, aviso) {
   try {
     const p = await prisma.package.findUnique({
       where: { id: paqueteId },
-      include: { residente: { select: { nombre: true, email: true, telefono: true } } },
+      include: { residente: { select: { id: true, nombre: true, email: true, telefono: true } } },
     });
     if (!p?.residente?.email) return;
     const { residente, ...paquete } = p;
-    enviarAvisoLlegada(notificador, { residente, paquete, conjunto, aviso });
+    enviarAvisoLlegada(notificador, { residente, paquete, conjunto });
   } catch {
     console.error('[notificador] fallo al preparar "llegada"');
   }
@@ -247,7 +247,7 @@ export async function asignarPaquete({ operadorId, paqueteId, residenteId, notif
     transicionar(fresco.estado, EVENTOS.ASIGNAR);
     const residente = await buscarResidente(tx, residenteId);
     const r = await resolverCobro(tx, {
-      conjunto, residente, categoria: fresco.categoriaPeso, createdAt: fresco.createdAt,
+      conjunto, residente, categoria: fresco.categoriaPeso, paqueteId: fresco.id,
     });
     await aplicarEvento(tx, fresco, EVENTOS.ASIGNAR, {
       actorId: operadorId,

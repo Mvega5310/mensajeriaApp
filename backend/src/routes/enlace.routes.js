@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { asyncHandler } from '../domain/errores.js';
+import { AppError, CODIGOS, asyncHandler } from '../domain/errores.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 import { requireTenant } from '../middleware/tenant.middleware.js';
 import { abrirEnlace, vistaMisPaquetes } from '../services/enlace.service.js';
@@ -13,11 +13,20 @@ router.use((req, res, next) => {
 });
 
 // Refresco con la sesión limitada del enlace (o una sesión normal de residente).
-// Se declara ANTES de /:token para que "paquetes" no se tome como token.
 router.get('/paquetes', requireAuth, requireTenant, requireRole('RESIDENT'),
   asyncHandler(async (req, res) => res.json(await vistaMisPaquetes(req.user.sub))));
 
-// PÚBLICA (sin sesión): el token firmado es la credencial.
-router.get('/:token', asyncHandler(async (req, res) => res.json(await abrirEnlace(req.params.token))));
+// PÚBLICA (sin sesión): el token firmado es la credencial. Va en el CUERPO (el
+// frontend lo lee del fragmento `/p#<token>`), nunca en la URL: así no queda en
+// los registros de Railway/Vercel. Ya NO existe GET /api/p/:token: se eliminó (en
+// vez de dejarlo en 410) para no mantener una ruta pública más y porque un enlace
+// viejo `/p/<token>` ya no llega a esta API (lo atiende el frontend).
+router.post('/abrir', asyncHandler(async (req, res) => {
+  const { token } = req.body ?? {};
+  if (typeof token !== 'string' || !token) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Falta el enlace. Abre el enlace que te enviaron.', 400, { campo: 'token' });
+  }
+  res.json(await abrirEnlace(token));
+}));
 
 export default router;

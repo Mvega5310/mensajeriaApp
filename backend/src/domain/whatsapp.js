@@ -25,12 +25,19 @@ export const ETIQUETAS_CATEGORIA = Object.freeze({
   PESADO: 'Carga especial',
 });
 
-/** Texto del aviso de llegada (artboard Op-Guardado: "Hola Ana, llegó tu paquete..."). */
-export function textoLlegada({ nombre, categoria, pin, enlace }) {
+/**
+ * Texto del aviso de llegada (artboard Op-Guardado: "Hola Ana, llegó tu paquete...").
+ * NUNCA lleva el PIN: el WhatsApp pasa por el teléfono del operador y el PIN solo
+ * lo ve el residente, dentro del enlace (o en su app/correo).
+ */
+export function textoLlegada({ nombre, categoria, enlace }) {
   const primero = String(nombre ?? '').trim().split(/\s+/)[0];
   const saludo = primero ? `Hola ${primero}` : 'Hola';
   const cat = ETIQUETAS_CATEGORIA[categoria];
-  const base = `${saludo}, llegó tu paquete a portería${cat ? ` (${cat})` : ''}. Tu PIN de entrega es ${pin}.`;
-  // T3.1: enlace firmado a "Mis paquetes" (sin contraseña, vence en 7 días).
-  return enlace ? `${base} Mira tus paquetes y pide la entrega aquí: ${enlace}` : base;
+  const base = `${saludo}, llegó tu paquete a portería${cat ? ` (${cat})` : ''}.`;
+  // T3.1: enlace a "Mis paquetes" (sin contraseña, vence en 7 días); el token va en
+  // el fragmento (#) para que no viaje al servidor. Ahí está el PIN.
+  return enlace
+    ? `${base} Tu PIN de entrega está aquí: ${enlace}`
+    : `${base} Consulta tu PIN de entrega en la app de Puertaya.`;
 }

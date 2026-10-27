@@ -72,6 +72,7 @@ model Conjunto {
   eventos     PaqueteEvento[]
   clavesIdempotencia ClaveIdempotencia[]
   paqueteFotos       PaqueteFoto[]
+  cortesias          CortesiaApartamento[]
 }
 
 model User {
@@ -252,6 +253,7 @@ model Package {
   eventos              PaqueteEvento[]
   clavesIdempotencia   ClaveIdempotencia[]
   fotos                PaqueteFoto[]
+  cortesia             CortesiaApartamento?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -324,4 +326,24 @@ model PaqueteFoto {
   creadoEn   DateTime @default(now())
 
   @@index([conjuntoId, paqueteId, orden])
+}
+
+// Reserva de la cortesía de primera entrega por APARTAMENTO (revisión F2).
+// Insertar la fila ES la reserva: el índice único [conjuntoId, claveApto] hace que
+// dos recepciones paralelas del mismo apartamento nuevo no puedan llevarse ambas la
+// cortesía (la perdedora espera a la ganadora y, al ver el conflicto, cobra TARIFA).
+// `claveApto` es la clave normalizada de services/apartamento.service.js
+// (torre canónica|apto; "cuenta:<id>" si torre/apto están incompletos).
+// `paqueteId` es único: un paquete ocupa a lo sumo una cortesía. onDelete Cascade:
+// si el paquete se borra, el apartamento queda libre. Lleva tenant (MODELOS_CON_TENANT).
+model CortesiaApartamento {
+  id         String   @id @default(cuid())
+  conjunto   Conjunto @relation(fields: [conjuntoId], references: [id])
+  conjuntoId String
+  claveApto  String
+  paquete    Package  @relation(fields: [paqueteId], references: [id], onDelete: Cascade)
+  paqueteId  String   @unique
+  creadoEn   DateTime @default(now())
+
+  @@unique([conjuntoId, claveApto])
 }

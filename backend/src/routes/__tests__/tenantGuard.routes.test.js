@@ -38,7 +38,9 @@ const RUTAS_SIN_SESION = new Set([
   // HMAC firmado y con vencimiento; la ruta verifica, abre su propio contexto de
   // tenant con el conjuntoId del token (runWithTenant) y entrega una sesión de
   // alcance limitado ('enlace') que solo sirve en 2 rutas (ver auth.middleware).
-  'GET /api/p/:token',
+  // Desde la revisión F2 el token va en el CUERPO (POST /api/p/abrir), no en la URL:
+  // el enlace del aviso es `/p#<token>` (fragmento) y así no queda en los logs.
+  'POST /api/p/abrir',
 ]);
 
 // --- Aplanado del router de Express ---

@@ -137,7 +137,8 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
 | `entregaLote.test.js` | unitaria | T2.5: token de entrega (firma, vencimiento, alteración) y regla de selección del lote. |
 | `entregaLote.integration.test.js` | integración | T2.5: `/entregas/verificar-pin` y `/confirmar` (lote por apartamento, `PIN_AMBIGUO`, límite por operador, token ajeno/vencido, carrera sin entregas parciales, aislamiento). |
-| `enlace.integration.test.js` + `domain/__tests__/enlace.test.js` | integración + pura | T3.1: token válido/vencido/alterado/basura/otro secreto/conjunto manipulado, residente borrado, sesión limitada (schedule propio sí, ajeno 404, todas las demás rutas del app real 403), URL `/p/` en el aviso. |
+| `revisionF2.integration.test.js` | integración | Revisión F2: cortesía única (escenario lunes/martes, carrera de 5 recepciones, "T2" = "TORRE 2"), ninguna respuesta al operador lleva el PIN, bloqueo por paquete en lote, presupuesto de fotos del JSON. |
+| `enlace.integration.test.js` + `domain/__tests__/enlace.test.js` | integración + pura | T3.1: token válido/vencido/alterado/basura/otro secreto/conjunto manipulado, residente borrado, sesión limitada (schedule propio sí, ajeno 404, todas las demás rutas del app real 403), URL `/p#` en el aviso. |
 | `enlaceAcceso.integration.test.js` | integración | T3.2: enlace mágico (correo existente / inexistente con respuesta idéntica, canje con JWT normal, segundo canje, vencido, propósito RESET vs ACCESO en ambos sentidos, carrera de canjes, límite 5/15 min, forgot/reset intacto). |
 | `avisos.integration.test.js` | integración | T2.4: correo de llegada con notificador `fake` (recepción, `asignar`, `checkin`; 0 en replay idempotente, sin correo o sin dueño; un notificador que lanza no tumba el 201). |
 | `notificador/__tests__/plantillas.test.js` | unitaria | T2.4: `escaparHtml`, plantillas escapadas y sin "Ipanema", selección `fake`/`resend`, `construirEnlace`. |
@@ -233,12 +234,27 @@ Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION
 - Alerta de primera entrega: **es por apartamento físico, no por
   cuenta** — si varias personas del mismo apto se registran con correos
   distintos, solo la primera entrega de cualquiera de ellas sale en $0;
-  la cortesía no se repite por cuenta. `torre`/`apto` se normalizan al
-  registrarse (`auth.controller.js`: mayúsculas/trim para torre, solo
+  la cortesía no se repite por cuenta. **Regla (revisión F2): la cortesía es
+  del primer paquete del apartamento que se COBRA**, no del primero que se creó.
+  Un paquete es primera entrega si NINGÚN otro paquete del apto ya fue cobrado, es
+  decir, está `EN_RECEPCION`, `PROGRAMADO` o `ENTREGADO` con dueño (criterio por
+  estado: `recibidoEn` también se llena en `SIN_ASIGNAR`, que aún no cobra, y los
+  paquetes legados no lo tienen; el estado solo avanza y cubre datos viejos sin
+  eventos). Así un `SIN_ASIGNAR` del lunes que se asigna DESPUÉS de que el martes
+  se llevó la cortesía paga TARIFA. `listAll()` y el CSV marcan "Primera vez" con la
+  misma regla (`services/cobro.service.js#idsPrimeraEntrega`: el cobrado con
+  `motivoCobro = CORTESIA` en su evento RECIBIR/ASIGNAR; en datos legados sin
+  eventos, el cobrado más antiguo). **Carrera:** la decisión se serializa por
+  apartamento con la tabla `CortesiaApartamento` (único `[conjuntoId, claveApto]`);
+  insertar su fila (`createMany` con `skipDuplicates`, Prisma puro, sin SQL crudo)
+  ES la reserva: una recepción paralela espera a la ganadora y al ver el conflicto
+  cobra TARIFA; si la ganadora revierte, la reserva se libera. No requiere backfill:
+  los apartamentos con paquetes ya cobrados se detectan por estado y nunca llegan a
+  reservar. `torre`/`apto` se normalizan por `tokenTorre`
+  (`domain/apartamento.js`): "TORRE 2", "Torre 2", "T2" y "2" son la MISMA torre; solo
   dígitos para apto — "Apto 302", "apto-302" y "302" cuentan como el
-  mismo apartamento), y `packages.controller.js` agrupa por esa clave
-  normalizada en `checkin()`, `listAll()` y `exportCsv()`
-  (`services/apartamento.service.js`). Si una cuenta no tiene torre o
+  mismo apartamento. La clave (`claveApartamento`, `services/apartamento.service.js`)
+  la usan la cortesía, el lote de entrega y el listado. Si una cuenta no tiene torre o
   apto completos, no se agrupa con otras cuentas incompletas — conserva
   su propia cortesía, como antes. Recepción, Reparto, el modal de
   validar PIN y la Bitácora marcan con una franja dorada "🎁 NO cobrar"
@@ -294,8 +310,9 @@ Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION
 **Backend / seguridad** (ver auditoría original para el detalle completo)
 - Roles decididos server-side vía JWT — nunca por un valor que mande el
   cliente.
-- PIN generado con `crypto`, nunca expuesto al operador; el residente
-  siempre puede consultar el suyo.
+- PIN generado con `crypto`, nunca expuesto al operador (ni al recibir, ni al
+  asignar, ni en el texto de WhatsApp, ni en listados): solo lo ve el residente en
+  su enlace, su app y el correo de llegada.
 - Política de contraseñas validada en servidor (no solo en el formulario).
 - Correo transaccional vía Resend, con dominio propio verificado
   (`prospect01.com`) — llega a cualquier residente, no solo a la cuenta
@@ -446,8 +463,8 @@ Respuesta `201`:
     "nombre": "Ana Gómez", "torre": "TORRE 2", "apto": "304", "etiquetaApto": "T2 · 304",
     "etiquetaNombre": null, "categoriaPeso": "ESTANDAR", "costo": 4500,
     "motivoCobro": "TARIFA", "guia": "AB-123", "transportadora": "Servientrega",
-    "pin": "4821", "recibidoEn": "2026-10-29T15:04:05.000Z" },
-  "aviso": { "texto": "Hola Ana, llegó tu paquete a portería (Paquete estándar). Tu PIN de entrega es 4821.",
+    "recibidoEn": "2026-10-29T15:04:05.000Z" },
+  "aviso": { "texto": "Hola Ana, llegó tu paquete a portería (Paquete estándar). Tu PIN de entrega está aquí: https://app…/p#<token>",
              "waUrl": "https://wa.me/573001234567?text=Hola%20Ana%2C…" } }
 ```
 
@@ -455,7 +472,9 @@ Respuesta `201`:
 si el residente no tiene teléfono; `aviso` es `null` sin residente. El enlace lo
 arma `domain/whatsapp.js#construirEnlace` con `Conjunto.prefijoPais`
 (provisional: T2.4 completa los avisos). Con `FRONTEND_URL` definida, el texto
-termina con el enlace firmado `…/p/<token>` (ver T3.1 abajo).
+termina con el enlace firmado `…/p#<token>` (el token va en el fragmento; ver T3.1 abajo). **El operador no recibe el PIN**: ni `paquete.pin` (recepción, asignar y replay idempotente) ni el texto de WhatsApp, que dice que el PIN está en el enlace; el correo de llegada al residente sí lo incluye.
+
+**Límite del cuerpo JSON.** 1 MB para toda la API; solo `POST /packages/recepcion` y `PATCH /packages/:id/checkin` admiten ~9,6 MB (parser montado tras `requireAuth`/`requireRole`): 4 fotos razonables x 1,5 MB x 1,37 (base64) = 8,2 MB de presupuesto + 1 MB de margen. `validarFotos` (dominio) rechaza con `413 CARGA_DEMASIADO_GRANDE` si el total de fotos excede el presupuesto, y cada foto pasa de 1,5 MB => 413 "La foto N pesa demasiado".
 
 **`PATCH /api/packages/:id/asignar`** con `{ "residenteId": "…" }`: `ASIGNAR`
 (`SIN_ASIGNAR` -> `EN_RECEPCION`), pone el residente y calcula el cobro en ese
@@ -503,12 +522,15 @@ Decisiones:
   (un solo código por aviso o por apto, único dentro del conjunto); no se cambió
   aquí.
 - **Intentos por operador**, no por paquete: un PIN inexistente no tiene paquete
-  al que atribuirlo. `crearLimitadorMemoria` (clave `entrega:<operador>`), 10
-  fallos / 15 min; el 11.º es 429. Los aciertos y los 409 no gastan cupo
+  al que atribuirlo. `crearLimitadorMemoria` (clave `entrega:<operador>`), 20
+  fallos / 10 min; el 21.º es 429 ("Muchos PIN incorrectos seguidos. Espera N minutos
+  o entrega desde Pendientes."; 10 / 15 min paralizaba la portería en hora pico). Los aciertos y los 409 no gastan cupo
   (`devolver`). Memoria del proceso (una réplica), igual que el login.
 - **Bloqueo por paquete** (T1.4): si algún paquete cuyo PIN coincidió tiene
   `pinBloqueadoHasta` vigente, 423 aunque el PIN sea correcto. Un acierto reinicia
-  el contador de esos paquetes. Los demás paquetes del lote no se consultan.
+  el contador de esos paquetes (`registrarIntentoPin`, igual que `/confirm-delivery`) y
+  un PIN errado con `residenteId`/`apto` indicado cuenta como fallo contra los
+  paquetes entregables de ese apartamento (5 fallos => 423 por paquete, T1.4). Los demás paquetes del lote no se consultan.
 - **`tokenEntrega`**: `base64url(payload).base64url(HMAC-SHA256)`, vence a los 10
   min, liga operador + conjunto + residente + ids del lote. Secreto
   `ENTREGA_SECRET` (opcional; si falta, `JWT_SECRET`) con prefijo de dominio, así
@@ -519,14 +541,14 @@ Decisiones:
   conecta).
 ### Enlace firmado del residente (T3.1, decisión D1)
 
-El aviso de llegada de WhatsApp lleva `${FRONTEND_URL}/p/<token>`: abre "Mis paquetes"
+El aviso de llegada de WhatsApp lleva `${FRONTEND_URL}/p#<token>` (en el **fragmento**, que el navegador no envía al servidor: no queda en los logs de Railway/Vercel): abre "Mis paquetes"
 **sin contraseña** y muestra el PIN. El token vence a los **7 días**.
 
 - **Token** (`domain/enlace.js`, puro): `v1.<payload base64url>.<firma base64url>`;
   payload `{ r: residenteId, c: conjuntoId, e: vencimiento ms }`, firma HMAC-SHA256
   con `ENLACE_SECRET` (comparación en tiempo constante; la firma se verifica antes
   de leer el contenido). Sin dependencias nuevas.
-- **`GET /api/p/:token`** (PÚBLICA, en `RUTAS_SIN_SESION`). Verifica el token,
+- **`POST /api/p/abrir` `{ token }`** (PÚBLICA, en `RUTAS_SIN_SESION`; el frontend lee el token de `location.hash`). `GET /api/p/:token` se **eliminó** (en vez de dejarlo en 410: una ruta pública menos, y un enlace viejo `/p/<token>` lo atiende el frontend, no esta API; el frontend debe mostrar "Abre el enlace más reciente que te enviamos."). Verifica el token,
   abre su propio contexto de tenant con el `conjuntoId` del token (`runWithTenant`,
   sin `GLOBAL_LOOKUP` ni SQL crudo: la firma garantiza que el conjunto lo emitimos
   nosotros) y comprueba que el residente exista, sea `RESIDENT` y pertenezca a ese
@@ -535,7 +557,7 @@ El aviso de llegada de WhatsApp lleva `${FRONTEND_URL}/p/<token>`: abre "Mis paq
   estado, pin` (solo `EN_RECEPCION`/`PROGRAMADO`; `null` en `PREALERTADO`), `costo,
   motivoCobro, categoriaPeso, proveedor, transportadora, guia, recibidoEn,
   franjaHoraria, metodoPagoServicio`. Nunca devuelve email ni teléfono ni fotos.
-  Errores: `401 ENLACE_INVALIDO | ENLACE_VENCIDO`, `404` si el residente ya no existe.
+  Errores: `400` sin token, `401 ENLACE_INVALIDO | ENLACE_VENCIDO`, `404` si el residente ya no existe.
   Cabeceras `Cache-Control: no-store` y `Referrer-Policy: no-referrer`.
 - **`sesion`**: JWT firmado con `JWT_SECRET`, `scope: 'enlace'`, vence en 2 h. Solo
   sirve en `GET /api/p/paquetes` (refresca la misma vista, sin `sesion`) y
