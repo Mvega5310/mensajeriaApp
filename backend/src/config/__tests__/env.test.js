@@ -52,7 +52,10 @@ test('en desarrollo, cualquier JWT_SECRET no vacío basta', () => {
   assert.equal(config.esProduccion, false);
 });
 
-test('configuración válida devuelve el objeto normalizado sin avisos', () => {
+// T5.1: en producción sin FOTOS_S3_* se sigue en modo legado, con aviso fuerte.
+const AVISO_FOTOS_PROD = validarEntorno({ ...BASE, NODE_ENV: 'production' }).avisos.find((a) => a.includes('FOTOS_S3_'));
+
+test('configuración válida devuelve el objeto normalizado (solo el aviso de fotos legado)', () => {
   const config = validarEntorno({ ...BASE, NODE_ENV: 'production', PORT: '8080', JWT_EXPIRES_IN: '2h' });
   assert.deepEqual(config, {
     nodeEnv: 'production',
@@ -66,7 +69,8 @@ test('configuración válida devuelve el objeto normalizado sin avisos', () => {
     frontendUrl: BASE.FRONTEND_URL,
     resendApiKey: 're_realrealreal',
     emailFrom: undefined,
-    avisos: [],
+    fotos: { modo: 'legado' },
+    avisos: [AVISO_FOTOS_PROD],
   });
 });
 

@@ -10,6 +10,7 @@
 // el log como advertencia; no detienen el arranque.
 
 import { createHmac } from 'node:crypto';
+import { resolverConfigFotos } from '../services/almacen/config.js';
 
 const JWT_MIN_PRODUCCION = 32;
 // Valor de ejemplo de backend/.env.example: no sirve como secreto real.
@@ -121,6 +122,12 @@ export function validarEntorno(env = process.env) {
     avisos.push('RESEND_API_KEY no está definida: el correo se simula y no se envía nada.');
   }
 
+  // Almacén de fotos (T5.1): sin FOTOS_S3_* la app sigue (fake en desarrollo, legado
+  // en producción) y se avisa; con variables a medias, es un error de configuración.
+  const fotos = resolverConfigFotos(env, { esProduccion });
+  problemas.push(...fotos.problemas);
+  avisos.push(...fotos.avisos);
+
   if (problemas.length > 0) {
     const error = new Error(
       'Configuración del servidor inválida. Revisa las variables de entorno '
@@ -143,6 +150,7 @@ export function validarEntorno(env = process.env) {
     frontendUrl,
     resendApiKey,
     emailFrom: leer(env, 'EMAIL_FROM'),
+    fotos: { modo: fotos.modo },
     avisos,
   };
 }

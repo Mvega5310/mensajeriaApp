@@ -58,7 +58,7 @@ npm run dev                 # http://localhost:4000
 > **Variables de entorno.** El servidor valida su configuración antes de
 > escuchar (`src/config/env.js`). Obligatorias: `DATABASE_URL` y `JWT_SECRET`.
 > Si falta alguna, el proceso se detiene y el error lista todas las que
-> faltan. Las opcionales (`CORS_ORIGIN`, `FRONTEND_URL`, `RESEND_API_KEY`)
+> faltan. Las opcionales (`CORS_ORIGIN`, `FRONTEND_URL`, `RESEND_API_KEY`, `FOTOS_S3_*`)
 > dejan un aviso en el log. Todas están documentadas, con comentarios, en
 > `backend/.env.example`.
 
@@ -128,6 +128,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `tenantGuard.routes.test.js` | estructural¹ | recorre el app real: toda ruta autenticada lleva `requireAuth`+`requireTenant`; rutas públicas declaradas. |
 | `tenantIsolation.integration.test.js` | integración | aislamiento CRUD entre dos conjuntos (findUnique/update/findMany, falla-cerrado). |
 | `registroLogin.integration.test.js` | integración | registro por código, login en dos conjuntos, 409 email cross-conjunto. |
+| `almacen.test.js` / `fotos.integration.test.js` | unitaria / integración | T5.1: decodificar y validar data-URI, selección s3/fake/legado, adaptador S3 con cliente simulado y firma local; recepción con 2 fotos → 2 `PaqueteFoto`, fotos legadas, 413, fallo del almacén sin paquete a medias, aislamiento. |
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
@@ -297,6 +298,15 @@ Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION
 - Correo transaccional vía Resend, con dominio propio verificado
   (`prospect01.com`) — llega a cualquier residente, no solo a la cuenta
   del operador.
+- **Almacén de fotos (T5.1).** Las fotos nuevas van a un bucket compatible con S3
+  (Railway Buckets) detrás de la interfaz `AlmacenFotos`
+  (`backend/src/services/almacen/`: `s3`, `fake` en memoria y `bd-legado`); la base
+  solo guarda filas `PaqueteFoto`. Se elige por `FOTOS_S3_ENDPOINT`,
+  `FOTOS_S3_BUCKET`, `FOTOS_S3_ACCESS_KEY`, `FOTOS_S3_SECRET` (+ `FOTOS_S3_REGION`,
+  `FOTOS_S3_FORCE_PATH_STYLE`); sin ellas: `fake` en desarrollo y, en producción,
+  se sigue guardando en la base con un aviso en el log. Cómo crear el Bucket: ver
+  DEPLOY.md. `GET /packages/:id/foto` devuelve `{ fotos: [{ url, orden }] }`
+  (URLs firmadas de 10 min; las fotos antiguas de `fotoUrl` se siguen leyendo).
 - Las fotos (`fotoUrl`, hasta 3 imágenes en base64 por paquete) nunca
   viajan en los listados generales (`GET /packages`, `GET /packages/mine`)
   ni en el sondeo de 20s del residente — solo se piden aparte, al abrir

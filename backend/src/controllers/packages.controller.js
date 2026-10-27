@@ -11,6 +11,8 @@ import { resolverCobro } from '../services/cobro.service.js';
 import { EVENTOS, ESTADOS, transicionar } from '../domain/paquete.machine.js';
 import { aplicarEvento, crearConEvento } from '../services/paquete.service.js';
 import { recibirPaquete, asignarPaquete } from '../services/recepcion.service.js';
+import { subirFotos, registrarFotos, descartarSubidas, fotosDelPaquete } from '../services/fotos.service.js';
+import { decodificarDataUri } from '../services/almacen/index.js';
 
 // La cortesía de primera entrega es por apartamento físico, no por
 // cuenta — varias personas del mismo apto pueden registrarse con
@@ -157,13 +159,15 @@ export async function listAll(req, res) {
 export async function getFoto(req, res) {
   const pkg = await prisma.package.findUnique({
     where: { id: req.params.id },
-    select: { fotoUrl: true, residenteId: true },
+    select: { id: true, fotoUrl: true, residenteId: true },
   });
   if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
   if (req.user.role === 'RESIDENT' && pkg.residenteId !== req.user.sub) {
     throw new AppError(CODIGOS.PROHIBIDO, 'No tienes permiso para ver este paquete.', 403);
   }
-  res.json({ fotoUrl: pkg.fotoUrl });
+  // Nuevas: URLs firmadas del almacén (expiran en 10 min). Antiguas: las de fotoUrl.
+  const fotos = await fotosDelPaquete({ almacen: req.app.locals.almacenFotos, paqueteId: pkg.id, fotoUrl: pkg.fotoUrl });
+  res.json({ fotos });
 }
 
 // Residente: programa su propia franja de entrega — se verifica dueño.
@@ -183,8 +187,8 @@ export async function schedule(req, res) {
   res.json(updated);
 }
 
-// Hasta `Conjunto.maxFotos` fotos, guardadas como JSON en la misma columna
-// fotoUrl (T5.1 las moverá a un almacén). El cobro (cortesía por apartamento,
+// Hasta `Conjunto.maxFotos` fotos, guardadas en el almacén de fotos (T5.1;
+// en modo legado, como JSON en Package.fotoUrl). El cobro (cortesía por apartamento,
 // bono atómico, tarifa) lo calcula services/cobro.service.js, la MISMA función
 // que usa la recepción directa.
 export async function checkin(req, res) {
@@ -194,6 +198,9 @@ export async function checkin(req, res) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, mensajeMaxFotos(conjunto.maxFotos), 400);
   }
   if (fotos) validarFotos(fotos, conjunto.maxFotos);
+  // Se validan las fotos (400/413) antes de tocar nada.
+  const almacen = req.app.locals.almacenFotos;
+  (fotos ?? []).forEach((f, i) => decodificarDataUri(f, i + 1));
 
   const actual = await prisma.package.findUnique({
     where: { id: req.params.id },
@@ -214,7 +221,11 @@ export async function checkin(req, res) {
   // transición es inválida (409) o alguien más ya recibió el paquete, el crédito
   // consumido se revierte. Sin residente (SIN_ASIGNAR) la transición RECIBIR
   // falla con 409 (el camino es ASIGNAR).
-  const { pkg, bono, esPrimera } = await prisma.$transaction(async (tx) => {
+  // Sube ANTES de la transacción; si ésta falla se borran los objetos subidos.
+  const { fotoUrl, subidas } = await subirFotos({ almacen, conjuntoId: conjunto.id, fotos, paqueteId: req.params.id });
+  let resultado;
+  try {
+  resultado = await prisma.$transaction(async (tx) => {
     const fresco = await tx.package.findUnique({ where: { id: req.params.id } });
     if (!fresco) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
     // Valida la transición ANTES de tocar el bono (un paquete ya recibido o
@@ -232,11 +243,17 @@ export async function checkin(req, res) {
         costoServicio: r.cobro.monto,
         bonoId: r.bonoId,
         recibidoEn: new Date(),
-        fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
+        fotoUrl,
       },
     });
+    await registrarFotos(tx, pkg.id, subidas);
     return { pkg, bono: r.bono, esPrimera: r.esPrimeraEntrega };
   });
+  } catch (e) {
+    await descartarSubidas(almacen, subidas);
+    throw e;
+  }
+  const { pkg, bono, esPrimera } = resultado;
 
   // Correo de llegada, ya confirmada la transacción (el aviso de WhatsApp sigue manual).
   enviarAvisoLlegada(req.app.locals.notificador, { residente: actual.residente, paquete: pkg, conjunto });
@@ -253,6 +270,7 @@ export async function checkin(req, res) {
 // Cabecera opcional `Idempotency-Key`: un reintento devuelve el mismo paquete.
 export async function recepcion(req, res) {
   const { respuesta, repetida } = await recibirPaquete({
+    almacenFotos: req.app.locals.almacenFotos,
     operadorId: req.user.sub,
     body: req.body,
     claveCabecera: req.get('Idempotency-Key'),

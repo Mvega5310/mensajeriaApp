@@ -71,6 +71,7 @@ model Conjunto {
   comentarios Comentario[]
   eventos     PaqueteEvento[]
   clavesIdempotencia ClaveIdempotencia[]
+  paqueteFotos       PaqueteFoto[]
 }
 
 model User {
@@ -242,6 +243,7 @@ model Package {
 
   eventos              PaqueteEvento[]
   clavesIdempotencia   ClaveIdempotencia[]
+  fotos                PaqueteFoto[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -295,4 +297,23 @@ model ClaveIdempotencia {
 
   @@unique([conjuntoId, operadorId, clave])
   @@index([conjuntoId, creadoEn])
+}
+
+// Foto de un paquete guardada en el almacén externo (T5.1, bucket S3 de Railway).
+// `clave` es la ruta del objeto en el almacén, nunca la imagen. Las fotos
+// anteriores a T5.1 siguen en Package.fotoUrl (base64) y se leen como "legado".
+// onDelete Cascade: borrar el paquete borra las filas (los objetos del bucket
+// los limpia el almacén, mejor esfuerzo).
+model PaqueteFoto {
+  id         String   @id @default(cuid())
+  conjunto   Conjunto @relation(fields: [conjuntoId], references: [id])
+  conjuntoId String
+  paquete    Package  @relation(fields: [paqueteId], references: [id], onDelete: Cascade)
+  paqueteId  String
+  clave      String
+  tipo       String
+  orden      Int      @default(0)
+  creadoEn   DateTime @default(now())
+
+  @@index([conjuntoId, paqueteId, orden])
 }

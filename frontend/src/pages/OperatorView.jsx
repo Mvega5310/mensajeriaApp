@@ -4,7 +4,7 @@ import { api, downloadFile } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS, tiersConCosto } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
-import { parseFotos } from '../utils/fotos.js';
+import { parseFotos, fotoUrlDeRespuesta } from '../utils/fotos.js';
 import { enlaceWhatsapp } from '../utils/whatsapp.js';
 import { etiquetaMetodoPago } from '../utils/metodosPago.js';
 import { getConjuntoConfig } from '../services/conjunto.js';
@@ -242,7 +242,7 @@ export default function OperatorView() {
     setDetailPkg(pkg);
     setDetailFotoLoading(true);
     api(`/packages/${pkg.id}/foto`)
-      .then(({ fotoUrl }) => setDetailPkg((prev) => (prev && prev.id === pkg.id ? { ...prev, fotoUrl } : prev)))
+      .then((r) => setDetailPkg((prev) => (prev && prev.id === pkg.id ? { ...prev, fotoUrl: fotoUrlDeRespuesta(r) } : prev)))
       .catch(() => {})
       .finally(() => setDetailFotoLoading(false));
   }
