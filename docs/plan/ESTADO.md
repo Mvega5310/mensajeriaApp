@@ -28,7 +28,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T2.3 | S | pendiente | | |
 | T2.4 | S | pendiente | | |
 | T2.5 | S | pendiente | | |
-| T2.6 | H | en curso | | |
+| T2.6 | H | hecho | dc38a49 | Franjas, métodos de pago, prefijo y maxFotos salen de /conjunto/config; guard frontendSinFijos ampliado. Pendiente para T2.3: checkin usa `fotos.length > 3` fijo. |
 | T3.1 | S | pendiente | | |
 | T3.2 | S | pendiente | | |
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
@@ -56,3 +56,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - Deuda para F8/legal: borrar una cuenta (derecho de supresión, Ley 1581) con `PaqueteEvento` exige definir anonimización vs purga.
 - 2026-10-27: correcciones de la revisión F0/F1 integradas (e49253e): ráfaga de login 10/50, `--line-strong` ≥3:1, errores 4xx. `test:all` 239/239, build verde. **F0 y F1 cerradas.**
 - 2026-10-27: T2.1 integrada (conflicto en DEPLOY.md resuelto conservando ambas secciones). `test:all` 255/255; `migrate diff` sin drift. En paralelo: T2.2 y T2.6.
+- 2026-10-27: T2.6 integrada; build verde, pruebas sin BD 156/156.
