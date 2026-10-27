@@ -23,17 +23,34 @@ export async function api(ruta, { metodo = 'GET', token, cuerpo, cabeceras } = {
 /** Apartamento único en toda la corrida (aunque corran varios workers y ambos proyectos):
  *  `mkdir` es atómico, así dos escenarios nunca comparten apartamento (la cortesía y el lote
  *  son por apartamento). 3 dígitos (100-999) en la torre 1; al agotarse, sigue con la torre 2, etc. */
-export function siguienteApto() {
+export async function siguienteApto() {
   const dir = entorno().secuencia;
-  const inicio = entorno().modo === 'remoto' ? Math.floor(Math.random() * 800) : 0;
-  for (let n = inicio; ; n++) {
+  const remoto = entorno().modo === 'remoto';
+  const inicio = remoto ? Math.floor(Math.random() * 900) : 0;
+  for (let i = 0; i < 900; i++) {
+    const n = (inicio + i) % 900;
     try {
       fs.mkdirSync(path.join(dir, String(n)));
-      return { torre: `Torre ${(Math.floor(n / 900) % 6) + 1}`, apto: String(100 + (n % 900)) };
     } catch (e) {
       if (e.code !== 'EEXIST') throw e;
+      continue;
     }
+    const apto = String(100 + n);
+    // Entorno compartido (Railway): el conjunto DEMO conserva residentes de corridas anteriores. Un apto
+    // ya ocupado haría que la búsqueda (máx. 5) devuelva a otros residentes y que cortesía/lote
+    // se mezclen con paquetes ajenos: se descarta y se sigue con el siguiente.
+    if (remoto && await aptoOcupado(apto)) continue;
+    return { torre: 'Torre 1', apto };
   }
+  throw new Error('No quedan apartamentos libres de 3 dígitos en este conjunto de pruebas.');
+}
+
+/** ¿Hay algún residente con ese apartamento (en cualquier torre)? Lee /residentes/buscar con la sesión del operador. */
+async function aptoOcupado(apto) {
+  const r = await api(`/residentes/buscar?q=${encodeURIComponent(apto)}`, { token: await sesionOperador() });
+  if (!r.ok) throw new Error(`No pude verificar el apartamento ${apto}: ${r.datos.message}`);
+  const lista = Array.isArray(r.datos) ? r.datos : (r.datos.residentes ?? []);
+  return lista.some((u) => u.apto === apto);
 }
 
 export const sufijo = () => crypto.randomBytes(3).toString('hex');
@@ -41,7 +58,7 @@ export const sufijo = () => crypto.randomBytes(3).toString('hex');
 /** Registra un residente por la API (con el código de invitación) y entra. Nombre/correo únicos. */
 export async function crearResidente({ nombre } = {}) {
   const s = sufijo();
-  const { torre, apto } = siguienteApto();
+  const { torre, apto } = await siguienteApto();
   const datos = {
     nombre: nombre ?? `Residente ${s}`,
     email: `res-${s}@e2e.test`,
@@ -114,7 +131,39 @@ export async function iniciarSesion(context, token, { tema } = {}) {
 /** Contexto nuevo con el mismo tamaño que el proyecto en curso. */
 export async function contextoNuevo(browser, testInfo, baseURL) {
   const { viewport, hasTouch, isMobile } = testInfo.project.use;
+  const ctx = await browser.newContext({ baseURL, viewport, hasTouch, isMobile, locale: 'es-CO' });
+  await calentarServiceWorker(ctx, baseURL);
+  return ctx;
+}
+
+/** Contexto limpio (primera visita real) sin calentar: solo para probar el comportamiento de la primera visita. */
+export async function contextoVirgen(browser, testInfo, baseURL) {
+  const { viewport, hasTouch, isMobile } = testInfo.project.use;
   return browser.newContext({ baseURL, viewport, hasTouch, isMobile, locale: 'es-CO' });
+}
+
+/** En remoto (build de producción con PWA) un contexto nuevo registra el service worker en su primera
+ *  visita. Las versiones desplegadas antes del arreglo de `main.jsx` recargaban la página cuando el SW
+ *  reclamaba la pestaña (`controllerchange`), borrando lo que la prueba ya había tecleado. Para que las
+ *  pruebas no dependan de esa carrera se visita `/` una vez y se espera al controlador ANTES del escenario.
+ *  No cambia lo que se verifica. En local (vite dev, sin SW) no hace nada. */
+export async function calentarServiceWorker(context, baseURL) {
+  if (entorno().modo !== 'remoto') return;
+  const p = await context.newPage();
+  try {
+    await p.goto(baseURL || entorno().baseUrl, { waitUntil: 'load' });
+    for (let i = 0; i < 40; i++) {
+      try {
+        const listo = await p.evaluate(() => !('serviceWorker' in navigator) || !!navigator.serviceWorker.controller);
+        if (listo) break;
+      } catch { /* la página se está recargando por el controllerchange: reintentar */ }
+      await p.waitForTimeout(500);
+    }
+    await p.waitForLoadState('load').catch(() => {});
+    await p.waitForTimeout(500);
+  } finally {
+    await p.close();
+  }
 }
 
 /** Aserción reutilizable: la página no se desplaza en horizontal. */
@@ -149,14 +198,22 @@ export async function recibirPorUI(page, residente, { guia, nuevaPagina = true }
   await expect(page.getByRole('heading', { name: 'Recibir' })).toBeVisible();
   await sinScrollHorizontal(page, 'Recibir');
   await teclear(page, residente.apto, c);
-  await c.tocar(page.locator('.op-sug', { hasText: residente.nombre }));
-  await expect(page.locator('.op-tile').first()).toBeVisible();
-  await sinScrollHorizontal(page, 'Tamaño');
-  await c.tocar(page.locator('.op-tile').nth(1)); // paquete estándar
-  if (guia) {
-    await c.tocar(page.getByRole('button', { name: /guía/i }));
-    await page.getByLabel('Número de guía').fill(guia);
-    await c.tocar(page.getByRole('button', { name: 'Guardar guía' }));
+  const sug = page.locator('.op-sug', { hasText: residente.nombre });
+  await expect(sug).toBeVisible();
+  const guardar = page.getByRole('button', { name: 'Guardar', exact: true });
+  if (!guia && await guardar.isVisible()) {
+    // Camino corto (T8.1): una sola sugerencia con apto completo -> "Guardar" directo (Estándar preseleccionado).
+    c.corto = true;
+  } else {
+    await c.tocar(sug);
+    await expect(page.locator('.op-tile').first()).toBeVisible();
+    await sinScrollHorizontal(page, 'Tamaño');
+    await c.tocar(page.locator('.op-tile').nth(1)); // paquete estándar
+    if (guia) {
+      await c.tocar(page.getByRole('button', { name: /guía/i }));
+      await page.getByLabel('Número de guía').fill(guia);
+      await c.tocar(page.getByRole('button', { name: 'Guardar guía' }));
+    }
   }
   await c.tocar(page.getByRole('button', { name: 'Guardar', exact: true }));
   await expect(page.getByRole('heading', { name: 'Guardado', exact: true })).toBeVisible();
@@ -165,6 +222,11 @@ export async function recibirPorUI(page, residente, { guia, nuevaPagina = true }
 }
 
 export const test = base.extend({
+  // `context` del proyecto: en remoto se calienta el service worker antes de abrir la página del escenario.
+  context: async ({ context, baseURL }, use) => {
+    await calentarServiceWorker(context, baseURL);
+    await use(context);
+  },
   // La URL del frontend se conoce solo después del globalSetup: se lee aquí, no en la configuración.
   baseURL: async ({}, use) => { await use(entorno().baseUrl); },
 });

@@ -4,7 +4,7 @@
 import {
   test, expect, entorno, api, crearResidente, sesionOperador, recibirPorApi, misPaquetes, pinDe,
   enlaceDe, sql, sinPin, iniciarSesion, contextoNuevo, sinScrollHorizontal, teclear, recibirPorUI,
-  sufijo, siguienteApto,
+  sufijo, siguienteApto, contextoVirgen,
 } from './fixtures.mjs';
 import crypto from 'node:crypto';
 
@@ -13,7 +13,7 @@ const remoto = () => entorno().modo === 'remoto';
 test.describe('Residente: registro y acceso', () => {
   test('se registra con el código de invitación y entra', async ({ page }) => {
     const s = sufijo();
-    const { apto } = siguienteApto();
+    const { apto } = await siguienteApto();
     const nombre = `Registro ${s}`;
     const email = `reg-${s}@e2e.test`;
     await page.goto(`/registro?c=${encodeURIComponent(entorno().codigo)}`);
@@ -35,6 +35,24 @@ test.describe('Residente: registro y acceso', () => {
     await expect(page).toHaveURL(/\/paquetes$/);
     await expect(page.getByRole('heading', { name: `Hola, ${nombre.split(' ')[0]}` })).toBeVisible();
     await sinScrollHorizontal(page, 'Mis paquetes');
+  });
+
+  test('primera visita: el service worker no recarga la página ni borra lo tecleado', async ({ browser }, testInfo) => {
+    test.skip(remoto() && !process.env.E2E_SW_SIN_RECARGA, 'Solo aplica a builds con el arreglo de main.jsx; activar con E2E_SW_SIN_RECARGA=1 cuando el despliegue ya lo incluya.');
+    const ctx = await contextoVirgen(browser, testInfo, entorno().baseUrl);
+    const p = await ctx.newPage();
+    await p.goto('/registro?c=x');
+    await p.evaluate(() => { window.__marca = 1; });
+    await p.getByLabel('Nombre completo').fill('No me borres');
+    // Espera a que el SW (si lo hay) tome el control y deja pasar el tiempo en que antes se recargaba.
+    await p.evaluate(() => Promise.race([
+      'serviceWorker' in navigator ? navigator.serviceWorker.ready : null, // en dev no hay SW: no resuelve
+      new Promise((r) => setTimeout(r, 4000)),
+    ]).then(() => null)).catch(() => {});
+    await p.waitForTimeout(3000);
+    expect(await p.evaluate(() => window.__marca), 'la página se recargó sola').toBe(1);
+    await expect(p.getByLabel('Nombre completo')).toHaveValue('No me borres');
+    await ctx.close();
   });
 
   test('un código de invitación inválido no registra', async ({ page }) => {
@@ -123,6 +141,7 @@ test.describe('Operador: recibir', () => {
 
     // Toques hasta Guardado: teclas del apto + elegir residente + tamaño + Guardar (<= 3 + dígitos).
     expect(c.n).toBeLessThanOrEqual(3 + res.apto.length);
+    if (c.corto) expect(c.n, 'camino corto: dígitos del apto + Guardar').toBe(res.apto.length + 1);
   });
 
   test('sin dueño: queda en Pendientes "Sin asignar" y se asigna', async ({ page, context }) => {
@@ -270,6 +289,10 @@ test.describe('Operador: entrega con PIN', () => {
     await expect(page.getByRole('heading', { name: 'Entregar' })).toBeVisible();
     await sinScrollHorizontal(page, 'Entregar');
     await teclear(page, pin);
+    // PIN de 4 dígitos en un entorno compartido: si coincide con otro apartamento, se elige el propio.
+    const eleccion = page.getByRole('group', { name: 'Elige el apartamento' });
+    await expect(eleccion.or(page.getByRole('heading', { name: res.etiqueta })).first()).toBeVisible();
+    if (await eleccion.isVisible()) await eleccion.getByRole('button', { name: res.etiqueta }).click();
     await expect(page).toHaveURL(/\/op\/entregar\/lote$/);
     await expect(page.getByRole('heading', { name: res.etiqueta })).toBeVisible();
     await expect(page.getByText(`${res.nombre} · 2 paquetes`)).toBeVisible();
@@ -291,23 +314,42 @@ test.describe('Operador: entrega con PIN', () => {
   });
 
   test('PIN incorrecto 5 veces: el apto queda bloqueado (423) y se ve en pantalla', async ({ page, context }) => {
+    test.setTimeout(remoto() ? 15 * 60_000 : 60_000);
     const res = await crearResidente();
     await recibirPorApi({ residenteId: res.id });
     const pin = await pinDe(res);
     const equivocado = String((Number(pin) + 1) % 10000).padStart(4, '0');
     const token = await sesionOperador();
 
+    // El operador tiene además un límite propio (20 fallos / 10 min) que en un entorno compartido puede
+    // estar consumido por otras corridas: ese 429 es otra protección distinta del bloqueo del apto (423).
+    // Se espera a que se libere (sin contarlo) para verificar lo que esta prueba quiere verificar.
+    const sinLimiteDeOperador = async (cuerpo) => {
+      for (let i = 0; i < 30; i++) {
+        const r = await api('/entregas/verificar-pin', { metodo: 'POST', token, cuerpo });
+        if (r.status !== 429) return r;
+        expect(remoto(), 'el límite del operador (429) solo se espera en el entorno compartido').toBe(true);
+        await page.waitForTimeout(20_000);
+      }
+      throw new Error('El límite de intentos del operador no se liberó en 10 minutos.');
+    };
     const estados = [];
     for (let i = 0; i < 5; i++) {
-      const r = await api('/entregas/verificar-pin', { metodo: 'POST', token, cuerpo: { pin: equivocado, residenteId: res.id } });
-      estados.push(r.status);
+      estados.push((await sinLimiteDeOperador({ pin: equivocado, residenteId: res.id })).status);
     }
     expect(estados.slice(0, 4)).toEqual([400, 400, 400, 400]);
     expect(estados[4]).toBe(423);
 
+    await sinLimiteDeOperador({ pin, residenteId: res.id }); // 423 del apto; solo asegura que el operador no esté limitado
     await iniciarSesion(context, token);
     await page.goto('/op/entregar');
     await teclear(page, pin); // incluso el PIN correcto está bloqueado
+    // Con muchos paquetes en el entorno compartido el PIN de 4 dígitos puede coincidir con otro apartamento:
+    // la pantalla pide elegir apto. Se elige el propio y el bloqueo debe verse igual.
+    const eleccion = page.getByRole('group', { name: 'Elige el apartamento' });
+    const aviso = page.locator('.ds-toast--error');
+    await expect(eleccion.or(aviso).first()).toBeVisible();
+    if (await eleccion.isVisible()) await eleccion.getByRole('button', { name: res.etiqueta }).click();
     await expect(page.locator('.ds-toast--error')).toContainText(/Demasiados intentos/);
     await expect(page).toHaveURL(/\/op\/entregar$/);
     await sinScrollHorizontal(page, 'Entregar (bloqueado)');

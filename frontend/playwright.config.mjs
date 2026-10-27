@@ -15,18 +15,24 @@ function rutaChromium() {
   return fs.existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined;
 }
 
+// Modo remoto (despliegue real, p. ej. Railway): red y bcrypt reales, datos compartidos.
+// Los tiempos se amplían SOLO aquí; lo que se verifica no cambia. Un solo worker: los escenarios
+// comparten el mismo conjunto DEMO y el operador, y en paralelo se estorban (latencia, "Pendientes").
+const REMOTO = !!(process.env.E2E_BASE_URL && process.env.E2E_API_URL);
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.mjs',
   globalSetup: './e2e/entorno.mjs',
-  timeout: 60_000,
-  expect: { timeout: 10_000 },
+  timeout: REMOTO ? 120_000 : 60_000,
+  expect: { timeout: REMOTO ? 25_000 : 10_000 },
   fullyParallel: false,
-  workers: process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : 2,
+  workers: process.env.E2E_WORKERS ? Number(process.env.E2E_WORKERS) : (REMOTO ? 1 : 2),
   retries: 0,
   reporter: [['list']],
   outputDir: 'test-results',
   use: {
+    ...(REMOTO ? { actionTimeout: 30_000, navigationTimeout: 45_000 } : {}),
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     locale: 'es-CO',
