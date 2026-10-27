@@ -26,6 +26,7 @@ import { aplicarEvento, crearConEvento } from './paquete.service.js';
 import { generatePin } from './pin.service.js';
 import { resolverCobro } from './cobro.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
+import { subirFotos, registrarFotos, descartarSubidas } from './fotos.service.js';
 
 export const VENTANA_IDEMPOTENCIA_MS = 24 * 60 * 60 * 1000;
 
@@ -94,7 +95,7 @@ async function respuestaPorClave(operadorId, clave, conjunto) {
  * @param {{operadorId:string, body:object, claveCabecera?:string}} p
  * @returns {Promise<{respuesta:{paquete:object, aviso:object|null}, repetida:boolean}>}
  */
-export async function recibirPaquete({ operadorId, body, claveCabecera }) {
+export async function recibirPaquete({ operadorId, body, claveCabecera, almacenFotos }) {
   const conjunto = await conjuntoDelContexto();
   const datos = validarRecepcion(body, { maxFotos: conjunto.maxFotos });
   const clave = validarClaveIdempotencia(claveCabecera);
@@ -104,7 +105,9 @@ export async function recibirPaquete({ operadorId, body, claveCabecera }) {
     if (previa) return { respuesta: previa, repetida: true };
   }
 
-  const fotoUrl = datos.fotos.length ? JSON.stringify(datos.fotos) : null;
+  // Fotos: se validan y suben ANTES de la transacción (no se retiene una conexión
+  // de base de datos durante la subida). Si algo falla después, se borran.
+  const { fotoUrl, subidas } = await subirFotos({ almacen: almacenFotos, conjuntoId: conjunto.id, fotos: datos.fotos });
   let paqueteId;
   try {
     paqueteId = await prisma.$transaction(async (tx) => {
@@ -186,9 +189,11 @@ export async function recibirPaquete({ operadorId, body, claveCabecera }) {
         });
         await tx.claveIdempotencia.create({ data: { clave, operadorId, paqueteId: paquete.id } });
       }
+      await registrarFotos(tx, paquete.id, subidas);
       return paquete.id;
     });
   } catch (e) {
+    await descartarSubidas(almacenFotos, subidas);
     // Dos envíos simultáneos con la misma clave: el perdedor falla por la unicidad
     // (su transacción, bono incluido, se revierte) y devuelve lo que creó el ganador.
     if (clave && e?.code === 'P2002') {

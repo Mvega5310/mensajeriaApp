@@ -53,7 +53,7 @@ git push
    `JWT_SECRET`), si `JWT_SECRET` tiene menos de 32 caracteres con
    `NODE_ENV=production`, o si `PORT` o `DATABASE_URL` son inválidos, el
    proceso **no arranca**: el log lista todos los problemas a la vez. Las
-   opcionales ausentes (`CORS_ORIGIN`, `FRONTEND_URL`, `RESEND_API_KEY`) no
+   opcionales ausentes (`CORS_ORIGIN`, `FRONTEND_URL`, `RESEND_API_KEY`, `FOTOS_S3_*`) no
    detienen el arranque; el log muestra un `AVISO:` por cada una. Si el deploy
    falla justo después de cambiar variables, lo primero es leer ese mensaje en
    Railway → Deployments → Logs.
@@ -192,6 +192,44 @@ un dato desechable de 24 h; no bloquea borrar paquetes ni usuarios).
   reintento). Probado: rollback y re-aplicación con `migrate deploy`.
 - Las claves vencidas se liberan al reusarse; no hay tarea de limpieza (la tabla
   crece una fila por recepción con clave).
+
+### Almacén de fotos y migración `add_paquete_foto` (T5.1, refactor mobile-first)
+
+Las fotos nuevas ya no van a la base (base64 en `Package.fotoUrl`) sino a un
+**Bucket de Railway** (compatible con S3). La base solo guarda la referencia en la
+tabla `PaqueteFoto` (`paqueteId`, `clave`, `tipo`, `orden`, con `conjuntoId`).
+Las fotos antiguas siguen en `fotoUrl` y `GET /packages/:id/foto` las sigue leyendo
+(devuelve `{ fotos: [{ url, orden }] }`: URLs firmadas que expiran en 10 min para
+las nuevas, la imagen tal cual para las antiguas).
+
+**Crear el Bucket:** en el proyecto de Railway, *+ New → Bucket* (o el MCP
+`create-bucket`). En el servicio del backend define estas variables a partir de las
+credenciales del bucket (pestaña *Credentials*; puedes referenciarlas con
+`${{Bucket.VARIABLE}}`):
+
+| Variable | Valor |
+|---|---|
+| `FOTOS_S3_ENDPOINT` | endpoint S3 del bucket (p. ej. `https://t3.storageapi.dev`) |
+| `FOTOS_S3_BUCKET` | nombre del bucket |
+| `FOTOS_S3_ACCESS_KEY` | access key id |
+| `FOTOS_S3_SECRET` | secret access key |
+| `FOTOS_S3_REGION` | opcional; por defecto `auto` (usa la que muestre Railway) |
+| `FOTOS_S3_FORCE_PATH_STYLE` | opcional; por defecto `true` (déjalo así en Railway) |
+
+Las cuatro primeras van juntas o ninguna (a medias, el servidor no arranca y lo
+dice). **Sin ellas en producción** el backend NO se rompe: sigue guardando las
+fotos como base64 en la base (modo legado) y deja un `AVISO: ATENCIÓN ...` en el
+log de arranque. En desarrollo/pruebas usa un almacén en memoria (`fake`) con aviso.
+Cada foto se valida al recibirla: JPG/PNG/WebP, máx. 1,5 MB decodificada (413 si
+se pasa). Si la transacción de recepción falla tras subir, se intenta borrar lo
+subido (mejor esfuerzo, queda en el log).
+
+- Migración **aditiva** (`20261030120000_add_paquete_foto`), `prisma migrate deploy`
+  normal; generada con `prisma migrate diff` contra Postgres. El código anterior
+  ignora la tabla.
+- **Rollback:** `backend/prisma/manual/rollback_add_paquete_foto.sql` (con `psql`).
+  Ojo: las fotos nuevas solo se enlazan a su paquete por esta tabla; al borrarla
+  quedan huérfanas en el bucket.
 
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 

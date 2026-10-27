@@ -8,13 +8,14 @@ import bonosRoutes from './routes/bonos.routes.js';
 import residentesRoutes from './routes/residentes.routes.js';
 import { manejadorErrores } from './domain/errores.js';
 import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS } from './domain/limitador.js';
+import { crearAlmacenDesdeEntorno } from './services/almacen/index.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
 
 // Construye la app de Express SIN arrancar el servidor. index.js hace el
 // listen en producción; las pruebas de integración HTTP hacen app.listen(0)
 // contra un puerto efímero (ver __tests__/http.integration.test.js).
 // `limitadorLogin` es inyectable (pruebas, o un limitador con Redis más adelante).
-export function createApp({ limitadorLogin } = {}) {
+export function createApp({ limitadorLogin, almacenFotos } = {}) {
   const app = express();
 
   // Detrás del proxy de Railway, `req.ip` sería la IP del proxy para todos y el
@@ -31,6 +32,9 @@ export function createApp({ limitadorLogin } = {}) {
     app.set('trust proxy', 1);
   }
   app.locals.limitadorLogin = limitadorLogin ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
+
+  // Almacén de fotos (T5.1): inyectable; por defecto sale de FOTOS_S3_* (sin ellas: fake/legado).
+  app.locals.almacenFotos = almacenFotos ?? crearAlmacenDesdeEntorno(process.env);
 
   app.use(cors({ origin: process.env.CORS_ORIGIN }));
   // El límite ya no es la defensa principal contra fotos gigantes — el

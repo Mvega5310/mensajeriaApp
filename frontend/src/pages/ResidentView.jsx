@@ -7,6 +7,7 @@ import { etiquetaMetodoPago } from '../utils/metodosPago.js';
 import { getConjuntoConfig } from '../services/conjunto.js';
 import { paginar } from '../utils/pagination.js';
 import StatusBadge from '../components/StatusBadge.jsx';
+import { fotoUrlDeRespuesta } from '../utils/fotos.js';
 import PhotoGallery from '../components/PhotoGallery.jsx';
 import Pagination from '../components/Pagination.jsx';
 
@@ -80,7 +81,7 @@ export default function ResidentView() {
     setDetailPkg(pkg);
     setDetailFotoLoading(true);
     api(`/packages/${pkg.id}/foto`)
-      .then(({ fotoUrl }) => setDetailPkg((prev) => (prev && prev.id === pkg.id ? { ...prev, fotoUrl } : prev)))
+      .then((r) => setDetailPkg((prev) => (prev && prev.id === pkg.id ? { ...prev, fotoUrl: fotoUrlDeRespuesta(r) } : prev)))
       .catch(() => {})
       .finally(() => setDetailFotoLoading(false));
   }

@@ -125,7 +125,9 @@ test('con residente y pre-alerta con la misma guía (normalizada): vincula ESA, 
   const db = await leer(objetivo.id);
   assert.equal(db.transportadora, 'Servientrega');
   assert.equal(db.guia, 'bb-22 2'); // la guía ya existente no se pisa
-  assert.deepEqual(JSON.parse(db.fotoUrl), ['data:image/png;base64,AAA']);
+  // T5.1: con el almacén (fake en pruebas) no se escribe fotoUrl; hay una fila PaqueteFoto.
+  assert.equal(db.fotoUrl, null);
+  assert.equal(await enA(() => prisma.paqueteFoto.count({ where: { paqueteId: objetivo.id } })), 1);
   const ev = await eventos(objetivo.id);
   assert.deepEqual(ev.map((e) => [e.tipo, e.deEstado, e.aEstado]), [['RECIBIR', 'PREALERTADO', 'EN_RECEPCION']]);
   assert.equal(ev[0].datos.conPrealerta, true);
