@@ -77,7 +77,11 @@ model User {
   createdAt    DateTime @default(now())
 
   // Tenant (KAN-8). Nullable en la fase "expand" para permitir el backfill de
-  // Ipanema; se vuelve obligatorio en la migracion "contract" (design.md 5.2).
+  // Ipanema. SIGUE nullable hasta el paso C5 del corte (ver DEPLOY.md): el
+  // CONTRACT (NOT NULL + FK RESTRICT) se aplica a mano desde
+  // prisma/manual/contract_conjunto_not_null.sql, y SOLO en el commit de C5 este
+  // `String?` pasa a `String` (relación obligatoria) + se registra la migración.
+  // Mantenerlo nullable aquí evita drift mientras el código se despliega en C2.
   // email se mantiene @unique GLOBAL, sin cambios (requirements, nota R5).
   conjunto     Conjunto? @relation(fields: [conjuntoId], references: [id])
   conjuntoId   String?
