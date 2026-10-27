@@ -10,10 +10,15 @@ import './base.css';
 // en vite.config.js), pero la pestaña ya abierta no recarga sola para
 // tomar los archivos nuevos. Esto la recarga automáticamente apenas el
 // nuevo service worker toma control.
+// Solo si la página YA tenía un service worker al cargar: en la primera visita
+// el SW se instala y reclama la pestaña (clientsClaim) sin que haya versión
+// vieja que reemplazar, y recargar entonces borraba lo que el usuario estaba
+// escribiendo (p. ej. el formulario de registro) un par de segundos después de abrir.
 if ('serviceWorker' in navigator) {
   let yaRecargando = false;
+  const teniaControlador = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (yaRecargando) return;
+    if (!teniaControlador || yaRecargando) return;
     yaRecargando = true;
     window.location.reload();
   });
