@@ -74,7 +74,7 @@ El valor por defecto aplica si el usuario no dice nada.
 | D2 | Estado `SIN_ASIGNAR` para paquetes sin destinatario claro. Custodia máxima de 30 días | Sí |
 | D3 | Correo automático de llegada (Resend, gratis). El WhatsApp sigue siendo manual con wa.me | Sí |
 | D4 | Fotos nuevas en un bucket de Railway; las de la base de datos se siguen leyendo | Sí |
-| D5 | Identidad visual "Etiqueta de envío": kraft, tinta marino, cobalto y sello bermellón. Día por defecto, noche opcional | Sí |
+| D5 | Paleta de marca v3 (ver `docs/research/colores.md`): crema claro, marino, azul de marca para la acción, naranja para la cortesía. Día por defecto, noche opcional | Sí |
 
 ---
 
@@ -215,7 +215,7 @@ Formato de cada tarjeta: **Id · Modelo · Depende de**, seguido de qué hacer, 
 
 **T4.1 · S · T0.2** Sistema de diseño en código.
 - **Qué hacer:**
-  - Crear `frontend/src/design/tokens.css`, copiando los tokens de `Main.dc.html`, temas `.pt` y `.pt.noche`.
+  - Crear `frontend/src/design/tokens.css`, copiando los tokens v3 de `Main.dc.html` (ver `docs/research/colores.md`), temas `.pt` y `.pt.noche`.
   - Crear los componentes en `src/design/`: `Button` (con variantes `primario`, `secundario` y `whatsapp`), `Keypad`, `PinInput`, `PackageLabel`, `Stamp`, `Badge`, `BottomNav`, `Toast`, `Sheet`, `TopBar` y `Field`.
   - Cargar las fuentes Archivo, Atkinson Hyperlegible Next e IBM Plex Mono.
   - `useTheme` pasa a manejar día y noche. Se borra `ThemeToggle`.

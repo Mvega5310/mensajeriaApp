@@ -11,8 +11,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&amp;family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&amp;family=IBM+Plex+Mono:wght@500;700&amp;display=swap">
 <style>
 body{margin:0}
-.pt{--bg:#E9DFCC;--surface:#FBF8F1;--raised:#F3ECDD;--line:#CDBFA5;--ink:#13294B;--muted:#5B5446;--action:#1F4FD1;--on-action:#FFFFFF;--edge:#13294B;--pin:#0B6E75;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
-.pt.noche{--bg:#15130F;--surface:#1F1C17;--raised:#2A261F;--line:#3E382E;--ink:#F3ECDD;--muted:#BDB3A0;--action:#7D97FF;--on-action:#0B1020;--edge:#000000;--pin:#4FD1C5;--wa:#25D366;--on-wa:#04210F;--gift:#FF8A5B;--warn:#F2B33D;--danger:#FF6B5B}
+.pt{--bg:#F4F6F9;--surface:#FFFFFF;--raised:#E9EEF5;--line:#C7D0DA;--ink:#13294B;--muted:#4A5872;--action:#1E63C9;--on-action:#FFFFFF;--edge:#0C2E73;--pin:#0C2E73;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;--brand:#17B6C4;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.pt.noche{--bg:#0A1428;--surface:#13213B;--raised:#1C2D4D;--line:#33466B;--ink:#EEF2F8;--muted:#B3BFD2;--action:#6EA0FF;--on-action:#06142E;--edge:#000000;--pin:#C7D0DA;--wa:#25D366;--on-wa:#04210F;--gift:#FF9A4D;--warn:#F2B33D;--danger:#FF6B5B;--brand:#17B6C4}
 .h{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:-0.02em}
 .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .btn{box-sizing:border-box;min-height:56px;padding:0 20px;border-radius:14px;font:700 18px 'Atkinson Hyperlegible Next',sans-serif;border:0;display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none}
@@ -22,16 +22,16 @@ body{margin:0}
 .badge{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 10px;border-radius:6px;font:700 14px 'Atkinson Hyperlegible Next',sans-serif;border:2px solid currentColor}
 .stamp{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:2.5px solid var(--gift);color:var(--gift);border-radius:8px;font:900 14px Archivo,sans-serif;letter-spacing:.06em;text-transform:uppercase;transform:rotate(-4deg)}
 .sw{display:flex;align-items:center;gap:12px;font-size:16px}
-.sw i{width:44px;height:44px;border-radius:10px;border:2px solid var(--ink);flex:none}
+.sw i{width:44px;height:44px;border-radius:10px;border:1px solid var(--line);flex:none}
 .sec{font:900 13px Archivo,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
-.card{background:var(--surface);border-radius:18px;padding:28px;border:2px solid var(--ink)}
+.card{background:var(--surface);border-radius:18px;padding:28px;border:1px solid var(--line)}
 </style>
 </helmet>
 <div class="pt" style="width:1280px;height:1500px;box-sizing:border-box;padding:56px 64px;display:flex;flex-direction:column;gap:32px">
   <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;border-bottom:3px solid var(--ink);padding-bottom:24px">
     <div style="display:flex;flex-direction:column;gap:10px">
-      <h1 class="h" style="margin:0;font-size:72px;line-height:.9;font-weight:900">PUERTA<span style="color:var(--action)">YÁ</span></h1>
-      <p style="margin:0;font-size:20px;color:var(--muted)">Sistema de diseño v2 · «Etiqueta de envío» · mobile-first a 390 px</p>
+      <h1 class="h" style="margin:0;font-size:72px;line-height:.9;font-weight:900">PUERTA<span style="color:var(--action);border-bottom:5px solid var(--brand)">YÁ</span></h1>
+      <p style="margin:0;font-size:20px;color:var(--muted)">Sistema de diseño v3 · paleta de marca Puertayá · mobile-first a 390 px</p>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">
       <span class="stamp">Primera entrega gratis</span>
@@ -41,30 +41,30 @@ body{margin:0}
 
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px">
     <div class="card" style="display:flex;flex-direction:column;gap:16px">
-      <p class="sec">Día · kraft (por defecto, pleno sol)</p>
+      <p class="sec">Día · por defecto (mejor lectura a pleno sol)</p>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
-        <div class="sw"><i style="background:#E9DFCC"></i><span>bg · cartón kraft</span></div>
-        <div class="sw"><i style="background:#FBF8F1"></i><span>surface · papel de etiqueta</span></div>
-        <div class="sw"><i style="background:#13294B"></i><span>ink · azul marino de marca</span></div>
-        <div class="sw"><i style="background:#5B5446"></i><span>muted · 5,7:1 sobre kraft</span></div>
-        <div class="sw"><i style="background:#1F4FD1"></i><span><b>action</b> · cobalto, solo botón principal</span></div>
-        <div class="sw"><i style="background:#0B6E75"></i><span><b>pin</b> · turquesa de marca, confianza</span></div>
-        <div class="sw"><i style="background:#C2410C"></i><span><b>gift</b> · sello bermellón, cortesía</span></div>
-        <div class="sw"><i style="background:#0F7A40"></i><span><b>wa</b> · solo WhatsApp</span></div>
-        <div class="sw"><i style="background:#8A5A00"></i><span><b>warn</b> · ocre, sin asignar / sin señal</span></div>
-        <div class="sw"><i style="background:#B42318"></i><span><b>danger</b> · error</span></div>
+        <div class="sw"><i style="background:#F4F6F9"></i><span>bg · crema de marca</span></div>
+        <div class="sw"><i style="background:#FFFFFF"></i><span>surface · tarjeta</span></div>
+        <div class="sw"><i style="background:#13294B"></i><span>ink · marino de marca · 13:1</span></div>
+        <div class="sw"><i style="background:#4A5872"></i><span>muted · 6,5:1</span></div>
+        <div class="sw"><i style="background:#1E63C9"></i><span><b>action</b> · azul de marca · 5,7:1</span></div>
+        <div class="sw"><i style="background:#0C2E73"></i><span><b>pin</b> · azul profundo</span></div>
+        <div class="sw"><i style="background:#C2410C"></i><span><b>gift</b> · naranja, cortesía · 5,2:1</span></div>
+        <div class="sw"><i style="background:#0F7A40"></i><span><b>wa</b> · solo WhatsApp · 5,4:1</span></div>
+        <div class="sw"><i style="background:#8A5A00"></i><span><b>warn</b> · ocre + ícono</span></div>
+        <div class="sw"><i style="background:#17B6C4"></i><span><b>brand</b> · turquesa, solo decorativo</span></div>
       </div>
     </div>
-    <div class="pt noche card" style="display:flex;flex-direction:column;gap:16px;border-color:#3E382E">
-      <p class="sec">Noche · portería de turno nocturno</p>
+    <div class="pt noche card" style="display:flex;flex-direction:column;gap:16px">
+      <p class="sec">Noche · turno nocturno</p>
       <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">
-        <div class="sw"><i style="background:#15130F;border-color:#3E382E"></i><span>bg · carbón cálido</span></div>
-        <div class="sw"><i style="background:#1F1C17;border-color:#3E382E"></i><span>surface</span></div>
-        <div class="sw"><i style="background:#F3ECDD"></i><span>ink · papel</span></div>
-        <div class="sw"><i style="background:#BDB3A0"></i><span>muted</span></div>
-        <div class="sw"><i style="background:#7D97FF"></i><span><b>action</b> · cobalto claro</span></div>
-        <div class="sw"><i style="background:#4FD1C5"></i><span><b>pin</b></span></div>
-        <div class="sw"><i style="background:#FF8A5B"></i><span><b>gift</b></span></div>
+        <div class="sw"><i style="background:#0A1428"></i><span>bg · fondo oscuro de marca</span></div>
+        <div class="sw"><i style="background:#13213B"></i><span>surface</span></div>
+        <div class="sw"><i style="background:#EEF2F8"></i><span>ink</span></div>
+        <div class="sw"><i style="background:#B3BFD2"></i><span>muted</span></div>
+        <div class="sw"><i style="background:#6EA0FF"></i><span><b>action</b> · azul claro</span></div>
+        <div class="sw"><i style="background:#C7D0DA"></i><span><b>pin</b> · plata de marca</span></div>
+        <div class="sw"><i style="background:#FF9A4D"></i><span><b>gift</b></span></div>
         <div class="sw"><i style="background:#25D366"></i><span><b>wa</b></span></div>
         <div class="sw"><i style="background:#F2B33D"></i><span><b>warn</b></span></div>
         <div class="sw"><i style="background:#FF6B5B"></i><span><b>danger</b></span></div>
@@ -86,7 +86,7 @@ body{margin:0}
     </div>
     <div class="card" style="display:flex;flex-direction:column;gap:12px">
       <p class="sec">Reglas</p>
-      <p style="margin:0;font-size:17px;line-height:1.55">1. Una pantalla, una decisión.<br>2. Un solo botón cobalto por pantalla.<br>3. Número y foto antes que texto.<br>4. Estado = palabra + ícono, nunca solo color.<br>5. Sin degradados, sin brillos, sin emoji.<br>6. La espera muestra tiempo.<br>7. Sin señal no se pierde nada.</p>
+      <p style="margin:0;font-size:17px;line-height:1.55">1. Una pantalla, una decisión.<br>2. Un solo botón azul por pantalla.<br>3. Número y foto antes que texto.<br>4. Estado = palabra + ícono, nunca solo color.<br>5. Sin degradados, sin brillos, sin emoji.<br>6. La espera muestra tiempo.<br>7. Sin señal no se pierde nada.</p>
     </div>
   </div>
 

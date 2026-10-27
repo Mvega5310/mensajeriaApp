@@ -10,7 +10,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | D2 Estado SIN_ASIGNAR y custodia de 30 días | por defecto: sí (sin confirmar) |
 | D3 Correo automático de llegada | por defecto: sí (sin confirmar) |
 | D4 Fotos en bucket de Railway | por defecto: sí (sin confirmar) |
-| D5 Identidad "Etiqueta de envío" | por defecto: sí (sin confirmar) |
+| D5 Paleta de marca v3 | por defecto: sí (sin confirmar) |
 
 ## Tareas
 
