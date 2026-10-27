@@ -76,3 +76,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T2.8 integrada, `test:all` 444/444, build verde.
 - 2026-10-27: T4.6 integrada (build verde, cola 13/13). Railway `puertaya-refactor` creado y desplegado desde la rama; /health OK.
 - 2026-10-27: Railway: preDeploy `prisma migrate deploy && npm run seed` con conjunto DEMO; T6.1 (E2E) en curso.
+- 2026-10-27: humo en Railway OK: login operador DEMO, registro con código, búsqueda, recepción con foto → bucket S3 real + URL firmada descargable, cortesía aplicada, sin PIN al operador, enlace /p#. Credenciales del operador DEMO en variables del servicio api (OPERATOR_EMAIL/OPERATOR_PASSWORD).
