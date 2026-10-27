@@ -25,27 +25,51 @@ C0 backup → C1 backfill#1 → C2 merge a main (deploy, columnas aún NULLABLE)
 El ensayo corre P0, P1, C1, C3 y C5 completos contra una **copia** de producción,
 con el código nuevo levantado, y navegando con cuentas reales de Ipanema.
 
-### 0.1 Copia de producción a Postgres local
+### 0.1 Copia de producción a Postgres local (sin Docker, con `initdb`/`pg_ctl`)
+
+> Este entorno **no tiene Docker**: se usa una instancia temporal de Postgres con
+> el cliente PostgreSQL 16 ya instalado (`initdb`/`pg_ctl`), en el puerto **5433**,
+> con autenticación `trust` (solo local, efímera). **El servicio del 5432 no se
+> toca.** Comandos en **PowerShell**.
 
 1. **Túnel SSH a Railway** (ver DEPLOY.md → "Migraciones de Postgres"):
    `railway connect Postgres --tunnel-only -P 55432`.
-2. **`pg_dump` de producción** por el túnel:
+2. **Verificar versiones** antes del dump:
+   ```powershell
+   # Versión del servidor de Railway (por el túnel):
+   psql "postgresql://postgres:<pwd>@127.0.0.1:55432/railway" -c "SELECT version();"
+   # Versión del pg_dump local — debe ser >= la del servidor:
+   pg_dump --version
    ```
+   Si el `pg_dump` local es **menor** que el servidor, actualiza el cliente
+   PostgreSQL antes de seguir (un dump con cliente viejo contra servidor nuevo
+   falla). El cliente 16 instalado sirve si el servidor es 16 o menor.
+3. **`pg_dump` de producción** por el túnel (formato custom):
+   ```powershell
    pg_dump "postgresql://postgres:<pwd>@127.0.0.1:55432/railway" -Fc -f prod.dump
    ```
-   - **Versión de `pg_dump`:** debe ser **≥** la del servidor Postgres de Railway.
-     Verifica la del servidor con `SELECT version();` por el túnel; si tu
-     `pg_dump` local es menor, usa uno igual o mayor (p. ej. el del contenedor
-     `postgres:16` de Docker: `docker run --rm postgres:16 pg_dump ...`).
-   - **El dump es grande:** las fotos de evidencia viven como base64 en la columna
-     `Package.fotoUrl`, así que el `.dump` puede pesar cientos de MB y tardar.
-     Hazlo con tiempo y espacio en disco suficiente.
-3. **Postgres temporal local** (puerto 5433) y restaurar la copia:
+   - **El dump es grande:** las fotos de evidencia viven como base64 en
+     `Package.fotoUrl`, así que el `.dump` puede pesar cientos de MB y tardar
+     varios minutos. Ten espacio en disco y paciencia.
+4. **Instancia temporal local** (puerto 5433) con `initdb`/`pg_ctl`:
+   ```powershell
+   $DATA = "$env:TEMP\ipa-ensayo-pgdata"
+   initdb -D $DATA -U postgres --auth=trust -E UTF8
+   # arrancar en el 5433 (el 5432 del sistema queda intacto):
+   pg_ctl -D $DATA -o "-p 5433" -l "$env:TEMP\ipa-ensayo.log" start
+   createdb -h 127.0.0.1 -p 5433 -U postgres railway
    ```
-   docker run --rm -d --name ipa-ensayo -e POSTGRES_PASSWORD=postgres \
-     -e POSTGRES_DB=railway -p 5433:5432 postgres:16
-   pg_restore -d "postgresql://postgres:postgres@localhost:5433/railway" --no-owner prod.dump
-   export DATABASE_URL="postgresql://postgres:postgres@localhost:5433/railway"
+5. **Restaurar la copia** y apuntar `DATABASE_URL` al 5433:
+   ```powershell
+   pg_restore -h 127.0.0.1 -p 5433 -U postgres -d railway --no-owner prod.dump
+   $env:DATABASE_URL = "postgresql://postgres@127.0.0.1:5433/railway"
+   ```
+6. **Al terminar el ensayo** (limpieza en §0.2): parar y borrar la instancia
+   temporal y el dump:
+   ```powershell
+   pg_ctl -D $DATA stop
+   Remove-Item -Recurse -Force $DATA
+   Remove-Item prod.dump   # contiene datos personales y fotos: no dejarlo en disco
    ```
 
 ### 0.2 Correr los pasos del corte contra la copia
@@ -55,13 +79,13 @@ Con `DATABASE_URL` apuntando al 5433 y el backend/front nuevos levantados
 
 - **P0 (expand):** `cd backend && npx prisma migrate deploy` (si la copia aún no
   trae la migración `add_conjunto_multitenant`).
-- **P1 (crear Conjunto, sin backfill):** `npm run backfill-conjunto -- --config docs/ipanema.json`
-  en **dry-run** primero; luego, para crear solo el conjunto, usar `backfill-conjunto`
-  con `--apply` (si no hay NULLs aún crea el conjunto; si los hay, también backfillea
-  — en el ensayo da igual, es una copia). *(Alternativa para P1 puro: crear el
-  conjunto con un `--apply` cuando no existan filas legacy; en producción P1 ocurre
-  antes del backfill real.)*
-- **C1 (backfill #1):** `npm run backfill-conjunto -- --config docs/ipanema.json --apply`.
+- **P1 (crear Conjunto, sin backfill):**
+  `npm run backfill-conjunto -- --config ipanema.local.json --solo-conjunto` en
+  **dry-run** primero, luego con `--apply --solo-conjunto`. El flag `--solo-conjunto`
+  crea el `Conjunto` y su `codigoInvitacion` **sin tocar ninguna fila** (sobre la
+  copia, que ya tiene miles de filas NULL de la restauración, es el comportamiento
+  correcto: ninguna se asigna todavía).
+- **C1 (backfill #1):** `npm run backfill-conjunto -- --config ipanema.local.json --apply`.
   Revisa el reporte: `0` NULL en las 4 tablas, conteos antes/después, y **anota el
   SQL de rollback** que imprime.
 - **C3 (backfill #2):** vuelve a correr el mismo comando → debe decir
@@ -73,8 +97,9 @@ Con `DATABASE_URL` apuntando al 5433 y el backend/front nuevos levantados
 - **Navegar con cuentas reales:** login del operador (Francisco) y de un residente
   de Ipanema; recorrer el checklist de §2.4. Confirmar que todo funciona con los
   datos reales restaurados.
-- **Limpieza:** `docker rm -f ipa-ensayo` y borrar `prod.dump` (contiene datos
-  personales y fotos — no dejarlo en disco).
+- **Limpieza:** parar y borrar la instancia temporal y el dump (ver §0.1 paso 6:
+  `pg_ctl -D $DATA stop`, borrar `$DATA` y `prod.dump` — contienen datos personales
+  y fotos, no dejarlos en disco).
 
 Criterio para pasar del ensayo a la ejecución real: **todos** los pasos anteriores
 completan sin sorpresas y el checklist de smoke pasa contra la copia.
@@ -93,17 +118,23 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
 
 ### P1 — Crear el Conjunto Ipanema (sin backfill)
 - **Comando (por el túnel, dry-run primero):**
-  `npm run backfill-conjunto -- --config ipanema.json` → revisar host y resumen.
-- **Esperado:** se crea el `Conjunto` Ipanema con su `codigoInvitacion`. Con esto
-  ya se puede **reimprimir el QR/flyer** con `/registro?c=<código>`.
+  `npm run backfill-conjunto -- --config ipanema.local.json --solo-conjunto`,
+  luego `--apply --solo-conjunto`. Revisar host y resumen.
+- **Esperado:** se crea el `Conjunto` Ipanema con su `codigoInvitacion`, **sin
+  tocar ninguna fila**. Con esto ya se puede **reimprimir el QR/flyer** con
+  `/registro?c=<código>`.
 - **Continuar si:** el conjunto existe y el código quedó anotado.
 - **Rollback:** `DELETE FROM "Conjunto" WHERE slug='ipanema'` (aún no tiene filas
   asociadas). Reportar.
 
-> `ipanema.json`: `{ nombre, slug:"ipanema", operadorNombre, operadorWhatsapp,
-> operadorDomicilio, puntoRecepcion, tarifaMano:3000, tarifaEstandar:4500,
-> tarifaVolumen:7000, tarifaPesado:12000 }`. `bonosHabilitados` NO se incluye
-> (siempre false).
+> **Archivo de config (datos reales → NO versionar).** El repo es público. Copia
+> `docs/ipanema.example.json` (valores ficticios, versionado) a `ipanema.local.json`
+> (ignorado por git: patrón `*.local.json` en `.gitignore`) o a una ruta fuera del
+> repo, y pon ahí los datos reales del operador. El CLI avisa si el `--config` está
+> dentro del repo y no ignorado. Campos: `{ nombre, slug:"ipanema", operadorNombre,
+> operadorWhatsapp, operadorDomicilio, puntoRecepcion, tarifaMano:3000,
+> tarifaEstandar:4500, tarifaVolumen:7000, tarifaPesado:12000 }`. `bonosHabilitados`
+> NO se incluye (siempre false).
 
 ---
 
@@ -119,7 +150,7 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   ensayo). **Sin backup verificado no se sigue.**
 
 ### C1 — Backfill #1
-- **Comando:** `npm run backfill-conjunto -- --config ipanema.json --apply`
+- **Comando:** `npm run backfill-conjunto -- --config ipanema.local.json --apply`
   (por el túnel; al ser host remoto, el script pedirá reescribir el slug `ipanema`).
 - **Esperado:** reporte `APLICADO`, `0` NULL en las 4 tablas, conteos coherentes.
   **Anotar el SQL de rollback** del reporte.
@@ -127,6 +158,14 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
 - **Abortar/rollback:** si el script aborta (pre-chequeo) o algo no cuadra → **no
   mergear**. Rollback: ejecutar el SQL de rollback impreso (`UPDATE ... SET
   conjuntoId = NULL WHERE conjuntoId = '<Ipanema>'`). Reportar.
+
+  > **⚠️ Alcance del SQL de rollback.** Deja en NULL **TODAS** las filas del
+  > conjunto. Entre C1 y C2 (antes del deploy) eso es exactamente lo asignado por
+  > el backfill. Pero **después de C2** el código nuevo ya creó filas con el
+  > `conjuntoId` puesto; ejecutar este rollback entonces también las dejaría en
+  > NULL. Úsalo sin reservas para **deshacer C1 antes del deploy** o como
+  > **reversión total**; **después de C2 con tráfico real, no lo ejecutes sin
+  > decidirlo explícitamente** (podrías "desasignar" datos recién creados).
 
 ### C2 — Merge a `main` (deploy del código con aislamiento)
 - **Comando:** merge de `feature/kan-8-multiconjunto` a `main` y push. Railway
@@ -158,10 +197,18 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   `psql "<DATABASE_URL del túnel>" -f backend/prisma/manual/contract_conjunto_not_null.sql`
 - **Esperado:** se aplica sin error (el guard `DO $$` confirma 0 NULLs). Columnas
   `NOT NULL` y FKs `RESTRICT`.
-- **Después:** registrar la migración en el historial para que `migrate deploy`
-  futuro no intente re-aplicarla: mover/crear la carpeta en `prisma/migrations/` y
-  `npx prisma migrate resolve --applied <nombre>`; en el commit de C5, cambiar
-  `schema.prisma` a `conjuntoId String` (relación obligatoria).
+- **Después — orden EXACTO del registro (no invertir):**
+  1. **Aplicar el SQL manual** (el paso anterior) contra producción por el túnel.
+  2. **`npx prisma migrate resolve --applied <nombre>`** contra producción (por el
+     túnel), para marcar la migración como ya aplicada en el historial.
+  3. **Solo entonces** `commit` + `push` con la carpeta `prisma/migrations/<nombre>/`
+     y `schema.prisma` en `conjuntoId String` (relación obligatoria).
+
+  > **Por qué este orden:** si la carpeta llega a `main` **antes** del `resolve`,
+  > el `prisma migrate deploy` del arranque de Railway intentaría **aplicarla** (y
+  > fallaría o la aplicaría dos veces). El `migration.sql` de esa carpeta debe ser
+  > **idéntico** al SQL aplicado a mano en el paso 1, para que `resolve` sea
+  > coherente con lo que realmente está en la base.
 - **Continuar si:** el contract aplicó y el smoke test sigue en verde.
 - **Abortar/rollback:** `psql ... -f backend/prisma/manual/rollback_contract_conjunto.sql`
   (vuelve a nullable + FK SET NULL, sin pérdida de datos). Reportar.
