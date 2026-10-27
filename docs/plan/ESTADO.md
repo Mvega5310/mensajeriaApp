@@ -24,8 +24,8 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T1.3 | S | hecho | 6075b49 | PaqueteEvento solo-inserción (trigger); aplicarEvento con updateMany condicional; bono atómico, sin crédito → TARIFA. |
 | T1.4 | S | hecho | 41f6159 | PIN: 5 fallos → 423 por 15 min (contador fuera de la tx). Login: 10/IP/15 min → 429; trust proxy=1 en producción. |
 | T2.1 | S | hecho | 98546d6 | residenteId opcional; etiquetaNombre, transportadora, metodoPago, recibidoEn; guia/fechaEntrega reutilizados; Conjunto: prefijoPais, franjasEntrega, maxFotos, custodiaMaxDias. |
-| T2.2 | S | en curso | | |
-| T2.3 | S | pendiente | | |
+| T2.2 | S | hecho | 893516b | GET /api/residentes/buscar (OPERATOR): "304", "T2 304", "2-304", nombre sin tildes; máx 5; torre se guarda "TORRE N". |
+| T2.3 | S | en curso | | |
 | T2.4 | S | pendiente | | |
 | T2.5 | S | pendiente | | |
 | T2.6 | H | hecho | dc38a49 | Franjas, métodos de pago, prefijo y maxFotos salen de /conjunto/config; guard frontendSinFijos ampliado. Pendiente para T2.3: checkin usa `fotos.length > 3` fijo. |
@@ -57,3 +57,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: correcciones de la revisión F0/F1 integradas (e49253e): ráfaga de login 10/50, `--line-strong` ≥3:1, errores 4xx. `test:all` 239/239, build verde. **F0 y F1 cerradas.**
 - 2026-10-27: T2.1 integrada (conflicto en DEPLOY.md resuelto conservando ambas secciones). `test:all` 255/255; `migrate diff` sin drift. En paralelo: T2.2 y T2.6.
 - 2026-10-27: T2.6 integrada; build verde, pruebas sin BD 156/156.
+- 2026-10-27: T2.2 integrada, `test:all` 281/281. Arranca T2.3 (recepción sin pre-alerta: el bloqueo principal).
