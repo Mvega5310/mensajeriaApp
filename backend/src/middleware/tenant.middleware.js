@@ -40,6 +40,13 @@ export async function requireTenant(req, res, next) {
     return next(new AppError(CODIGOS.SESION_INVALIDA, 'Tu sesión no está asociada a un conjunto válido. Inicia sesión de nuevo.', 401));
   }
 
+  // Sesión de enlace (T3.1): el token trae el conjunto con el que se firmó; si ya
+  // no coincide con el del usuario en la BD, se rechaza. El tenant sigue saliendo
+  // de la BD, esto es solo una verificación cruzada.
+  if (req.user.scope && req.user.conjuntoId !== conjuntoId) {
+    return next(new AppError(CODIGOS.SESION_INVALIDA, 'Tu acceso ya no es válido. Abre de nuevo el enlace del aviso.', 401));
+  }
+
   // Abre el contexto TENANT para el resto de la cadena. El role viene del JWT
   // ya verificado (solo se usa para consultas, no para autorizar aquí).
   // runWithTenant ahora devuelve SIEMPRE una promesa (envuelve el callback en

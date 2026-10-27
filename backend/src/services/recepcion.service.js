@@ -26,6 +26,7 @@ import { aplicarEvento, crearConEvento } from './paquete.service.js';
 import { generatePin } from './pin.service.js';
 import { resolverCobro } from './cobro.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
+import { urlMisPaquetes } from './enlace.service.js';
 
 export const VENTANA_IDEMPOTENCIA_MS = 24 * 60 * 60 * 1000;
 
@@ -76,7 +77,10 @@ async function armarRespuesta(paqueteId, conjunto) {
   };
   let aviso = null;
   if (r) {
-    const texto = textoLlegada({ nombre: r.nombre, categoria: p.categoriaPeso, pin: p.pin });
+    const texto = textoLlegada({
+      nombre: r.nombre, categoria: p.categoriaPeso, pin: p.pin,
+      enlace: urlMisPaquetes({ residenteId: r.id, conjuntoId: conjunto.id }),
+    });
     aviso = { texto, waUrl: construirEnlace({ prefijoPais: conjunto.prefijoPais, telefono: r.telefono, texto }) };
   }
   return { paquete, aviso };

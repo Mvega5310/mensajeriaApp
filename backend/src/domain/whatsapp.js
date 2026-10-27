@@ -26,9 +26,11 @@ export const ETIQUETAS_CATEGORIA = Object.freeze({
 });
 
 /** Texto del aviso de llegada (artboard Op-Guardado: "Hola Ana, llegó tu paquete..."). */
-export function textoLlegada({ nombre, categoria, pin }) {
+export function textoLlegada({ nombre, categoria, pin, enlace }) {
   const primero = String(nombre ?? '').trim().split(/\s+/)[0];
   const saludo = primero ? `Hola ${primero}` : 'Hola';
   const cat = ETIQUETAS_CATEGORIA[categoria];
-  return `${saludo}, llegó tu paquete a portería${cat ? ` (${cat})` : ''}. Tu PIN de entrega es ${pin}.`;
+  const base = `${saludo}, llegó tu paquete a portería${cat ? ` (${cat})` : ''}. Tu PIN de entrega es ${pin}.`;
+  // T3.1: enlace firmado a "Mis paquetes" (sin contraseña, vence en 7 días).
+  return enlace ? `${base} Mira tus paquetes y pide la entrega aquí: ${enlace}` : base;
 }
