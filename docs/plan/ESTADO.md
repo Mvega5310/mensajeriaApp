@@ -25,11 +25,11 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T1.4 | S | hecho | 41f6159 | PIN: 5 fallos → 423 por 15 min (contador fuera de la tx). Login: 10/IP/15 min → 429; trust proxy=1 en producción. |
 | T2.1 | S | hecho | 98546d6 | residenteId opcional; etiquetaNombre, transportadora, metodoPago, recibidoEn; guia/fechaEntrega reutilizados; Conjunto: prefijoPais, franjasEntrega, maxFotos, custodiaMaxDias. |
 | T2.2 | S | hecho | 893516b | GET /api/residentes/buscar (OPERATOR): "304", "T2 304", "2-304", nombre sin tildes; máx 5; torre se guarda "TORRE N". |
-| T2.3 | S | en curso | | |
-| T2.4 | S | pendiente | | |
-| T2.5 | S | pendiente | | |
+| T2.3 | S | hecho | 2f21448 | POST /packages/recepcion (con/sin residente, vincula pre-alerta por guía), PATCH /:id/asignar, ?estado=, Idempotency-Key; cobro compartido en cobro.service. **Bloqueo principal eliminado en backend.** |
+| T2.4 | S | en curso | | |
+| T2.5 | S | en curso | | |
 | T2.6 | H | hecho | dc38a49 | Franjas, métodos de pago, prefijo y maxFotos salen de /conjunto/config; guard frontendSinFijos ampliado. Pendiente para T2.3: checkin usa `fotos.length > 3` fijo. |
-| T3.1 | S | pendiente | | |
+| T3.1 | S | en curso | | |
 | T3.2 | S | pendiente | | |
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
 | T4.2 | S | pendiente | | |
@@ -37,7 +37,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T4.4 | H | pendiente | | |
 | T4.5 | S | pendiente | | |
 | T4.6 | H | pendiente | | |
-| T5.1 | S | pendiente | | |
+| T5.1 | S | en curso | | |
 | T6.1 | S | pendiente | | |
 | T7.1 | Orq. | pendiente | | |
 | T8.1 | S | pendiente | | |
@@ -58,3 +58,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T2.1 integrada (conflicto en DEPLOY.md resuelto conservando ambas secciones). `test:all` 255/255; `migrate diff` sin drift. En paralelo: T2.2 y T2.6.
 - 2026-10-27: T2.6 integrada; build verde, pruebas sin BD 156/156.
 - 2026-10-27: T2.2 integrada, `test:all` 281/281. Arranca T2.3 (recepción sin pre-alerta: el bloqueo principal).
+- 2026-10-27: T2.3 integrada, `test:all` 309/309. En paralelo: T2.4, T2.5, T3.1, T5.1.
