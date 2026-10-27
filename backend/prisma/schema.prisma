@@ -70,6 +70,7 @@ model Conjunto {
   bonos       Bono[]
   comentarios Comentario[]
   eventos     PaqueteEvento[]
+  clavesIdempotencia ClaveIdempotencia[]
 }
 
 model User {
@@ -101,6 +102,7 @@ model User {
   comentarios  Comentario[]
   bonos        Bono[]
   eventosActor PaqueteEvento[]
+  clavesIdempotencia ClaveIdempotencia[]
 
   // Indice de tenant (A3). El compuesto sirve tambien para las consultas que
   // filtran solo por conjuntoId (Postgres usa la primera columna), asi que no
@@ -239,6 +241,7 @@ model Package {
   bonoId               String?
 
   eventos              PaqueteEvento[]
+  clavesIdempotencia   ClaveIdempotencia[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -271,4 +274,25 @@ model PaqueteEvento {
   creadoEn   DateTime @default(now())
 
   @@index([conjuntoId, paqueteId, creadoEn])
+}
+
+// Resultado guardado de una recepción con cabecera `Idempotency-Key` (T2.3):
+// un reintento con la misma clave (mismo operador y conjunto, ventana de 24 h)
+// devuelve el mismo paquete sin crear otro. Se escribe en la MISMA transacción
+// que crea el paquete. Lleva tenant (conjuntoId) y está en MODELOS_CON_TENANT.
+// onDelete Cascade: borrar el paquete u operador no debe quedar bloqueado por
+// una clave de reintento (es un dato desechable, no una bitácora).
+model ClaveIdempotencia {
+  id         String   @id @default(cuid())
+  conjunto   Conjunto @relation(fields: [conjuntoId], references: [id])
+  conjuntoId String
+  clave      String
+  operador   User     @relation(fields: [operadorId], references: [id], onDelete: Cascade)
+  operadorId String
+  paquete    Package  @relation(fields: [paqueteId], references: [id], onDelete: Cascade)
+  paqueteId  String
+  creadoEn   DateTime @default(now())
+
+  @@unique([conjuntoId, operadorId, clave])
+  @@index([conjuntoId, creadoEn])
 }

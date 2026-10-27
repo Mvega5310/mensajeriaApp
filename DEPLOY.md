@@ -177,6 +177,22 @@ paquetes sin residente, así que se aplica con el flujo normal (`migrate deploy`
   nada; asigna o borra esos paquetes y reintenta. Probado en
   `scripts/__tests__/migracionRecepcion.integration.test.js`.
 
+### Migración `add_clave_idempotencia` (T2.3, refactor mobile-first)
+
+Crea la tabla `ClaveIdempotencia` (`clave`, `operadorId`, `paqueteId`, `creadoEn`,
+con `conjuntoId`; única por `[conjuntoId, operadorId, clave]`) que usa
+`POST /packages/recepcion` para no duplicar paquetes al reintentar. **Aditiva**:
+el código anterior ignora la tabla, se aplica con `prisma migrate deploy` normal.
+Generada con `prisma migrate diff` contra Postgres (sin diferencias con
+`schema.prisma`). Las FK a `User` y `Package` son `ON DELETE CASCADE` (la clave es
+un dato desechable de 24 h; no bloquea borrar paquetes ni usuarios).
+
+- **Rollback:** `backend/prisma/manual/rollback_add_clave_idempotencia.sql` (con
+  `psql`; quita la tabla y la fila de `_prisma_migrations`; solo pierde claves de
+  reintento). Probado: rollback y re-aplicación con `migrate deploy`.
+- Las claves vencidas se liberan al reusarse; no hay tarea de limpieza (la tabla
+  crece una fila por recepción con clave).
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama

@@ -22,6 +22,7 @@ export const MODELOS_CON_TENANT = Object.freeze([
   'bono',
   'comentario',
   'paqueteevento',
+  'claveidempotencia',
 ]);
 
 // Set para O(1) en la extensión.
