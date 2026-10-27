@@ -34,7 +34,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
 | T4.2 | S | hecho | daa541c | 6 pantallas del operador en `pages/operador/`; OperatorView borrado. Probado con Playwright 390 px día/noche. Toques hasta Guardado: 3 + dígitos del apto (4 con apto de 1 dígito, 6 con 3 dígitos). Bitácora con filtros no replicada (queda CSV). |
 | T4.3 | S | pendiente | | |
-| T4.4 | H | en curso | | |
+| T4.4 | H | hecho | f9d2b84 | Nav lateral ≥1024 px, Pendientes en dos columnas; sin scroll horizontal a 1280 y 390 (día/noche). El orquestador añadió "Entregar con PIN" al detalle. |
 | T4.5 | S | pendiente | | |
 | T4.6 | H | pendiente | | |
 | T5.1 | S | hecho | 39d9705 | AlmacenFotos (s3/fake/legado) + PaqueteFoto; sin bucket en producción sigue en legado con aviso. |
@@ -65,3 +65,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - **Revisión de fase F2/T3.1/T5.1: PASA CON CORRECCIONES** (sin críticos). Correcciones en curso: cortesía duplicada al asignar y en carrera; unificar "T2"/"TORRE 2"; límite de PIN por operador menos agresivo; token del enlace fuera de la ruta (fragmento #); el operador ya no ve el PIN (decisión del orquestador: el PIN solo lo ve el residente, por enlace/app/correo); límite del body vs fotos; producción detectada en Railway aunque falte NODE_ENV.
 - 2026-10-27: T4.2 integrada; build verde.
 - Contratos que pidió el frontend (tarea nueva **T2.7**, tras las correcciones de F2): resumen "hoy" liviano, `GET /packages/:id` para el operador, búsqueda con torre por prefijo, y bitácora filtrable.
+- 2026-10-27: T4.4 integrada; build verde.
