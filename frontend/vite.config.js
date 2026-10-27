@@ -29,6 +29,13 @@ export default defineConfig({
       // yendo siempre a la red — nunca se sirven paquetes/PIN desde caché.
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
+        // La API nunca se cachea (T4.5): ni el fallback de navegación ni el
+        // runtime cache pueden servir paquetes/PIN viejos. Sin señal, el
+        // fetch falla y la cola de recepciones se encarga.
+        navigateFallbackDenylist: [/^\/api\//],
+        runtimeCaching: [
+          { urlPattern: ({ url }) => url.pathname.startsWith('/api/'), handler: 'NetworkOnly' },
+        ],
       },
     }),
   ],
