@@ -8,13 +8,14 @@ import bonosRoutes from './routes/bonos.routes.js';
 import residentesRoutes from './routes/residentes.routes.js';
 import { manejadorErrores } from './domain/errores.js';
 import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS } from './domain/limitador.js';
+import { crearNotificadorDesdeEntorno } from './services/notificador/index.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
 
 // Construye la app de Express SIN arrancar el servidor. index.js hace el
 // listen en producción; las pruebas de integración HTTP hacen app.listen(0)
 // contra un puerto efímero (ver __tests__/http.integration.test.js).
 // `limitadorLogin` es inyectable (pruebas, o un limitador con Redis más adelante).
-export function createApp({ limitadorLogin } = {}) {
+export function createApp({ limitadorLogin, notificador } = {}) {
   const app = express();
 
   // Detrás del proxy de Railway, `req.ip` sería la IP del proxy para todos y el
@@ -31,6 +32,9 @@ export function createApp({ limitadorLogin } = {}) {
     app.set('trust proxy', 1);
   }
   app.locals.limitadorLogin = limitadorLogin ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
+
+  // Inyectable (pruebas: fake). Sin clave de Resend => fake en memoria + aviso en el log.
+  app.locals.notificador = notificador ?? crearNotificadorDesdeEntorno();
 
   app.use(cors({ origin: process.env.CORS_ORIGIN }));
   // El límite ya no es la defensa principal contra fotos gigantes — el

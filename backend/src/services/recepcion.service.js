@@ -26,6 +26,7 @@ import { aplicarEvento, crearConEvento } from './paquete.service.js';
 import { generatePin } from './pin.service.js';
 import { resolverCobro } from './cobro.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
+import { enviarAvisoLlegada } from './avisos.service.js';
 
 export const VENTANA_IDEMPOTENCIA_MS = 24 * 60 * 60 * 1000;
 
@@ -94,7 +95,7 @@ async function respuestaPorClave(operadorId, clave, conjunto) {
  * @param {{operadorId:string, body:object, claveCabecera?:string}} p
  * @returns {Promise<{respuesta:{paquete:object, aviso:object|null}, repetida:boolean}>}
  */
-export async function recibirPaquete({ operadorId, body, claveCabecera }) {
+export async function recibirPaquete({ operadorId, body, claveCabecera, notificador }) {
   const conjunto = await conjuntoDelContexto();
   const datos = validarRecepcion(body, { maxFotos: conjunto.maxFotos });
   const clave = validarClaveIdempotencia(claveCabecera);
@@ -198,11 +199,31 @@ export async function recibirPaquete({ operadorId, body, claveCabecera }) {
     throw e;
   }
 
-  return { respuesta: await armarRespuesta(paqueteId, conjunto), repetida: false };
+  const respuesta = await armarRespuesta(paqueteId, conjunto);
+  await avisarLlegadaDe(notificador, paqueteId, conjunto, respuesta.aviso);
+  return { respuesta, repetida: false };
+}
+
+// Correo de llegada, SOLO tras confirmar la transacción y nunca en un replay.
+// La búsqueda del destinatario se espera (es una lectura corta y hace el
+// resultado determinista); el envío en sí es fire-and-forget y un fallo no se propaga.
+async function avisarLlegadaDe(notificador, paqueteId, conjunto, aviso) {
+  if (!notificador || !aviso) return; // sin dueño no hay a quién avisar
+  try {
+    const p = await prisma.package.findUnique({
+      where: { id: paqueteId },
+      include: { residente: { select: { nombre: true, email: true, telefono: true } } },
+    });
+    if (!p?.residente?.email) return;
+    const { residente, ...paquete } = p;
+    enviarAvisoLlegada(notificador, { residente, paquete, conjunto, aviso });
+  } catch {
+    console.error('[notificador] fallo al preparar "llegada"');
+  }
 }
 
 /** Asigna un residente a un paquete SIN_ASIGNAR y calcula su cobro (SIN_ASIGNAR -> EN_RECEPCION). */
-export async function asignarPaquete({ operadorId, paqueteId, residenteId }) {
+export async function asignarPaquete({ operadorId, paqueteId, residenteId, notificador }) {
   if (typeof residenteId !== 'string' || !residenteId) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Elige el residente al que se le asigna el paquete.', 400, { campo: 'residenteId' });
   }
@@ -229,5 +250,7 @@ export async function asignarPaquete({ operadorId, paqueteId, residenteId }) {
     });
   });
 
-  return armarRespuesta(paqueteId, conjunto);
+  const respuesta = await armarRespuesta(paqueteId, conjunto);
+  await avisarLlegadaDe(notificador, paqueteId, conjunto, respuesta.aviso);
+  return respuesta;
 }

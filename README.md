@@ -134,6 +134,9 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
 | `recepcionSinPrealerta.integration.test.js` | integración | T2.1: paquete sin residente (SIN_ASIGNAR / EN_RECEPCION directo) se crea y lista con `etiquetaNombre`, checkin/entrega lo toleran (409 o TARIFA, sin 500), aislamiento, y `GET /conjunto/config` con los defaults nuevos. |
 | `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
+| `avisos.integration.test.js` | integración | T2.4: correo de llegada con notificador `fake` (recepción, `asignar`, `checkin`; 0 en replay idempotente, sin correo o sin dueño; un notificador que lanza no tumba el 201). |
+| `notificador/__tests__/plantillas.test.js` | unitaria | T2.4: `escaparHtml`, plantillas escapadas y sin "Ipanema", selección `fake`/`resend`, `construirEnlace`. |
+| `backendSinFijos.test.js` | estática | T2.4: "Ipanema" no aparece en `backend/src` fuera de pruebas. |
 | `migracionRecepcion.integration.test.js` | integración | T2.1: la migración aplica sobre datos existentes en una base desechable; el rollback aborta con mensaje si hay paquetes sin residente y, sin ellos, revierte. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
@@ -446,6 +449,34 @@ conjunto o inexistente: 404.
 
 **`GET /api/packages?estado=SIN_ASIGNAR`**: filtro opcional por estado (cualquiera
 de la máquina; otro valor -> 400). Sin parámetro devuelve todos, como antes.
+
+### Avisos por correo: Notificador (T2.4)
+
+Los correos pasan por la interfaz `services/notificador/` (servicio externo
+detrás de interfaz con `fake`). Implementaciones: `resend` (API de Resend) y
+`fake` (memoria: `obtenerEnviados()` / `limpiar()`). Sin `RESEND_API_KEY`
+válida (la de ejemplo `re_xxx...` cuenta como ausente) se usa `fake` y se avisa
+en el log. Se inyecta con `createApp({ notificador })` y vive en
+`app.locals.notificador`. `EMAIL_FROM` define el remitente (por defecto
+`Puertaya <onboarding@resend.dev>`).
+
+Métodos: `avisarLlegada({ residente, paquete, conjunto, aviso })`,
+`agradecerEntrega({ residente, paquetes, conjunto })`,
+`enviarEnlaceAcceso({ email, url, conjunto })`,
+`confirmarPrealerta`, `avisarNuevaPrealerta`, `recuperarContrasena`.
+
+- **Correo de llegada** (decisión D3: correo automático, WhatsApp manual): se
+  envía tras confirmar la transacción en `POST /packages/recepcion`, en
+  `PATCH /packages/:id/asignar` y en el `checkin` legado, solo si el residente
+  tiene correo; nunca en un replay idempotente. Es fire-and-forget: un fallo
+  se registra en el log (sin datos personales) y no altera la respuesta. El
+  aviso de WhatsApp sigue siendo manual (`aviso.waUrl`).
+- **Plantillas** (`notificador/plantillas.js`): todo valor interpolado pasa por
+  `escaparHtml`; el nombre del conjunto sale de `Conjunto`, no del código;
+  español, tuteo, sin emoji ni exclamaciones.
+- `backendSinFijos.test.js` falla si "Ipanema" aparece en `backend/src`.
+- El armado de `wa.me` del frontend (`frontend/src/utils/whatsapp.js`, usado en
+  `OperatorView.jsx`) se deja para T4.2, que rehace las pantallas.
 
 ## Pendiente
 

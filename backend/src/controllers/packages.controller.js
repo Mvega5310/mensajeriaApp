@@ -1,9 +1,7 @@
 import { prisma } from '../config/db.js';
 import { generatePin, verifyPin, registrarIntentoPin } from '../services/pin.service.js';
 import { costoPara } from '../services/tariff.service.js';
-import {
-  sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
-} from '../services/email.service.js';
+import { enSegundoPlano, enviarAvisoLlegada } from '../services/avisos.service.js';
 import { conjuntoDelContexto, operadorDelConjuntoActual } from '../services/conjunto.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { claveApartamento } from '../services/apartamento.service.js';
@@ -88,14 +86,17 @@ export async function createPrealert(req, res) {
     },
   }));
 
-  // Aviso automático — no bloquea la respuesta si falla el envío (ver
-  // sendEmail en email.service.js, que ya se traga sus propios errores).
+  // Avisos automáticos: no bloquean ni tumban la respuesta si falla el envío.
   const residente = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  const conjunto = await conjuntoDelContexto();
+  const { notificador } = req.app.locals;
   // Operador DEL CONJUNTO del residente (no el primero de la tabla). Si no hay
   // operador en el conjunto, no se envía correo y no se lanza error.
   const operador = await operadorDelConjuntoActual();
-  if (operador) sendNewPackageOperatorEmail(operador.email, pkg, residente);
-  sendPrealertConfirmationEmail(residente.email, pkg);
+  if (operador) {
+    enSegundoPlano('nuevaPrealerta', () => notificador.avisarNuevaPrealerta({ operador, residente, paquete: pkg, conjunto }));
+  }
+  enSegundoPlano('prealerta', () => notificador.confirmarPrealerta({ residente, paquete: pkg, conjunto }));
 
   res.status(201).json(pkg);
 }
@@ -196,7 +197,10 @@ export async function checkin(req, res) {
 
   const actual = await prisma.package.findUnique({
     where: { id: req.params.id },
-    select: { residenteId: true, createdAt: true, residente: { select: { id: true, torre: true, apto: true } } },
+    select: {
+      residenteId: true, createdAt: true,
+      residente: { select: { id: true, torre: true, apto: true, nombre: true, email: true, telefono: true } },
+    },
   });
   if (!actual) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
 
@@ -234,6 +238,9 @@ export async function checkin(req, res) {
     return { pkg, bono: r.bono, esPrimera: r.esPrimeraEntrega };
   });
 
+  // Correo de llegada, ya confirmada la transacción (el aviso de WhatsApp sigue manual).
+  enviarAvisoLlegada(req.app.locals.notificador, { residente: actual.residente, paquete: pkg, conjunto });
+
   res.json({
     ...pkg,
     pin: undefined,
@@ -249,6 +256,7 @@ export async function recepcion(req, res) {
     operadorId: req.user.sub,
     body: req.body,
     claveCabecera: req.get('Idempotency-Key'),
+    notificador: req.app.locals.notificador,
   });
   if (repetida) res.set('Idempotent-Replayed', 'true');
   res.status(201).json(respuesta);
@@ -260,6 +268,7 @@ export async function asignar(req, res) {
     operadorId: req.user.sub,
     paqueteId: req.params.id,
     residenteId: req.body?.residenteId,
+    notificador: req.app.locals.notificador,
   }));
 }
 
@@ -323,7 +332,7 @@ export async function exportCsv(req, res) {
   const csv = [CSV_HEADERS, ...rows].map((row) => row.map(csvEscape).join(',')).join('\r\n');
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="puertaya-ipanema-paquetes.csv"');
+  res.setHeader('Content-Disposition', 'attachment; filename="puertaya-paquetes.csv"');
   const BOM = '﻿'; // sin esto Excel adivina mal la codificación y daña tildes/ñ
   res.send(BOM + csv);
 }
@@ -377,12 +386,17 @@ export async function confirmDelivery(req, res) {
     });
     return tx.package.findUnique({
       where: { id: pkg.id },
-      include: { residente: { select: { email: true } } },
+      include: { residente: { select: { nombre: true, email: true } } },
     });
   });
 
   // Un paquete sin residente no tiene a quién agradecer.
-  if (updated.residente?.email) sendDeliveryThanksEmail(updated.residente.email, updated);
+  if (updated.residente?.email) {
+    const conjunto = await conjuntoDelContexto();
+    enSegundoPlano('entrega', () => req.app.locals.notificador.agradecerEntrega({
+      residente: updated.residente, paquetes: [updated], conjunto,
+    }));
+  }
 
   const { residente, ...pkgSinResidente } = updated;
   res.json({ ...pkgSinResidente, pin: undefined });
