@@ -40,9 +40,9 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T4.6 | S | hecho | f5181ef | axe: 0 serias/críticas en 55 pantallas (390/1280, día/noche); títulos sin "Ipanema"; textos ≥16 px; cola solo reenvía los del operador en sesión; `frontend/e2e/a11y.audit.mjs`. |
 | T2.8 | S | hecho | bf123c5 | Fotos con sesión de enlace; schedule con `modalidad: RECOGER` (evento PROGRAMAR); `transportadora` en pre-alerta; `motivoCobro` en /mine; "Mis bonos" (GET /bonos/mine) si el conjunto los habilita. El orquestador mostró "Recoge en portería" al operador. |
 | T5.1 | S | hecho | 39d9705 | AlmacenFotos (s3/fake/legado) + PaqueteFoto; sin bucket en producción sigue en legado con aviso. |
-| T6.1 | S | pendiente | | |
+| T6.1 | S | hecho | da605e6 | `npm run e2e`: 14 escenarios × móvil/escritorio = 28/28 (verificado por el orquestador, 42 s); `e2e:a11y` envuelve la auditoría; modo Railway con E2E_BASE_URL/E2E_API_URL. |
 | T7.1 | Orq. | en curso | | Proyecto puertaya-refactor: Postgres 18, bucket `fotos` (iad), api https://api-production-df00.up.railway.app, web https://web-production-2b5d05.up.railway.app. 13 migraciones OK; correo simulado (sin RESEND_API_KEY). |
-| T8.1 | S | pendiente | | |
+| T8.1 | S | en curso | | |
 
 ## Bitácora del orquestador
 
@@ -77,3 +77,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T4.6 integrada (build verde, cola 13/13). Railway `puertaya-refactor` creado y desplegado desde la rama; /health OK.
 - 2026-10-27: Railway: preDeploy `prisma migrate deploy && npm run seed` con conjunto DEMO; T6.1 (E2E) en curso.
 - 2026-10-27: humo en Railway OK: login operador DEMO, registro con código, búsqueda, recepción con foto → bucket S3 real + URL firmada descargable, cortesía aplicada, sin PIN al operador, enlace /p#. Credenciales del operador DEMO en variables del servicio api (OPERATOR_EMAIL/OPERATOR_PASSWORD).
+- 2026-10-27: T6.1 integrada; E2E 28/28. **F6 cerrada.** En curso: E2E contra Railway y revisión final T8.1.
