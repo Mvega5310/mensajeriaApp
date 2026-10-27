@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../services/api.js';
 import { formatCOP } from '../utils/format.js';
 import { TIERS, tiersConCosto } from '../utils/tiers.js';
-import { TIME_SLOTS, PAYMENT_METHODS } from '../utils/schedule.js';
+import { etiquetaMetodoPago } from '../utils/metodosPago.js';
 import { getConjuntoConfig } from '../services/conjunto.js';
 import { paginar } from '../utils/pagination.js';
 import StatusBadge from '../components/StatusBadge.jsx';
@@ -12,12 +12,16 @@ import Pagination from '../components/Pagination.jsx';
 
 const PAGE_SIZE = 10;
 
-const emptyForm = {
-  proveedor: '', guia: '', categoriaPeso: 'ESTANDAR',
-  esContraEntregaProveedor: false, valorProductoProveedor: '', valorDeclarado: '',
-  franjaHoraria: TIME_SLOTS[0], metodoPagoServicio: PAYMENT_METHODS[0].value, notas: '',
-  pinProveedor: '',
-};
+// Franjas y métodos de pago vienen de /conjunto/config: el formulario toma el
+// primero de cada lista cuando la config carga (ver el efecto de abajo).
+function formVacio(franjas, metodosPago) {
+  return {
+    proveedor: '', guia: '', categoriaPeso: 'ESTANDAR',
+    esContraEntregaProveedor: false, valorProductoProveedor: '', valorDeclarado: '',
+    franjaHoraria: franjas[0] || '', metodoPagoServicio: metodosPago[0] || '', notas: '',
+    pinProveedor: '',
+  };
+}
 
 // Cada cuánto se revisa si algo cambió (ej. el operador confirmó la
 // entrega) mientras el residente tiene la pestaña abierta y visible.
@@ -26,10 +30,12 @@ const POLL_MS = 20000;
 export default function ResidentView() {
   const [packages, setPackages] = useState([]);
   const [tab, setTab] = useState('list');
-  const [form, setForm] = useState(emptyForm);
+  const [franjas, setFranjas] = useState([]);
+  const [metodosPago, setMetodosPago] = useState([]);
+  const [form, setForm] = useState(() => formVacio([], []));
   const [scheduling, setScheduling] = useState(null); // paquete a programar
-  const [slot, setSlot] = useState(TIME_SLOTS[0]);
-  const [paymentMethod, setPaymentMethod] = useState(PAYMENT_METHODS[0].value);
+  const [slot, setSlot] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [error, setError] = useState('');
 
   const [comentarios, setComentarios] = useState([]);
@@ -63,8 +69,8 @@ export default function ResidentView() {
 
   function openSchedule(pkg) {
     setScheduling(pkg);
-    setSlot(pkg.franjaHoraria || TIME_SLOTS[0]);
-    setPaymentMethod(pkg.metodoPagoServicio || PAYMENT_METHODS[0].value);
+    setSlot(pkg.franjaHoraria || franjas[0] || '');
+    setPaymentMethod(pkg.metodoPagoServicio || metodosPago[0] || '');
   }
 
   // El listado general ya no trae fotoUrl (pueden pesar cientos de KB
@@ -87,12 +93,22 @@ export default function ResidentView() {
     setComentarios(await api('/comments/mine'));
   }
 
-  // Config del conjunto (fuente única de bonosHabilitados y tarifas). Una vez.
+  // Config del conjunto (fuente única de bonosHabilitados, tarifas, franjas y
+  // métodos de pago). Una vez.
   useEffect(() => {
     getConjuntoConfig()
       .then((cfg) => {
+        const fr = cfg.franjasEntrega || [];
+        const mp = cfg.metodosPago || [];
         setBonosHabilitados(!!cfg.bonosHabilitados);
         setTarifas(cfg.tarifas || null);
+        setFranjas(fr);
+        setMetodosPago(mp);
+        setForm((f) => ({
+          ...f,
+          franjaHoraria: f.franjaHoraria || fr[0] || '',
+          metodoPagoServicio: f.metodoPagoServicio || mp[0] || '',
+        }));
       })
       .catch(() => {});
   }, []);
@@ -160,7 +176,7 @@ export default function ResidentView() {
           pinProveedor: form.pinProveedor,
         },
       });
-      setForm(emptyForm);
+      setForm(formVacio(franjas, metodosPago));
       await refresh();
       setTab('list');
     } catch (err) {
@@ -260,7 +276,8 @@ export default function ResidentView() {
             <label htmlFor="franjaHoraria">Franja en la que sueles estar en tu apartamento</label>
             <select id="franjaHoraria" value={form.franjaHoraria}
               onChange={(e) => setForm({ ...form, franjaHoraria: e.target.value })}>
-              {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+              {franjas.length === 0 && <option value="">Cargando…</option>}
+              {franjas.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             <p className="field-hint">La confirmas de nuevo cuando el paquete llegue a recepción, por si cambia.</p>
           </div>
@@ -269,7 +286,8 @@ export default function ResidentView() {
             <label htmlFor="metodoPagoServicio">Método de pago del servicio de entrega</label>
             <select id="metodoPagoServicio" value={form.metodoPagoServicio}
               onChange={(e) => setForm({ ...form, metodoPagoServicio: e.target.value })}>
-              {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              {metodosPago.length === 0 && <option value="">Cargando…</option>}
+              {metodosPago.map((m) => <option key={m} value={m}>{etiquetaMetodoPago(m)}</option>)}
             </select>
           </div>
 
@@ -455,7 +473,7 @@ export default function ResidentView() {
             {detailPkg.franjaHoraria && (
               <div className="cod-box-muted" style={{ marginTop: 10 }}>
                 <span>Franja / pago:</span>
-                <strong>{detailPkg.franjaHoraria} · {detailPkg.metodoPagoServicio || '—'}</strong>
+                <strong>{detailPkg.franjaHoraria} · {etiquetaMetodoPago(detailPkg.metodoPagoServicio)}</strong>
               </div>
             )}
             {detailPkg.esContraEntregaProveedor && (
@@ -509,13 +527,13 @@ export default function ResidentView() {
               <div className="field">
                 <label>Franja de reparto</label>
                 <select value={slot} onChange={(e) => setSlot(e.target.value)}>
-                  {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {franjas.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="field">
                 <label>Método de pago del servicio</label>
                 <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-                  {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  {metodosPago.map((m) => <option key={m} value={m}>{etiquetaMetodoPago(m)}</option>)}
                 </select>
               </div>
               <button className="btn btn-primary" type="submit">Confirmar Horario</button>

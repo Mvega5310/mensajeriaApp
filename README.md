@@ -358,6 +358,9 @@ pre-alertado (fase *expand*, ver DEPLOY.md):
 - `Conjunto`: `prefijoPais`, `franjasEntrega`, `maxFotos`, `custodiaMaxDias`.
   `GET /conjunto/config` los devuelve (más `metodosPago`); si `franjasEntrega` es
   null se aplica el default de `domain/conjuntoConfig.js`.
+  El frontend no tiene franjas, métodos de pago, prefijo ni máximo de fotos
+  fijos: los lee de esa misma config (`utils/schedule.js` se borró). La prueba
+  `frontendSinFijos.test.js` falla si vuelven a aparecer.
 
 ## Pendiente
 

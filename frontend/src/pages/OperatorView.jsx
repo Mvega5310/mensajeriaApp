@@ -5,13 +5,14 @@ import { formatCOP } from '../utils/format.js';
 import { TIERS, tiersConCosto } from '../utils/tiers.js';
 import { compressImage } from '../utils/image.js';
 import { parseFotos } from '../utils/fotos.js';
+import { enlaceWhatsapp } from '../utils/whatsapp.js';
+import { etiquetaMetodoPago } from '../utils/metodosPago.js';
 import { getConjuntoConfig } from '../services/conjunto.js';
 import StatusBadge from '../components/StatusBadge.jsx';
 import Pagination from '../components/Pagination.jsx';
 import PhotoGallery from '../components/PhotoGallery.jsx';
 import { paginar } from '../utils/pagination.js';
 
-const MAX_FOTOS = 3;
 const PAGE_SIZE = 10;
 
 const ESTADOS_FILTRO = [
@@ -61,6 +62,10 @@ export default function OperatorView() {
   const bonosHabilitados = !!config?.bonosHabilitados;
   const tarifas = config?.tarifas || null;
   const tiers = tiersConCosto(tarifas); // etiquetas + montos de la config
+  // Prefijo y máximo de fotos vienen de la config. Mientras carga, maxFotos es 0
+  // y no se pueden agregar fotos (no hay un valor fijo de respaldo).
+  const prefijoPais = config?.prefijoPais;
+  const maxFotos = config?.maxFotos || 0;
 
   const [checkinPkg, setCheckinPkg] = useState(null);
   const [tier, setTier] = useState('ESTANDAR');
@@ -256,7 +261,7 @@ export default function OperatorView() {
   async function handlePhotoSelect(e) {
     const file = e.target.files[0];
     e.target.value = ''; // permite volver a elegir el mismo archivo si se quita y se repite
-    if (!file || photos.length >= MAX_FOTOS) return;
+    if (!file || photos.length >= maxFotos) return;
     setPhotoBusy(true);
     setCheckinError('');
     try {
@@ -401,7 +406,7 @@ export default function OperatorView() {
               <div className="grid-2" onClick={(e) => e.stopPropagation()}>
                 <button className="btn btn-primary" onClick={() => openCheckin(pkg)}>📷 Recibir y Fotografiar</button>
                 <a className="btn btn-whatsapp"
-                  href={`https://wa.me/57${pkg.residente.telefono}?text=${encodeURIComponent(`Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}`}
+                  href={enlaceWhatsapp(prefijoPais, pkg.residente.telefono, `Hola ${pkg.residente.nombre}, te confirmamos que tu paquete de ${pkg.proveedor} ya está en recepción.`)}
                   target="_blank" rel="noreferrer">💬 WhatsApp</a>
               </div>
               {bonosHabilitados && (
@@ -529,7 +534,7 @@ export default function OperatorView() {
                   </div>
                   <a className="btn btn-whatsapp" style={{ width: 'auto', padding: '6px 12px' }}
                     onClick={(e) => e.stopPropagation()}
-                    href={`https://wa.me/57${c.residente.telefono}`} target="_blank" rel="noreferrer">💬</a>
+                    href={enlaceWhatsapp(prefijoPais, c.residente.telefono)} target="_blank" rel="noreferrer">💬</a>
                 </div>
                 <p style={{ fontSize: 13.5, margin: '10px 0 0' }}>{truncar(c.mensaje)}</p>
               </div>
@@ -604,7 +609,7 @@ export default function OperatorView() {
             {detailPkg.franjaHoraria && (
               <div className="cod-box-muted" style={{ marginTop: 10 }}>
                 <span>Franja / pago:</span>
-                <strong>{detailPkg.franjaHoraria} · {detailPkg.metodoPagoServicio || '—'}</strong>
+                <strong>{detailPkg.franjaHoraria} · {etiquetaMetodoPago(detailPkg.metodoPagoServicio)}</strong>
               </div>
             )}
             {detailPkg.esContraEntregaProveedor && (
@@ -655,7 +660,7 @@ export default function OperatorView() {
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.5 }}>{detailComentario.mensaje}</p>
             <a className="btn btn-whatsapp" style={{ marginTop: 14 }}
-              href={`https://wa.me/57${detailComentario.residente.telefono}`} target="_blank" rel="noreferrer">
+              href={enlaceWhatsapp(prefijoPais, detailComentario.residente.telefono)} target="_blank" rel="noreferrer">
               💬 Responder por WhatsApp
             </a>
           </div>
@@ -701,7 +706,7 @@ export default function OperatorView() {
             </div>
             <form onSubmit={handleCheckinSubmit}>
               <div className="field">
-                <label>Fotos de Custodia (hasta {MAX_FOTOS}, ej. distintos lados del paquete)</label>
+                <label>Fotos de Custodia (hasta {maxFotos || '…'}, ej. distintos lados del paquete)</label>
                 <div className="photo-grid">
                   {photos.map((src, i) => (
                     <div className="photo-slot" key={i}>
@@ -709,14 +714,14 @@ export default function OperatorView() {
                       <button type="button" className="photo-remove" onClick={() => removePhoto(i)} aria-label="Quitar foto">✕</button>
                     </div>
                   ))}
-                  {photos.length < MAX_FOTOS && (
+                  {photos.length < maxFotos && (
                     <label htmlFor="pkg-photo-input" className="photo-picker photo-slot photo-slot-empty">
                       <span className="photo-picker-empty">📷 {photos.length === 0 ? 'Tomar foto' : 'Agregar'}</span>
                     </label>
                   )}
                 </div>
                 <input id="pkg-photo-input" type="file" accept="image/*" capture="environment"
-                  onChange={handlePhotoSelect} className="sr-only" disabled={photoBusy || photos.length >= MAX_FOTOS} />
+                  onChange={handlePhotoSelect} className="sr-only" disabled={photoBusy || photos.length >= maxFotos} />
                 <p className="field-hint">
                   {photoBusy ? 'Procesando foto…' : 'En el celular abre la cámara directo; en computador deja elegir un archivo.'}
                 </p>
@@ -800,7 +805,7 @@ export default function OperatorView() {
                   Si quieres, envíale un agradecimiento por WhatsApp:
                 </p>
                 <a className="btn btn-whatsapp" style={{ marginTop: 14 }}
-                  href={`https://wa.me/57${pinPkg.residente.telefono}?text=${encodeURIComponent(`¡Hola ${pinPkg.residente.nombre}! Tu paquete de ${pinPkg.proveedor} ya fue entregado. ¡Gracias por confiar en ${config?.nombre || 'Puertaya'}! 🙌`)}`}
+                  href={enlaceWhatsapp(prefijoPais, pinPkg.residente.telefono, `¡Hola ${pinPkg.residente.nombre}! Tu paquete de ${pinPkg.proveedor} ya fue entregado. ¡Gracias por confiar en ${config?.nombre || 'Puertaya'}! 🙌`)}
                   target="_blank" rel="noreferrer">💬 Enviar agradecimiento por WhatsApp</a>
                 <button className="btn btn-secondary" style={{ marginTop: 10 }} onClick={closePinModal}>Cerrar</button>
               </>
