@@ -16,6 +16,7 @@ import { backfillConjunto, RESULTADO, BackfillError } from './lib/backfillConjun
 
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
+const SOLO_CONJUNTO = args.includes('--solo-conjunto');
 const idxConfig = args.indexOf('--config');
 const CONFIG_PATH = idxConfig !== -1 ? args[idxConfig + 1] : null;
 
@@ -30,7 +31,7 @@ const esLocal = (h) => h === 'localhost' || h === '127.0.0.1' || h === '::1';
 
 async function main() {
   linea();
-  linea(negrita('== Backfill de conjunto (legado) — Puertaya =='));
+  linea(negrita(`== ${SOLO_CONJUNTO ? 'Crear conjunto (P1, sin backfill)' : 'Backfill de conjunto (legado)'} — Puertaya ==`));
   if (!CONFIG_PATH) throw new Error('Falta --config <archivo.json>');
 
   // Cargar y parsear la config.
@@ -65,13 +66,31 @@ async function main() {
   }
 
   // --- Ejecutar (o ensayar) ---
-  const reporte = await backfillConjunto({ config, apply: APPLY, log: (m) => linea(`  ${m}`) });
+  const reporte = await backfillConjunto({ config, apply: APPLY, soloConjunto: SOLO_CONJUNTO, log: (m) => linea(`  ${m}`) });
 
   // --- Reporte final ---
   linea();
   linea(negrita('Conteos ANTES (total / NULL / asignados):'));
   for (const [t, c] of Object.entries(reporte.conteosAntes)) {
     linea(`  ${t.padEnd(12)} ${c.total} / ${c.nulos} / ${c.asignados}`);
+  }
+
+  // --- Modo --solo-conjunto (P1): crea el conjunto sin tocar filas ---
+  if (reporte.soloConjunto) {
+    linea();
+    if (reporte.resultado === RESULTADO.DRY_RUN) {
+      linea(negrita('*** DRY-RUN (--solo-conjunto): no se escribió nada. Crearía el conjunto, sin tocar filas. ***'));
+      linea('Para aplicar: repite el comando con --apply --solo-conjunto.');
+    } else if (reporte.resultado === RESULTADO.CONJUNTO_YA_EXISTE) {
+      linea(negrita(`El conjunto "${reporte.conjunto.nombre}" ya existía (config igual). No se tocó nada.`));
+      imprimirInvitacion(reporte);
+    } else {
+      linea(negrita(`✅ Conjunto "${reporte.conjunto.nombre}" creado (P1), SIN tocar filas.`));
+      linea('   Ninguna fila fue asignada. El backfill de filas es un paso posterior (C1).');
+      imprimirInvitacion(reporte);
+    }
+    await cerrar(0);
+    return;
   }
 
   if (reporte.resultado === RESULTADO.DRY_RUN) {

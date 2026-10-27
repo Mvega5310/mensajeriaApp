@@ -21,6 +21,8 @@ export const RESULTADO = Object.freeze({
   DRY_RUN: 'DRY_RUN',
   APLICADO: 'APLICADO',
   SIN_CAMBIOS: 'SIN_CAMBIOS', // idempotente: 0 filas por asignar
+  CONJUNTO_CREADO: 'CONJUNTO_CREADO', // --solo-conjunto: creó el conjunto, sin tocar filas
+  CONJUNTO_YA_EXISTE: 'CONJUNTO_YA_EXISTE', // --solo-conjunto: ya existía (config igual), nada que hacer
 });
 
 // Campos de config que deben coincidir si el conjunto ya existe (caso P1).
@@ -74,7 +76,7 @@ function sqlRollback(conjuntoId) {
  * @param {(msg:string)=>void} [opts.log]  sink de logs (default: no-op)
  * @returns {Promise<object>} reporte
  */
-export async function backfillConjunto({ config, apply = false, log = () => {} }) {
+export async function backfillConjunto({ config, apply = false, soloConjunto = false, log = () => {} }) {
   validarConfig(config);
 
   // --- Pre-chequeos (fuera de la transacción de escritura; solo lectura) ---
@@ -92,6 +94,57 @@ export async function backfillConjunto({ config, apply = false, log = () => {} }
       );
     }
     log(`Conjunto "${config.slug}" ya existe (caso P1): se reutiliza.`);
+  }
+
+  // --- Modo --solo-conjunto (paso P1): crea el Conjunto SIN tocar ninguna fila.
+  //     Excluyente con el backfill completo. No exige el pre-chequeo de "1
+  //     operador" (no asigna nada) ni mira NULLs: solo la config del conjunto.
+  if (soloConjunto) {
+    if (!apply) {
+      log('DRY-RUN (--solo-conjunto): crearía el conjunto, sin tocar filas.');
+      return {
+        resultado: RESULTADO.DRY_RUN,
+        soloConjunto: true,
+        conteosAntes,
+        conjuntoExistente: !!existente,
+      };
+    }
+    if (existente) {
+      // Config ya validada como igual arriba; no se hace nada.
+      log(`Conjunto "${config.slug}" ya existe (config igual): nada que crear.`);
+      return {
+        resultado: RESULTADO.CONJUNTO_YA_EXISTE,
+        soloConjunto: true,
+        conjunto: existente,
+        codigoInvitacion: existente.codigoInvitacion,
+        conteosAntes,
+      };
+    }
+    const codigoInvitacion = generarCodigoInvitacion({ prefijo: config.slug });
+    const conjunto = await prisma.conjunto.create({
+      data: {
+        nombre: config.nombre,
+        slug: config.slug,
+        codigoInvitacion,
+        operadorNombre: config.operadorNombre,
+        operadorWhatsapp: config.operadorWhatsapp,
+        operadorDomicilio: config.operadorDomicilio,
+        puntoRecepcion: config.puntoRecepcion,
+        tarifaMano: config.tarifaMano,
+        tarifaEstandar: config.tarifaEstandar,
+        tarifaVolumen: config.tarifaVolumen,
+        tarifaPesado: config.tarifaPesado,
+        // bonosHabilitados omitido -> false por default.
+      },
+    });
+    log(`Conjunto "${config.slug}" creado (sin tocar filas).`);
+    return {
+      resultado: RESULTADO.CONJUNTO_CREADO,
+      soloConjunto: true,
+      conjunto,
+      codigoInvitacion: conjunto.codigoInvitacion,
+      conteosAntes,
+    };
   }
 
   // Filas apuntando a OTRO conjunto -> no es un backfill limpio.
