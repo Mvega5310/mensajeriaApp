@@ -30,7 +30,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T2.5 | S | hecho | b213c19 | /entregas/verificar-pin y /confirmar: lote = apartamento, PIN_AMBIGUO, límite 10/15 min por operador, token de entrega 10 min. Propuesta futura: PIN por residente/apto (colisiones). |
 | T2.6 | H | hecho | dc38a49 | Franjas, métodos de pago, prefijo y maxFotos salen de /conjunto/config; guard frontendSinFijos ampliado. Pendiente para T2.3: checkin usa `fotos.length > 3` fijo. |
 | T3.1 | S | hecho | c787313 | GET /api/p/:token (HMAC, 7 días) con sesión limitada `scope:enlace` (2 h) que solo permite ver y programar; enlace en el aviso. |
-| T3.2 | S | en curso | | |
+| T3.2 | S | hecho | 91068de | POST /auth/enlace (200 genérico, 5/15 min) y /auth/enlace/canjear (un solo uso, atómico); PasswordResetToken.proposito RESET/ACCESO. |
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
 | T4.2 | S | en curso | | |
 | T4.3 | S | pendiente | | |
@@ -61,3 +61,5 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T2.3 integrada, `test:all` 309/309. En paralelo: T2.4, T2.5, T3.1, T5.1.
 - 2026-10-27: T2.4, T2.5, T3.1 y T5.1 integradas (conflictos de integración resueltos combinando ambos lados). `test:all` 389/389, build verde, sin drift. **F2 completa.** En curso: revisión de fase F2/F3.1/F5, T3.2 y T4.2.
 - Deuda detectada: `claveApartamento` no equipara "T2" con "TORRE 2" (la búsqueda sí, con `tokenTorre`): unificar para cortesía y lote.
+- 2026-10-27: T3.2 integrada, `test:all` 400/400.
+- **Revisión de fase F2/T3.1/T5.1: PASA CON CORRECCIONES** (sin críticos). Correcciones en curso: cortesía duplicada al asignar y en carrera; unificar "T2"/"TORRE 2"; límite de PIN por operador menos agresivo; token del enlace fuera de la ruta (fragmento #); el operador ya no ve el PIN (decisión del orquestador: el PIN solo lo ve el residente, por enlace/app/correo); límite del body vs fotos; producción detectada en Railway aunque falte NODE_ENV.
