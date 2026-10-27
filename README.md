@@ -644,6 +644,30 @@ puede ser del token de entrega, no de la sesión).
 
 **Escritorio (T4.4).** A partir de 1024 px la barra inferior pasa a ser lateral fija (logo arriba; "Más" y tema abajo) y Pendientes se ve en dos columnas: lista a la izquierda y detalle del apartamento a la derecha (el mismo `DetalleCuerpo` que la hoja móvil). Las demás pantallas se centran con ancho máximo de 560 px. El detalle ofrece "Entregar con PIN" cuando hay paquetes entregables.
 
+### Pantallas del residente (T4.3)
+
+`ResidentView.jsx` se borró. El login del residente aterriza en `/paquetes`. Pantallas en
+`frontend/src/pages/residente/` (≤ 200 líneas), hooks en `frontend/src/hooks/residente/`:
+
+| Ruta | Pantalla | Qué hace |
+|---|---|---|
+| `/p` | Abrir | Enlace de WhatsApp `/p#<token>`: lee el fragmento, lo borra de la barra (`history.replaceState`), `POST /api/p/abrir` y entra a Mis paquetes sin contraseña. 401 o enlace viejo `/p/<token>` → "Este enlace ya no sirve" con salida a `/acceso`. |
+| `/paquetes` | Mis paquetes | Saludo, tarjetas (estado, foto si hay, monto o "Gratis", **PIN en grande**), **Pedir entrega** (o "Cambiar franja" si ya está programado), "Ver historial" y "+ Avisar" solo con sesión normal. Lee `GET /api/p/paquetes` (sirve con ambas sesiones) y se refresca cada 20 s. |
+| `/paquetes/entrega` | Pedir entrega | Franjas y método de pago del conjunto como chips (`radiogroup`) y **Confirmar \<franja\>**: una llamada `PATCH /packages/:id/schedule` por paquete, con error parcial claro. |
+| `/paquetes/avisar` | Avisar | 2 campos (transportadora en chips + guía opcional); "Agregar detalles" abre tienda, tamaño, contra entrega, valor declarado, PIN del proveedor y nota (`POST /packages`). |
+| `/paquetes/historial` | Historial | Entregados con fecha, monto y fotos (`GET /packages/mine`). |
+| `/paquetes/buzon` | Buzón | Comentarios al operador (`/comments`). |
+| `/acceso`, `/acceso/:token` | Acceso | Pide enlace por correo (mensaje genérico tal cual) y canjea automático con `POST /auth/enlace/canjear`; "Entrar con contraseña" sigue como secundario (`/login`). |
+
+La **sesión del enlace** (JWT de 2 h con PINes) se guarda solo en memoria y `sessionStorage`
+(con `try/catch`), nunca en `localStorage` ni mezclada con el token de login; con ella solo se
+llaman `GET /p/paquetes` y `PATCH /packages/:id/schedule`. Por eso, con el enlace no hay fotos,
+historial ni "+ Avisar" (se ofrece "entra con tu correo").
+
+**CSS legado eliminado.** `index.css` y las variables `--lg-*` ya no existen: Login, Registro,
+Recuperar, Restablecer, Términos, `PasswordField` y `PhotoGallery` usan tokens y componentes del
+sistema de diseño (`base.css`, `pages/auth.css`, `components/photoGallery.css`).
+
 ## Pendiente
 
 - **WhatsApp automático**: decisión consciente de no implementarlo por

@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
-import './index.css';
-import './design';
+import './design'; // tokens y componentes primero: base.css usa sus variables
+import './base.css';
 
 // Sin esto, un usuario con la PWA ya instalada se queda viendo la versión
 // vieja del JS/CSS hasta que cierra y reabre la app dos veces: el nuevo

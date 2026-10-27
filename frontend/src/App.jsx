@@ -1,22 +1,30 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
 import ResetPassword from './pages/ResetPassword.jsx';
 import Terms from './pages/Terms.jsx';
-import ResidentView from './pages/ResidentView.jsx';
+import Abrir from './pages/residente/Abrir.jsx';
+import Acceso from './pages/residente/Acceso.jsx';
+import AccesoToken from './pages/residente/AccesoToken.jsx';
+import Avisar from './pages/residente/Avisar.jsx';
+import Buzon from './pages/residente/Buzon.jsx';
+import EnlaceInvalido from './pages/residente/EnlaceInvalido.jsx';
+import Historial from './pages/residente/Historial.jsx';
+import MisPaquetes from './pages/residente/MisPaquetes.jsx';
+import PedirEntrega from './pages/residente/PedirEntrega.jsx';
 import Recibir from './pages/operador/Recibir.jsx';
 import RecibirPeso from './pages/operador/RecibirPeso.jsx';
 import Guardado from './pages/operador/Guardado.jsx';
 import Entregar from './pages/operador/Entregar.jsx';
 import Cobrar from './pages/operador/Cobrar.jsx';
 import Pendientes from './pages/operador/Pendientes.jsx';
-import { getRole, isAuthenticated, logout } from './services/auth.js';
-import { api } from './services/api.js';
-import { getConjuntoConfig } from './services/conjunto.js';
+import { getRole, isAuthenticated } from './services/auth.js';
+import { modoDeSesion } from './hooks/residente/sesionEnlace.js';
 import { ThemeToggle, useTheme } from './design';
 import Logo from './puertaya-brand/Logo.jsx';
+import './pages/auth.css';
 
 // Catálogo del sistema de diseño: solo existe en desarrollo (se elimina del build).
 const DesignSystem = import.meta.env.DEV ? lazy(() => import('./design/DesignSystemPage.jsx')) : null;
@@ -32,11 +40,11 @@ function PublicPage({ children }) {
   const { tema } = useTheme();
   const theme = tema === 'noche' ? 'dark' : 'light';
   return (
-    <>
-      <div className="floating-theme-toggle"><ThemeToggle /></div>
+    <div className="pt auth-root">
+      <div className="auth-top"><ThemeToggle /></div>
       <div className="auth-brand"><Logo variant="lockup" size={72} mode={theme} /></div>
       {children}
-    </>
+    </div>
   );
 }
 
@@ -46,61 +54,16 @@ function SoloOperador({ children }) {
   return getRole() === 'OPERATOR' ? children : <Navigate to="/" replace />;
 }
 
-// El operador aterriza en Recibir; el residente ve su vista (T4.3 la reemplaza).
-function Raiz() {
-  return getRole() === 'OPERATOR' ? <Navigate to="/op/recibir" replace /> : <Home />;
+// Pantallas del residente (/paquetes/*): sesión normal o la limitada del enlace de WhatsApp.
+function SoloResidente({ children }) {
+  const modo = modoDeSesion();
+  if (!modo) return <Navigate to="/acceso" replace />;
+  return modo === 'normal' && getRole() === 'OPERATOR' ? <Navigate to="/op/recibir" replace /> : children;
 }
 
-function Home() {
-  const [me, setMe] = useState(null);
-  const [conjuntoNombre, setConjuntoNombre] = useState('');
-  const [confirmandoSalida, setConfirmandoSalida] = useState(false);
-  const { tema } = useTheme();
-  const theme = tema === 'noche' ? 'dark' : 'light';
-  const role = getRole();
-
-  useEffect(() => {
-    api('/auth/me').then(setMe).catch(() => {});
-    // Nombre del conjunto para la barra superior (con sesión). Fuente: config.
-    getConjuntoConfig().then((cfg) => setConjuntoNombre(cfg.nombre || '')).catch(() => {});
-  }, []);
-
-  return (
-    <>
-      <header className="topbar">
-        <div className="topbar-brand">
-          <Logo variant="icono" size={30} mode={theme} />
-          <div>
-            <strong>Puertaya{conjuntoNombre ? ` · ${conjuntoNombre}` : ''}</strong>
-            {me && <span className="topbar-user"> — {me.nombre} ({role === 'OPERATOR' ? 'Operador' : 'Residente'})</span>}
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <ThemeToggle />
-          <button className="btn-link" onClick={() => setConfirmandoSalida(true)}>Salir</button>
-        </div>
-      </header>
-      <ResidentView />
-
-      {confirmandoSalida && (
-        <div className="modal-overlay modal-overlay-center" onClick={() => setConfirmandoSalida(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head">
-              <h3>¿Salir de la cuenta?</h3>
-              <button className="modal-close" onClick={() => setConfirmandoSalida(false)}>✕</button>
-            </div>
-            <p className="card-sub" style={{ marginBottom: 16 }}>
-              Vas a cerrar sesión. Si solo querías cambiar el tema, toca Cancelar.
-            </p>
-            <div className="grid-2">
-              <button className="btn btn-secondary" onClick={() => setConfirmandoSalida(false)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={() => { logout(); window.location.href = '/login'; }}>Sí, salir</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+// El operador aterriza en Recibir; el residente, en Mis paquetes.
+function Raiz() {
+  return <Navigate to={getRole() === 'OPERATOR' ? '/op/recibir' : '/paquetes'} replace />;
 }
 
 export default function App() {
@@ -115,6 +78,15 @@ export default function App() {
         {DesignSystem && (
           <Route path="/_ds" element={<Suspense fallback={null}><DesignSystem /></Suspense>} />
         )}
+        <Route path="/p" element={<Abrir />} />
+        <Route path="/p/:token" element={<EnlaceInvalido />} />
+        <Route path="/acceso" element={<Acceso />} />
+        <Route path="/acceso/:token" element={<AccesoToken />} />
+        <Route path="/paquetes" element={<SoloResidente><MisPaquetes /></SoloResidente>} />
+        <Route path="/paquetes/entrega" element={<SoloResidente><PedirEntrega /></SoloResidente>} />
+        <Route path="/paquetes/avisar" element={<SoloResidente><Avisar /></SoloResidente>} />
+        <Route path="/paquetes/historial" element={<SoloResidente><Historial /></SoloResidente>} />
+        <Route path="/paquetes/buzon" element={<SoloResidente><Buzon /></SoloResidente>} />
         <Route path="/op/recibir" element={<SoloOperador><Recibir /></SoloOperador>} />
         <Route path="/op/recibir/:residenteId" element={<SoloOperador><RecibirPeso /></SoloOperador>} />
         <Route path="/op/guardado/:id" element={<SoloOperador><Guardado /></SoloOperador>} />

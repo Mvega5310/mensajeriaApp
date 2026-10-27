@@ -3,8 +3,7 @@ import { useCallback, useSyncExternalStore } from 'react';
 // Tema 'dia' | 'noche'. Sin preferencia guardada sigue a prefers-color-scheme;
 // el usuario puede forzarlo y se guarda por dispositivo (localStorage).
 // El estado vive a nivel de módulo: todos los componentes que usan el hook
-// ven el mismo valor. Aplica data-tema (nuevo) y data-theme light/dark (las
-// pantallas viejas, hasta T4.2/T4.3) en <html>.
+// ven el mismo valor. Aplica data-tema en <html>.
 const CLAVE = 'puertaya-tema';
 const mq = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 const oyentes = new Set();
@@ -28,7 +27,6 @@ function aplicar() {
   const t = resolver();
   const el = document.documentElement;
   el.setAttribute('data-tema', t);
-  el.setAttribute('data-theme', t === 'noche' ? 'dark' : 'light');
 }
 
 function avisar() {

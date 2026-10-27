@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Button, Field, Toast } from '../design';
 import { requestPasswordReset } from '../services/auth.js';
 
 export default function ForgotPassword() {
@@ -23,32 +24,19 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="auth-shell">
-      <div className="auth-card">
-        <h1>Recuperar contraseña</h1>
-        <p className="sub">Te enviamos un enlace para crear una nueva contraseña.</p>
-
-        {sent ? (
-          <p>Si ese correo está registrado, en unos minutos te llega un enlace para restablecer tu contraseña.</p>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="field">
-              <label htmlFor="email">Correo</label>
-              <input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-
-            {error && <p className="error-text">{error}</p>}
-
-            <button className="btn btn-primary" type="submit" disabled={loading}>
-              {loading ? 'Enviando…' : 'Enviar enlace'}
-            </button>
-          </form>
-        )}
-
-        <p className="auth-switch">
-          <Link to="/login">Volver a iniciar sesión</Link>
-        </p>
-      </div>
+    <div className="auth-card">
+      <h1>Recuperar contraseña</h1>
+      <p className="auth-sub">Te enviamos un enlace para crear una nueva contraseña.</p>
+      {sent ? (
+        <p role="status">Si ese correo está registrado, en unos minutos te llega un enlace para restablecer tu contraseña.</p>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <Field label="Correo" id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          {error && <Toast tipo="error">{error}</Toast>}
+          <Button type="submit" disabled={loading} aria-busy={loading}>{loading ? 'Enviando…' : 'Enviar enlace'}</Button>
+        </form>
+      )}
+      <p className="auth-switch"><Link to="/login">Volver a entrar</Link></p>
     </div>
   );
 }
