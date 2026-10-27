@@ -9,12 +9,13 @@ const TOPE_LECTURA = 3000;
 // aísla). Decisión de tildes: sin la extensión `unaccent` de Postgres y sin SQL
 // crudo (invariante 3), el nombre se compara EN MEMORIA ya sin tildes/mayúsculas,
 // sobre una lectura acotada (solo RESIDENT, 4 columnas, tope TOPE_LECTURA).
-// Para apto/torre, la BD filtra el apto (igual, o prefijo si no hay torre) y la
+// Para apto/torre, la BD filtra el apto (siempre como prefijo) y la
 // torre se compara por token en memoria ("TORRE 2" = "T2" = "2").
 export async function buscarResidentes(q) {
   const f = interpretarBusqueda(q);
   const where = { role: 'RESIDENT' };
-  if (f.apto) where.apto = f.torre ? f.apto : { startsWith: f.apto };
+  // El apto es prefijo con o sin torre ("T2 30" -> 301, 304...); la torre se compara por token abajo.
+  if (f.apto) where.apto = { startsWith: f.apto };
 
   const candidatos = await prisma.user.findMany({
     where,

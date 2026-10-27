@@ -1,5 +1,7 @@
-import { Link, Navigate, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { Badge, Button, Icon, Stamp } from '../../design';
+import { api } from '../../services/api.js';
 import { formatCOP } from '../../utils/format.js';
 import { TIERS } from '../../utils/tiers.js';
 import Pantalla from './Pantalla.jsx';
@@ -18,9 +20,17 @@ function cobro(p) {
 
 export default function Guardado() {
   const { state } = useLocation();
-  const resultado = state?.resultado;
-  // Los datos vienen de la recepción; sin ellos (recarga) no hay aviso que mostrar.
-  if (!resultado) return <Navigate to="/op/pendientes" replace />;
+  const { id } = useParams();
+  // Los datos vienen de la recepción; tras recargar se reconstruyen con GET /packages/:id.
+  const [recuperado, setRecuperado] = useState(null);
+  const [fallo, setFallo] = useState(false);
+  const resultado = state?.resultado ?? recuperado;
+  useEffect(() => {
+    if (state?.resultado) return;
+    api(`/packages/${id}`).then(setRecuperado).catch(() => setFallo(true));
+  }, [id, state]);
+  if (fallo) return <Navigate to="/op/pendientes" replace />;
+  if (!resultado) return <Pantalla><p className="op-vacio" aria-busy="true">Cargando…</p></Pantalla>;
 
   const { paquete: p, aviso } = resultado;
   const sinDueno = !p.residenteId;

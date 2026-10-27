@@ -39,7 +39,7 @@ const PALABRAS_TORRE = new Set(['torre', 'tor', 't']);
 
 /**
  * Interpreta el texto de búsqueda. Devuelve { torre?, apto?, texto? }:
- *  - apto: solo dígitos. Sin torre es además prefijo posible ("30" -> 301..309);
+ *  - apto: solo dígitos. Con o sin torre es prefijo ("30" -> 301..309);
  *    eso lo decide la consulta.
  *  - torre: token canónico ("2", "A").
  *  - texto: texto libre sin tildes/minúsculas, para buscar en el nombre.

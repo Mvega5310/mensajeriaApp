@@ -10,12 +10,6 @@ export function invalidarPaquetes() {
   cache = { datos: null, en: 0 };
 }
 
-function esHoy(iso) {
-  if (!iso) return false;
-  const d = new Date(iso);
-  const h = new Date();
-  return d.getFullYear() === h.getFullYear() && d.getMonth() === h.getMonth() && d.getDate() === h.getDate();
-}
 
 export default function usePaquetes() {
   const [paquetes, setPaquetes] = useState(cache.datos ?? []);
@@ -42,7 +36,6 @@ export default function usePaquetes() {
   const porEntregar = paquetes.filter((p) => p.estado === 'EN_RECEPCION' || p.estado === 'PROGRAMADO');
   const sinAsignar = paquetes.filter((p) => p.estado === 'SIN_ASIGNAR');
   const prealertados = paquetes.filter((p) => p.estado === 'PREALERTADO');
-  const recibidosHoy = paquetes.filter((p) => p.estado !== 'PREALERTADO' && esHoy(p.recibidoEn ?? p.fechaIngreso)).length;
 
-  return { paquetes, porEntregar, sinAsignar, prealertados, recibidosHoy, cargando, error, refrescar };
+  return { paquetes, porEntregar, sinAsignar, prealertados, cargando, error, refrescar };
 }
