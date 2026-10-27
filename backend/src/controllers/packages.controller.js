@@ -9,9 +9,11 @@ import { validarFotos, mensajeMaxFotos } from '../domain/recepcion.js';
 import { resolverCobro, idsPrimeraEntrega } from '../services/cobro.service.js';
 import { EVENTOS, ESTADOS, transicionar } from '../domain/paquete.machine.js';
 import { aplicarEvento, crearConEvento } from '../services/paquete.service.js';
-import { recibirPaquete, asignarPaquete } from '../services/recepcion.service.js';
+import { recibirPaquete, asignarPaquete, armarRespuesta } from '../services/recepcion.service.js';
 import { subirFotos, registrarFotos, descartarSubidas, fotosDelPaquete } from '../services/fotos.service.js';
 import { decodificarDataUri } from '../services/almacen/index.js';
+import { rangoHoyBogota, parsearFiltroFecha } from '../domain/fechas.js';
+import { interpretarBusqueda } from '../domain/apartamento.js';
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
@@ -92,34 +94,123 @@ export async function listMine(req, res) {
   res.json(packages.map(({ fotoUrl, ...p }) => p));
 }
 
+const POR_PAGINA_DEFECTO = 20;
+const POR_PAGINA_MAX = 100;
+
+function enteroPositivo(valor, campo, max) {
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < 1 || (max && n > max)) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS,
+      max ? `El valor de ${campo} debe ser un número entre 1 y ${max}.` : `El valor de ${campo} debe ser un número entero mayor que 0.`,
+      400, { campo });
+  }
+  return n;
+}
+
+// Filtros de la bitácora (T2.7). Todos son opcionales y se combinan con AND.
+//  - estado: uno de ESTADOS.
+//  - desde/hasta: "YYYY-MM-DD" (día de Bogotá, `hasta` incluye todo ese día) o ISO completo.
+//    Se comparan con la fecha efectiva del paquete: `recibidoEn` si ya llegó; si no
+//    (pre-alerta, aún sin recibir) `createdAt`.
+//  - q: apto ("304", "T2 30" = prefijo), nombre del residente o de la etiqueta, o guía.
+function filtrosListado(query) {
+  const { estado, desde, hasta, q } = query;
+  const y = [];
+  if (estado !== undefined) {
+    if (!Object.values(ESTADOS).includes(estado)) {
+      throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El estado no es válido. Elige uno de la lista.', 400, { campo: 'estado' });
+    }
+    y.push({ estado });
+  }
+  const rango = {};
+  for (const [campo, tipo, op] of [['desde', 'desde', 'gte'], ['hasta', 'hasta', 'lt']]) {
+    if (query[campo] === undefined) continue;
+    const f = parsearFiltroFecha(query[campo], tipo);
+    if (!f) throw new AppError(CODIGOS.DATOS_INVALIDOS, `La fecha "${campo}" no es válida. Usa el formato AAAA-MM-DD.`, 400, { campo });
+    rango[op] = f;
+  }
+  if (rango.gte || rango.lt) {
+    y.push({ OR: [{ recibidoEn: rango }, { recibidoEn: null, createdAt: rango }] });
+  }
+  const texto = typeof q === 'string' ? q.trim() : '';
+  if (texto) {
+    const f = interpretarBusqueda(texto);
+    const o = [
+      { guia: { contains: texto, mode: 'insensitive' } },
+      { etiquetaNombre: { contains: texto, mode: 'insensitive' } },
+      { residente: { is: { nombre: { contains: texto, mode: 'insensitive' } } } },
+    ];
+    if (f.apto || f.torre) {
+      const r = [{ role: 'RESIDENT' }];
+      if (f.apto) r.push({ apto: { startsWith: f.apto } });
+      if (f.torre) r.push({ torre: { in: [`TORRE ${f.torre}`, `T${f.torre}`, f.torre], mode: 'insensitive' } });
+      o.push({ residente: { is: { AND: r } } });
+    }
+    y.push({ OR: o });
+  }
+  return y.length ? { AND: y } : undefined;
+}
+
 // Operador: ve todos los paquetes, pero el PIN nunca viaja hacia esta
 // vista — y tampoco fotoUrl, por la misma razón que en listMine().
+// Compatibilidad: sin `pagina` responde un ARREGLO (como siempre, ahora con los
+// filtros opcionales). Con `pagina` (y `porPagina`, 1-100, 20 por defecto)
+// responde { items, total, pagina, porPagina } (la bitácora).
 export async function listAll(req, res) {
-  // Filtro opcional por estado (ej. ?estado=SIN_ASIGNAR para la sección "Sin asignar").
-  const { estado } = req.query;
-  if (estado !== undefined && !Object.values(ESTADOS).includes(estado)) {
-    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El estado no es válido. Elige uno de la lista.', 400, { campo: 'estado' });
+  const where = filtrosListado(req.query);
+  const paginado = req.query.pagina !== undefined || req.query.porPagina !== undefined;
+  let paginacion = {};
+  let pagina; let porPagina;
+  if (paginado) {
+    pagina = enteroPositivo(req.query.pagina ?? 1, 'pagina');
+    porPagina = req.query.porPagina === undefined ? POR_PAGINA_DEFECTO : enteroPositivo(req.query.porPagina, 'porPagina', POR_PAGINA_MAX);
+    paginacion = { skip: (pagina - 1) * porPagina, take: porPagina };
   }
-  const packages = await prisma.package.findMany({
-    where: estado ? { estado } : undefined,
-    include: {
-      residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
-      bono: { select: { id: true, categoriaPeso: true, cantidadTotal: true, cantidadUsada: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const [packages, total] = await Promise.all([
+    prisma.package.findMany({
+      where,
+      include: {
+        residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
+        bono: { select: { id: true, categoriaPeso: true, cantidadTotal: true, cantidadUsada: true } },
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...paginacion,
+    }),
+    paginado ? prisma.package.count({ where }) : Promise.resolve(0),
+  ]);
 
   // La cortesía es del PRIMER PAQUETE DEL APARTAMENTO QUE SE COBRA (no del más
   // antiguo en crearse; ver domain/cobro.js): se marca para que el operador vea
   // de un vistazo a quién no debe cobrarle. Coherente con resolverCobro().
   const primeras = await idsPrimeraEntrega();
 
-  res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => ({
+  const items = packages.map(({ pin, bonoId, fotoUrl, ...p }) => ({
     ...p,
     // Sin residente no hay cortesía de primera entrega. `etiquetaNombre` ya
     // viaja en `p`: la vista lo muestra cuando `residente` es null.
     esPrimeraEntrega: primeras.has(p.id),
-  })));
+  }));
+  res.json(paginado ? { items, total, pagina, porPagina } : items);
+}
+
+// Operador: contadores livianos para la cabecera de Recibir (solo `count`, sin filas).
+// "Hoy" = día calendario de America/Bogota.
+export async function resumen(req, res) {
+  const { inicio, fin } = rangoHoyBogota();
+  const hoy = (campo) => ({ [campo]: { gte: inicio, lt: fin } });
+  const [recibidos, entregados, porEntregar, sinAsignar] = await Promise.all([
+    prisma.package.count({ where: hoy('recibidoEn') }),
+    prisma.package.count({ where: { estado: ESTADOS.ENTREGADO, ...hoy('fechaEntrega') } }),
+    prisma.package.count({ where: { estado: { in: [ESTADOS.EN_RECEPCION, ESTADOS.PROGRAMADO] } } }),
+    prisma.package.count({ where: { estado: ESTADOS.SIN_ASIGNAR } }),
+  ]);
+  res.json({ hoy: { recibidos, entregados }, porEntregar, sinAsignar });
+}
+
+// Operador: un paquete con el mismo shape que `paquete` de la recepción, más el
+// `aviso` reconstruido (enlace firmado nuevo; nunca PIN ni fotos).
+export async function getById(req, res) {
+  res.json(await armarRespuesta(req.params.id, await conjuntoDelContexto()));
 }
 
 // Fotos aparte del listado general (ver comentario en listMine/listAll):

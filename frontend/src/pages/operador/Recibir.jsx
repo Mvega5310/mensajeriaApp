@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Field, Icon, Keypad } from '../../design';
 import useRecibir from '../../hooks/operador/useRecibir.js';
-import usePaquetes from '../../hooks/operador/usePaquetes.js';
+import useResumen from '../../hooks/operador/useResumen.js';
 import useConfig from '../../hooks/operador/useConfig.js';
 import Pantalla from './Pantalla.jsx';
 import MasSheet from './MasSheet.jsx';
@@ -10,7 +10,8 @@ import MasSheet from './MasSheet.jsx';
 export default function Recibir() {
   const navigate = useNavigate();
   const config = useConfig();
-  const { porEntregar, recibidosHoy } = usePaquetes();
+  const { resumen } = useResumen();
+  const porEntregar = resumen?.porEntregar ?? 0;
   const { texto, tecla, resultados, buscando, error, hayConsulta } = useRecibir();
   const [sinDueno, setSinDueno] = useState(false);
   const [etiqueta, setEtiqueta] = useState('');
@@ -27,7 +28,7 @@ export default function Recibir() {
   }
 
   return (
-    <Pantalla activo="recibir" pendientes={porEntregar.length}>
+    <Pantalla activo="recibir" pendientes={porEntregar}>
       <div className="op-marca">
         <span className="op-marca__logo">Puerta<b>yá</b></span>
         <span className="op-marca__conjunto">
@@ -37,7 +38,7 @@ export default function Recibir() {
       </div>
       <div className="op-tit">
         <h1>Recibir</h1>
-        <p>Hoy: <b>{recibidosHoy}</b> recibidos · <b>{porEntregar.length}</b> por entregar</p>
+        <p>Hoy: <b>{resumen?.hoy.recibidos ?? '–'}</b> recibidos · <b>{resumen ? porEntregar : '–'}</b> por entregar</p>
       </div>
 
       {sinDueno ? (

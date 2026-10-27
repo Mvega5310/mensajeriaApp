@@ -135,6 +135,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
 | `recepcionSinPrealerta.integration.test.js` | integración | T2.1: paquete sin residente (SIN_ASIGNAR / EN_RECEPCION directo) se crea y lista con `etiquetaNombre`, checkin/entrega lo toleran (409 o TARIFA, sin 500), aislamiento, y `GET /conjunto/config` con los defaults nuevos. |
 | `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
+| `contratosOperador.integration.test.js` | integración | T2.7: `/packages/resumen` (día de Bogotá, aislamiento, 403), `GET /packages/:id` (shape, sin pin/fotos, aviso `/p#`, 403/404), búsqueda `T2 30` por prefijo, bitácora (arreglo sin `pagina`, paginación, filtros). `fechas.test.js`: día de Bogotá y filtros de fecha. |
 | `entregaLote.test.js` | unitaria | T2.5: token de entrega (firma, vencimiento, alteración) y regla de selección del lote. |
 | `entregaLote.integration.test.js` | integración | T2.5: `/entregas/verificar-pin` y `/confirmar` (lote por apartamento, `PIN_AMBIGUO`, límite por operador, token ajeno/vencido, carrera sin entregas parciales, aislamiento). |
 | `revisionF2.integration.test.js` | integración | Revisión F2: cortesía única (escenario lunes/martes, carrera de 5 recepciones, "T2" = "TORRE 2"), ninguna respuesta al operador lleva el PIN, bloqueo por paquete en lote, presupuesto de fotos del JSON. |
@@ -413,7 +414,7 @@ aparecen):
   No se expone email ni teléfono.
 - `q` vacío (o de más de 60 caracteres) -> 400 `DATOS_INVALIDOS`.
 - Formatos de `q` (`domain/apartamento.js#interpretarBusqueda`): `304` (solo apto;
-  también prefijo: `30` -> 301..309), `T2 304`, `t2-304`, `2-304`, `2 304`,
+  también prefijo: `30` -> 301..309; con torre también es prefijo: `T2 30` -> 301, 304...), `T2 304`, `t2-304`, `2-304`, `2 304`,
   `2/304`, `Torre 2 apto 304`, y nombre libre (`ana`, `Ana Gó`, `gomez`).
 - Orden: apto exacto primero, luego torre y apto.
 - Torre guardada hoy: `"TORRE N"` (registro, en mayúsculas); se compara por
@@ -484,6 +485,31 @@ conjunto o inexistente: 404.
 
 **`GET /api/packages?estado=SIN_ASIGNAR`**: filtro opcional por estado (cualquiera
 de la máquina; otro valor -> 400). Sin parámetro devuelve todos, como antes.
+
+### Contratos de las pantallas del operador (T2.7)
+
+Todos solo `OPERATOR`, sin PIN ni fotos en ninguna respuesta.
+
+- **`GET /api/packages/resumen`** -> `{ "hoy": { "recibidos": 3, "entregados": 1 },
+  "porEntregar": 2, "sinAsignar": 1 }`. Solo `count` (sin filas). "Hoy" = día
+  calendario de `America/Bogota` (UTC-5; `domain/fechas.js`). `recibidos` =
+  `recibidoEn` de hoy; `entregados` = `fechaEntrega` de hoy; `porEntregar` =
+  `EN_RECEPCION` + `PROGRAMADO`. Recibir lo usa en vez de cargar `GET /packages`.
+- **`GET /api/packages/:id`** -> mismo `{ paquete, aviso }` de la recepción;
+  `aviso = { texto, waUrl }` con un enlace firmado NUEVO si hay residente (`null`
+  si no hay dueño). Nunca PIN ni fotos (esas, `GET /packages/:id/foto`).
+  Otro conjunto o inexistente: 404. Guardado lo usa al recargar.
+- **Bitácora: `GET /api/packages`** acepta `estado`, `desde`, `hasta`, `q`,
+  `pagina`, `porPagina`.
+  - `desde`/`hasta`: `AAAA-MM-DD` (día de Bogotá; `hasta` incluye todo ese día) o
+    ISO completo. Se aplican a la fecha efectiva: `recibidoEn` si el paquete ya
+    llegó; si no (pre-alerta) `createdAt`. Fecha inválida -> 400.
+  - `q`: apto (prefijo, `T2 30` también), nombre del residente, etiqueta o guía
+    (sin distinguir mayúsculas; el nombre sí distingue tildes).
+  - Compatibilidad: **sin `pagina` ni `porPagina` responde un arreglo**, como antes
+    (los filtros también aplican). Con `pagina` (>= 1) y/o `porPagina` (1-100, 20
+    por defecto) responde `{ items, total, pagina, porPagina }`. Valor inválido -> 400.
+  - Orden: `createdAt` descendente. En la app: "Más" -> "Bitácora".
 
 ### Entrega por lote con PIN (T2.5)
 
@@ -629,7 +655,7 @@ Métodos: `avisarLlegada({ residente, paquete, conjunto, aviso })`,
 
 | Ruta | Pantalla | Qué hace |
 |---|---|---|
-| `/op/recibir` | Recibir | Teclado + "Torre", búsqueda con debounce (`/residentes/buscar`), "No sé de quién es" (sin dueño), contador "Hoy: N · M por entregar". |
+| `/op/recibir` | Recibir | Teclado + "Torre", búsqueda con debounce (`/residentes/buscar`), "No sé de quién es" (sin dueño), contador "Hoy: N · M por entregar" (`GET /packages/resumen`). |
 | `/op/recibir/:residenteId` | Peso | 4 tiles con la tarifa del conjunto, foto opcional (`maxFotos`, `utils/image.js`), "+ Guía", **Guardar** (`POST /packages/recepcion` con `Idempotency-Key`). `residenteId = sin-dueno` para el flujo sin dueño. |
 | `/op/guardado/:id` | Guardado | Resumen, `motivoCobro` (sello de cortesía), vista previa del aviso y **Avisar por WhatsApp** (`aviso.waUrl`). |
 | `/op/entregar` | Entregar | PIN de 4 dígitos; verifica solo (`/entregas/verificar-pin`); `PIN_AMBIGUO` muestra chips de apartamento. |

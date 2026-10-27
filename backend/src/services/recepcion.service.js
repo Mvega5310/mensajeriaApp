@@ -49,11 +49,12 @@ async function buscarResidente(tx, id) {
 
 // Respuesta común de recepción y asignar. Lee el estado ya confirmado en la base,
 // así una repetición idempotente devuelve exactamente lo mismo.
-async function armarRespuesta(paqueteId, conjunto) {
+export async function armarRespuesta(paqueteId, conjunto) {
   const p = await prisma.package.findUnique({
     where: { id: paqueteId },
     include: { residente: { select: { id: true, nombre: true, telefono: true, torre: true, apto: true } } },
   });
+  if (!p) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
   const evento = await prisma.paqueteEvento.findFirst({
     where: { paqueteId, tipo: { in: [EVENTOS.RECIBIR, EVENTOS.ASIGNAR] } },
     orderBy: { creadoEn: 'desc' },

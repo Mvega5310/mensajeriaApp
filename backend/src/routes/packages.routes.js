@@ -14,6 +14,8 @@ import {
   confirmDelivery,
   exportCsv,
   getFoto,
+  resumen,
+  getById,
 } from '../controllers/packages.controller.js';
 
 // Rutas que reciben fotos en base64 en el cuerpo JSON (recepción y checkin).
@@ -38,6 +40,8 @@ router.get('/:id/foto', asyncHandler(getFoto));
 
 router.get('/', requireRole('OPERATOR'), asyncHandler(listAll));
 router.get('/export', requireRole('OPERATOR'), asyncHandler(exportCsv));
+router.get('/resumen', requireRole('OPERATOR'), asyncHandler(resumen));
+router.get('/:id', requireRole('OPERATOR'), asyncHandler(getById));
 router.post('/recepcion', requireRole('OPERATOR'), jsonFotos, asyncHandler(recepcion));
 router.patch('/:id/asignar', requireRole('OPERATOR'), asyncHandler(asignar));
 router.patch('/:id/checkin', requireRole('OPERATOR'), jsonFotos, asyncHandler(checkin));

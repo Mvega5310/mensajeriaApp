@@ -26,6 +26,5 @@ export default function useRecibir() {
     }
   }
 
-  // Con torre el backend compara el apartamento exacto (sin prefijo): no se avisa "sin resultados" a medio escribir.
-  return { texto, tecla, resultados, buscando, error, hayConsulta: consulta !== '' && torre === null };
+  return { texto, tecla, resultados, buscando, error, hayConsulta: consulta !== '' };
 }
