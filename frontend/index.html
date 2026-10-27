@@ -14,12 +14,17 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Puertaya">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500;700&display=swap">
   <script>
-    // Aplica el tema guardado antes de pintar, para evitar el parpadeo
-    // del tema equivocado (flash of wrong theme) al cargar la página.
+    // Aplica el tema antes de pintar (evita el parpadeo): el guardado o, si no
+    // hay, el del teléfono. useTheme mantiene después estos mismos atributos.
     try {
-      var t = localStorage.getItem('theme');
-      if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+      var t = localStorage.getItem('puertaya-tema');
+      if (t !== 'dia' && t !== 'noche') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'noche' : 'dia';
+      document.documentElement.setAttribute('data-tema', t);
+      document.documentElement.setAttribute('data-theme', t === 'noche' ? 'dark' : 'light');
     } catch (e) {}
   </script>
 </head>

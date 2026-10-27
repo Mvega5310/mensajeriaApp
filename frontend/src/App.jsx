@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
@@ -10,9 +10,11 @@ import OperatorView from './pages/OperatorView.jsx';
 import { getRole, isAuthenticated, logout } from './services/auth.js';
 import { api } from './services/api.js';
 import { getConjuntoConfig } from './services/conjunto.js';
-import ThemeToggle from './components/ThemeToggle.jsx';
-import useTheme from './hooks/useTheme.js';
+import { ThemeToggle, useTheme } from './design';
 import Logo from './puertaya-brand/Logo.jsx';
+
+// Catálogo del sistema de diseño: solo existe en desarrollo (se elimina del build).
+const DesignSystem = import.meta.env.DEV ? lazy(() => import('./design/DesignSystemPage.jsx')) : null;
 
 function Protected({ children }) {
   return isAuthenticated() ? children : <Navigate to="/login" replace />;
@@ -22,10 +24,11 @@ function Protected({ children }) {
 // esto les da el mismo botón de tema y el logo de marca sin tocar cada
 // archivo por separado.
 function PublicPage({ children }) {
-  const [theme, setTheme] = useTheme();
+  const { tema } = useTheme();
+  const theme = tema === 'noche' ? 'dark' : 'light';
   return (
     <>
-      <div className="floating-theme-toggle"><ThemeToggle theme={theme} setTheme={setTheme} /></div>
+      <div className="floating-theme-toggle"><ThemeToggle /></div>
       <div className="auth-brand"><Logo variant="lockup" size={72} mode={theme} /></div>
       {children}
     </>
@@ -36,7 +39,8 @@ function Home() {
   const [me, setMe] = useState(null);
   const [conjuntoNombre, setConjuntoNombre] = useState('');
   const [confirmandoSalida, setConfirmandoSalida] = useState(false);
-  const [theme, setTheme] = useTheme();
+  const { tema } = useTheme();
+  const theme = tema === 'noche' ? 'dark' : 'light';
   const role = getRole();
 
   useEffect(() => {
@@ -56,7 +60,7 @@ function Home() {
           </div>
         </div>
         <div className="topbar-actions">
-          <ThemeToggle theme={theme} setTheme={setTheme} />
+          <ThemeToggle />
           <button className="btn-link" onClick={() => setConfirmandoSalida(true)}>Salir</button>
         </div>
       </header>
@@ -92,6 +96,9 @@ export default function App() {
         <Route path="/recuperar" element={<PublicPage><ForgotPassword /></PublicPage>} />
         <Route path="/restablecer" element={<PublicPage><ResetPassword /></PublicPage>} />
         <Route path="/terminos" element={<PublicPage><Terms /></PublicPage>} />
+        {DesignSystem && (
+          <Route path="/_ds" element={<Suspense fallback={null}><DesignSystem /></Suspense>} />
+        )}
         <Route path="/" element={<Protected><Home /></Protected>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
