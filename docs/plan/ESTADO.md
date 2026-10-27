@@ -26,18 +26,18 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T2.1 | S | hecho | 98546d6 | residenteId opcional; etiquetaNombre, transportadora, metodoPago, recibidoEn; guia/fechaEntrega reutilizados; Conjunto: prefijoPais, franjasEntrega, maxFotos, custodiaMaxDias. |
 | T2.2 | S | hecho | 893516b | GET /api/residentes/buscar (OPERATOR): "304", "T2 304", "2-304", nombre sin tildes; máx 5; torre se guarda "TORRE N". |
 | T2.3 | S | hecho | 2f21448 | POST /packages/recepcion (con/sin residente, vincula pre-alerta por guía), PATCH /:id/asignar, ?estado=, Idempotency-Key; cobro compartido en cobro.service. **Bloqueo principal eliminado en backend.** |
-| T2.4 | S | en curso | | |
-| T2.5 | S | en curso | | |
+| T2.4 | S | hecho | 8a584c0 | Notificador (resend/fake) con plantillas escapadas y sin "Ipanema"; correo de llegada post-commit (no en replay). El orquestador conectó el agradecimiento del lote (un correo por lote). |
+| T2.5 | S | hecho | b213c19 | /entregas/verificar-pin y /confirmar: lote = apartamento, PIN_AMBIGUO, límite 10/15 min por operador, token de entrega 10 min. Propuesta futura: PIN por residente/apto (colisiones). |
 | T2.6 | H | hecho | dc38a49 | Franjas, métodos de pago, prefijo y maxFotos salen de /conjunto/config; guard frontendSinFijos ampliado. Pendiente para T2.3: checkin usa `fotos.length > 3` fijo. |
-| T3.1 | S | en curso | | |
-| T3.2 | S | pendiente | | |
+| T3.1 | S | hecho | c787313 | GET /api/p/:token (HMAC, 7 días) con sesión limitada `scope:enlace` (2 h) que solo permite ver y programar; enlace en el aviso. |
+| T3.2 | S | en curso | | |
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
-| T4.2 | S | pendiente | | |
+| T4.2 | S | en curso | | |
 | T4.3 | S | pendiente | | |
 | T4.4 | H | pendiente | | |
 | T4.5 | S | pendiente | | |
 | T4.6 | H | pendiente | | |
-| T5.1 | S | en curso | | |
+| T5.1 | S | hecho | 39d9705 | AlmacenFotos (s3/fake/legado) + PaqueteFoto; sin bucket en producción sigue en legado con aviso. |
 | T6.1 | S | pendiente | | |
 | T7.1 | Orq. | pendiente | | |
 | T8.1 | S | pendiente | | |
@@ -59,3 +59,5 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T2.6 integrada; build verde, pruebas sin BD 156/156.
 - 2026-10-27: T2.2 integrada, `test:all` 281/281. Arranca T2.3 (recepción sin pre-alerta: el bloqueo principal).
 - 2026-10-27: T2.3 integrada, `test:all` 309/309. En paralelo: T2.4, T2.5, T3.1, T5.1.
+- 2026-10-27: T2.4, T2.5, T3.1 y T5.1 integradas (conflictos de integración resueltos combinando ambos lados). `test:all` 389/389, build verde, sin drift. **F2 completa.** En curso: revisión de fase F2/F3.1/F5, T3.2 y T4.2.
+- Deuda detectada: `claveApartamento` no equipara "T2" con "TORRE 2" (la búsqueda sí, con `tokenTorre`): unificar para cortesía y lote.
