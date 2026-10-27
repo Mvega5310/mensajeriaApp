@@ -54,13 +54,16 @@ export default function Pendientes() {
             <h2 className="op-sec" style={{ marginTop: 10 }}>Por entregar · {p.grupos.reduce((n, g) => n + g.paquetes.length, 0)}</h2>
             {p.grupos.map((g) => {
               const franja = g.paquetes.find((x) => x.franjaHoraria)?.franjaHoraria;
+              const recoge = g.paquetes.some((x) => x.modalidadEntrega === 'RECOGER');
               const activa = seleccion?.paquetes?.[0]?.id === g.paquetes[0].id;
               return (
                 <button type="button" className="op-fila" key={g.clave} aria-pressed={esEscritorio ? activa : undefined} onClick={() => setDetalle({ titulo: g.apto, paquetes: g.paquetes })}>
                   <span className="op-fila__apto">{g.apto}</span>
                   <span className="op-fila__col">
                     <b>{g.nombre}</b>
-                    {franja
+                    {recoge
+                      ? <span className="op-programado">Recoge en portería</span>
+                      : franja
                       ? <span className="op-programado">Programado {franja}</span>
                       : <span>En portería · {haceCuanto(g.paquetes[0].recibidoEn ?? g.paquetes[0].fechaIngreso)}</span>}
                   </span>

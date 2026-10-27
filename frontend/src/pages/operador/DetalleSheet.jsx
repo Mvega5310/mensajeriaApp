@@ -32,7 +32,9 @@ function Tarjeta({ p }) {
       <span className="op-muted">{quienTrajo(p)}{p.guia && p.guia !== "Sin Guía" ? ` · guía ${p.guia}` : ""}</span>
       <span className="op-muted">Recibido {fecha(p.recibidoEn ?? p.fechaIngreso)} · {formatCOP(p.costoServicio)}</span>
       {nota && <span className="op-muted">{nota}</span>}
-      {p.franjaHoraria && <span className="op-muted">Franja {p.franjaHoraria} · {etiquetaMetodoPago(p.metodoPagoServicio)}</span>}
+      {p.modalidadEntrega === 'RECOGER'
+        ? <span className="op-muted">Recoge en portería</span>
+        : p.franjaHoraria && <span className="op-muted">Franja {p.franjaHoraria} · {etiquetaMetodoPago(p.metodoPagoServicio)}</span>}
       {p.pinProveedor && <span className="op-muted">PIN del proveedor: <b className="mono">{p.pinProveedor}</b></span>}
       {p.notas && <span className="op-muted">Nota: {p.notas}</span>}
       {!verFotos && <Button variante="secundario" icono="camara" onClick={() => setVerFotos(true)}>Ver fotos</Button>}
