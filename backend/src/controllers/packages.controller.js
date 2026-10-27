@@ -1,5 +1,5 @@
 import { prisma } from '../config/db.js';
-import { generatePin, verifyPin } from '../services/pin.service.js';
+import { generatePin, verifyPin, registrarIntentoPin } from '../services/pin.service.js';
 import { costoPara } from '../services/tariff.service.js';
 import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
@@ -356,21 +356,48 @@ export async function exportCsv(req, res) {
 
 // El operador envía un intento; el servidor compara y responde sí/no.
 // El valor correcto del PIN nunca aparece en esta respuesta.
+function pinBloqueado(minutos) {
+  return new AppError(
+    CODIGOS.PIN_BLOQUEADO,
+    `Demasiados intentos. Espera ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'} e inténtalo de nuevo.`,
+    423,
+    { minutosRestantes: minutos },
+  );
+}
+
 export async function confirmDelivery(req, res) {
   const { pin } = req.body;
+  const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
+  if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
+
+  // Primero la transición: un paquete no entregable (PREALERTADO, ya ENTREGADO)
+  // responde 409 sin gastar ni revelar nada sobre el PIN.
+  transicionar(pkg.estado, EVENTOS.ENTREGAR);
+
+  // Límite de intentos (T1.4). Bloqueado: 423 aunque el PIN sea correcto.
+  // El fallo se persiste FUERA de la transacción de entrega (si no, el throw lo
+  // revertiría). 423 Locked: el paquete queda bloqueado, no es un límite por IP.
+  const ahora = new Date();
+  const correcto = verifyPin(pin, pkg.pin);
+  const r = await registrarIntentoPin(prisma, pkg.id, correcto, ahora);
+  if (!r.permitido) {
+    throw pinBloqueado(r.minutosRestantes);
+  }
+  if (!correcto) {
+    if (r.bloquear) throw pinBloqueado(r.minutosRestantes);
+    throw new AppError(
+      CODIGOS.PIN_INCORRECTO,
+      `PIN incorrecto. Te quedan ${r.intentosRestantes} ${r.intentosRestantes === 1 ? 'intento' : 'intentos'}.`,
+      400,
+      { intentosRestantes: r.intentosRestantes },
+    );
+  }
+
+  // El contador ya quedó en 0 (acierto); aplicarEvento relee el estado y falla
+  // con 409 si otro proceso lo cambió.
   const updated = await prisma.$transaction(async (tx) => {
-    const pkg = await tx.package.findUnique({ where: { id: req.params.id } });
-    if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
-
-    // Primero la transición: un paquete no entregable (PREALERTADO, ya ENTREGADO)
-    // responde 409 sin gastar ni revelar nada sobre el PIN.
-    transicionar(pkg.estado, EVENTOS.ENTREGAR);
-
-    if (!verifyPin(pin, pkg.pin)) {
-      throw new AppError(CODIGOS.PIN_INCORRECTO, 'El PIN no coincide. Pídelo de nuevo al residente e inténtalo otra vez.', 400);
-    }
-
-    await aplicarEvento(tx, pkg, EVENTOS.ENTREGAR, {
+    const actual = await tx.package.findUnique({ where: { id: pkg.id } });
+    await aplicarEvento(tx, actual, EVENTOS.ENTREGAR, {
       actorId: req.user.sub,
       cambios: { fechaEntrega: new Date() },
     });

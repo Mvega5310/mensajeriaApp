@@ -150,7 +150,7 @@ Toda respuesta de error de la API tiene la forma `{ "code", "message", "details"
 - `message`: texto en español listo para mostrar (qué pasó y qué hacer).
 - `details`: opcional, datos de apoyo.
 
-Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `TRANSICION_INVALIDA`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
+Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `PIN_BLOQUEADO`, `DEMASIADOS_INTENTOS`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `TRANSICION_INVALIDA`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
 
 ## Funcionalidades
 
@@ -313,6 +313,20 @@ tenant funciona dentro de transacciones interactivas). La pre-alerta
   `POST /packages/:id/confirm-delivery` = `ENTREGAR` (desde EN_RECEPCION/PROGRAMADO).
   En la entrega la transición se valida **antes** que el PIN, así un paquete no
   entregable no gasta intentos de PIN.
+- **Límite de intentos (T1.4):** el PIN de entrega admite 5 fallos por paquete
+  (`Package.intentosPin`); el 5.º lo bloquea 15 min (`pinBloqueadoHasta`).
+  Respuestas: PIN malo = `400 PIN_INCORRECTO` ("PIN incorrecto. Te quedan X
+  intentos.", `details.intentosRestantes`); bloqueado = `423 PIN_BLOQUEADO`
+  ("Demasiados intentos. Espera N minutos e inténtalo de nuevo.",
+  `details.minutosRestantes`), incluso con el PIN correcto. Acertar resetea el
+  contador. Lógica pura en `domain/pin.js` (`evaluarIntento`); el fallo se
+  persiste fuera de la transacción de entrega con compare-and-set
+  (`registrarIntentoPin` en `services/pin.service.js`) para que el rollback no lo
+  borre y los fallos concurrentes cuenten todos.
+- **Límite de login:** 10 fallos por IP cada 15 min => `429 DEMASIADOS_INTENTOS`
+  (con `Retry-After`). Limitador en memoria (`domain/limitador.js`, interfaz
+  `registrarFallo/estaBloqueado/limpiar`, reloj inyectable), inyectable en
+  `createApp({ limitadorLogin })`. Ver `trust proxy` en DEPLOY.md.
 - **Bono atómico:** el descuento va en la misma transacción con
   `updateMany({ where: { cantidadUsada: { lt: cantidadTotal } } })` y se exige
   `count === 1`; dos recepciones concurrentes no gastan el mismo crédito. Si el
