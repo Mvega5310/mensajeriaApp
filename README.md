@@ -132,6 +132,8 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
+| `recepcionSinPrealerta.integration.test.js` | integración | T2.1: paquete sin residente (SIN_ASIGNAR / EN_RECEPCION directo) se crea y lista con `etiquetaNombre`, checkin/entrega lo toleran (409 o TARIFA, sin 500), aislamiento, y `GET /conjunto/config` con los defaults nuevos. |
+| `migracionRecepcion.integration.test.js` | integración | T2.1: la migración aplica sobre datos existentes en una base desechable; el rollback aborta con mensaje si hay paquetes sin residente y, sin ellos, revierte. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
 `npm install`, que lo dispara) aunque no toquen la base de datos.
@@ -322,6 +324,23 @@ tenant funciona dentro de transacciones interactivas). La pre-alerta
 - `PaqueteEvento` es **solo inserción**: un trigger Postgres rechaza `UPDATE` y
   `DELETE` (la FK a `User` es `RESTRICT`). Lleva `conjuntoId` y está en
   `MODELOS_CON_TENANT`. Las pruebas lo limpian con `test-support/purgarEventos.js`.
+
+### Recepción sin pre-alerta: esquema (T2.1)
+
+Base para que el operador reciba un paquete sin que el residente lo haya
+pre-alertado (fase *expand*, ver DEPLOY.md):
+
+- `Package.residenteId` es opcional. Un paquete sin residente muestra
+  `etiquetaNombre` (lo que dice la etiqueta) en `GET /packages` y en el CSV;
+  `residente` llega `null`, nunca tiene cortesía de primera entrega y no consume
+  bono. `checkin` y `confirm-delivery` lo toleran (la entrega no envía correo).
+- Campos nuevos: `etiquetaNombre`, `transportadora`, `metodoPago`
+  (`EFECTIVO`|`TRANSFERENCIA`, `domain/pago.js`), `recibidoEn`. Se reutilizan
+  `guia` (default "Sin Guía") y `fechaEntrega` (la fecha de entrega). `proveedor`
+  (tienda/plataforma) sigue siendo obligatorio y distinto de `transportadora`.
+- `Conjunto`: `prefijoPais`, `franjasEntrega`, `maxFotos`, `custodiaMaxDias`.
+  `GET /conjunto/config` los devuelve (más `metodosPago`); si `franjasEntrega` es
+  null se aplica el default de `domain/conjuntoConfig.js`.
 
 ## Pendiente
 

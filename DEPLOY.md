@@ -136,6 +136,28 @@ probada contra Postgres (no SQLite).
 - Si más adelante se borran usuarios, recordar que `PaqueteEvento.actorId` es FK
   `RESTRICT` (no `SET NULL`, que haría un `UPDATE` bloqueado por el trigger).
 
+### Migración `add_recepcion_sin_prealerta` (T2.1, refactor mobile-first)
+
+Fase *expand* para la recepción sin pre-alerta. **Solo agrega** (generada con
+`prisma migrate diff` contra Postgres, revisada a mano):
+
+- `Package.residenteId` pasa a **opcional** (`DROP NOT NULL`; la FK sigue `RESTRICT`).
+- `Package`: `etiquetaNombre`, `transportadora`, `metodoPago` (`EFECTIVO`|`TRANSFERENCIA`,
+  validado en `domain/pago.js`, sin enum de BD), `recibidoEn`, e índice `[conjuntoId, guia]`.
+  `guia` y `fechaEntrega` ya existían y se **reutilizan** (no se duplican).
+- `Conjunto`: `prefijoPais` (`'57'`), `franjasEntrega` (JSON; si es null el código usa
+  el default de `domain/conjuntoConfig.js`), `maxFotos` (3), `custodiaMaxDias` (30).
+
+El código anterior ignora las columnas nuevas y funciona mientras no existan
+paquetes sin residente, así que se aplica con el flujo normal (`migrate deploy`).
+
+- **Rollback:** `backend/prisma/manual/rollback_add_recepcion_sin_prealerta.sql`
+  (con `psql`). Vuelve `residenteId` a `NOT NULL` y quita las columnas/índice nuevos
+  (pierde sus datos). **Guard:** si existe algún `Package` con `residenteId` NULL
+  aborta con `ROLLBACK abortado: N paquete(s) tienen residenteId NULL...` y no cambia
+  nada; asigna o borra esos paquetes y reintenta. Probado en
+  `scripts/__tests__/migracionRecepcion.integration.test.js`.
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama

@@ -2,6 +2,8 @@
 import { prisma } from '../config/db.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
+import { franjasDe } from '../domain/conjuntoConfig.js';
+import { METODOS_PAGO } from '../domain/pago.js';
 import { soloPresentacionales, tarifasDe, conjuntoDelContexto } from '../services/conjunto.service.js';
 
 // GET /api/conjuntos/config-publica?c=<codigo>  (PÚBLICO, pre-sesión)
@@ -30,6 +32,12 @@ export async function config(req, res) {
     slug: conjunto.slug, // presentacional: nombre de archivos (CSV), URLs de soporte
     tarifas: tarifasDe(conjunto),
     bonosHabilitados: conjunto.bonosHabilitados,
+    // Recepción/entrega (T2.1). franjasEntrega usa el default si la columna es null.
+    prefijoPais: conjunto.prefijoPais,
+    franjasEntrega: franjasDe(conjunto),
+    maxFotos: conjunto.maxFotos,
+    custodiaMaxDias: conjunto.custodiaMaxDias,
+    metodosPago: METODOS_PAGO,
   };
   if (req.user?.role === 'OPERATOR') {
     payload.codigoInvitacion = conjunto.codigoInvitacion;
