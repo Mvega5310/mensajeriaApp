@@ -43,6 +43,9 @@ if (!omitir && !process.env.JWT_SECRET) {
 
 let prisma, runWithTenant, register, login;
 
+// `req.app` mínimo para el límite de login (T1.4).
+const appFake = () => ({ locals: { limitadorLogin: { estaBloqueado: () => ({ bloqueado: false }), registrarFallo() {}, limpiar() {} } } });
+
 // Respuesta fake de Express para capturar status/json de los controladores.
 function resFake() {
   return {
@@ -186,12 +189,12 @@ test('login funciona para usuarios de dos conjuntos distintos', { skip: omitir &
   ctx.uB = resB.body.id;
 
   const la = resFake();
-  await login({ body: { email: 'ra@itestc.local', password: PWD } }, la);
+  await login({ body: { email: 'ra@itestc.local', password: PWD }, ip: '127.0.0.1', app: appFake() }, la);
   assert.equal(la.statusCode, 200);
   assert.ok(la.body.token, 'login de A debe devolver token');
 
   const lb = resFake();
-  await login({ body: { email: 'rb@itestc.local', password: PWD } }, lb);
+  await login({ body: { email: 'rb@itestc.local', password: PWD }, ip: '127.0.0.1', app: appFake() }, lb);
   assert.equal(lb.statusCode, 200);
   assert.ok(lb.body.token, 'login de B debe devolver token');
 });

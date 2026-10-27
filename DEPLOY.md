@@ -136,6 +136,23 @@ probada contra Postgres (no SQLite).
 - Si más adelante se borran usuarios, recordar que `PaqueteEvento.actorId` es FK
   `RESTRICT` (no `SET NULL`, que haría un `UPDATE` bloqueado por el trigger).
 
+### Migración `add_pin_intentos` (T1.4, refactor mobile-first)
+
+Agrega `Package.intentosPin` (entero, default 0) y `Package.pinBloqueadoHasta`
+(timestamp, nulo). **Aditiva**: el código anterior ignora las columnas, se aplica
+con `prisma migrate deploy` normal. Verificada con `prisma migrate diff` contra
+Postgres (sin diferencias con `schema.prisma`).
+
+- **Rollback:** `backend/prisma/manual/rollback_add_pin_intentos.sql` (quita las
+  dos columnas y la fila de `_prisma_migrations`; pierde contadores y bloqueos).
+- **Proxy:** el límite de login cuenta por `req.ip`. En producción
+  (`NODE_ENV=production`) la app fija `trust proxy = 1` (un solo salto: el proxy
+  de Railway), de modo que la IP es la que Railway añade y un `X-Forwarded-For`
+  del cliente no la falsifica. Si hubiera otro proxy delante (CDN), ajustar con
+  la variable opcional `TRUST_PROXY` (número de saltos, o `false`).
+- El limitador de login vive en memoria del proceso: se reinicia con cada
+  despliegue y no se comparte entre réplicas (cambiable por Redis luego).
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama

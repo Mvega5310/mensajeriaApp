@@ -196,6 +196,10 @@ model Package {
   // protección real es que solo /packages/mine (dueño) y la creación
   // devuelven este campo; /packages (operador) lo excluye siempre.
   pin                  String
+  // Límite de intentos del PIN (T1.4): fallos acumulados y, al llegar a 5,
+  // bloqueo temporal de la entrega hasta esta fecha.
+  intentosPin          Int           @default(0)
+  pinBloqueadoHasta    DateTime?
   fechaIngreso         DateTime      @default(now())
   fechaEntrega         DateTime?
 

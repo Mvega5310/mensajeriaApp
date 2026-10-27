@@ -108,12 +108,28 @@ export async function register(req, res) {
 
 export async function login(req, res) {
   const { email, password } = req.body;
+  // Límite por IP (T1.4): 10 fallos cada 15 min. Se consulta ANTES de gastar
+  // bcrypt, y solo los fallos cuentan. No se limpia al acertar: quien tenga una
+  // cuenta propia podría alternar aciertos para reiniciar el contador.
+  const limitador = req.app.locals.limitadorLogin;
+  const bloqueo = limitador.estaBloqueado(req.ip);
+  if (bloqueo.bloqueado) {
+    const minutos = Math.max(1, Math.ceil(bloqueo.segundosRestantes / 60));
+    res.set('Retry-After', String(bloqueo.segundosRestantes));
+    throw new AppError(
+      CODIGOS.DEMASIADOS_INTENTOS,
+      `Demasiados intentos. Espera ${minutos} ${minutos === 1 ? 'minuto' : 'minutos'} e inténtalo de nuevo.`,
+      429,
+      { minutosRestantes: minutos },
+    );
+  }
   // Flujo sin sesión: el conjunto se descubre a partir de la credencial. El
   // lookup por email pasa por el único punto autorizado a resolver sin contexto
   // (design.md §3.6.2). El JWT NO lleva claim de conjunto: el conjunto se
   // resuelve por `sub` en cada request (§3.6).
   const user = await buscarUsuarioPorEmailSinTenant(email);
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    limitador.registrarFallo(req.ip);
     throw new AppError(CODIGOS.CREDENCIALES_INVALIDAS, 'Correo o contraseña incorrectos. Revísalos e intenta de nuevo.', 401);
   }
 
