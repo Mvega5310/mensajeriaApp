@@ -23,7 +23,7 @@ import {
   GUIA_POR_DEFECTO, PROVEEDOR_POR_DEFECTO, normalizarGuia,
 } from '../domain/recepcion.js';
 import { etiquetaApartamento } from '../domain/apartamento.js';
-import { aplicarEvento, crearConEvento } from './paquete.service.js';
+import { aplicarEvento, crearConEvento, selectSinFoto } from './paquete.service.js';
 import { generatePin } from './pin.service.js';
 import { resolverCobro } from './cobro.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
@@ -50,9 +50,14 @@ async function buscarResidente(tx, id) {
 // Respuesta común de recepción y asignar. Lee el estado ya confirmado en la base,
 // así una repetición idempotente devuelve exactamente lo mismo.
 export async function armarRespuesta(paqueteId, conjunto) {
+  // Solo lo que arma la respuesta: ni fotoUrl ni pin se leen de la base.
   const p = await prisma.package.findUnique({
     where: { id: paqueteId },
-    include: { residente: { select: { id: true, nombre: true, telefono: true, torre: true, apto: true } } },
+    select: {
+      id: true, estado: true, residenteId: true, etiquetaNombre: true, categoriaPeso: true, costoServicio: true,
+      guia: true, transportadora: true, recibidoEn: true,
+      residente: { select: { id: true, nombre: true, telefono: true, torre: true, apto: true } },
+    },
   });
   if (!p) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
   const evento = await prisma.paqueteEvento.findFirst({
@@ -135,7 +140,7 @@ export async function recibirPaquete({ operadorId, body, claveCabecera, notifica
         };
 
         if (elegida) {
-          const fresco = await tx.package.findUnique({ where: { id: elegida.id } });
+          const fresco = await tx.package.findUnique({ where: { id: elegida.id }, select: selectSinFoto({ conPin: true }) });
           const cambios = {
             categoriaPeso: datos.categoriaPeso,
             costoServicio: r.cobro.monto,
@@ -220,9 +225,10 @@ export async function recibirPaquete({ operadorId, body, claveCabecera, notifica
 async function avisarLlegadaDe(notificador, paqueteId, conjunto, aviso) {
   if (!notificador || !aviso) return; // sin dueño no hay a quién avisar
   try {
+    // El correo de llegada lleva el PIN (solo para su dueño), pero nunca la foto.
     const p = await prisma.package.findUnique({
       where: { id: paqueteId },
-      include: { residente: { select: { id: true, nombre: true, email: true, telefono: true } } },
+      select: { ...selectSinFoto({ conPin: true }), residente: { select: { id: true, nombre: true, email: true, telefono: true } } },
     });
     if (!p?.residente?.email) return;
     const { residente, ...paquete } = p;
@@ -240,7 +246,7 @@ export async function asignarPaquete({ operadorId, paqueteId, residenteId, notif
   const conjunto = await conjuntoDelContexto();
 
   await prisma.$transaction(async (tx) => {
-    const fresco = await tx.package.findUnique({ where: { id: paqueteId } });
+    const fresco = await tx.package.findUnique({ where: { id: paqueteId }, select: selectSinFoto({ conPin: true }) });
     if (!fresco) {
       throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
     }

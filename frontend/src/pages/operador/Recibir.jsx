@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Field, Icon, Keypad } from '../../design';
+import { Button, Field, Icon, Keypad, Toast } from '../../design';
 import useRecibir from '../../hooks/operador/useRecibir.js';
 import useResumen from '../../hooks/operador/useResumen.js';
 import useConfig from '../../hooks/operador/useConfig.js';
+import useGuardarPaquete from '../../hooks/operador/useGuardarPaquete.js';
+import { formatCOP } from '../../utils/format.js';
+import { NOMBRES_CORTOS } from '../../utils/tiers.js';
 import Pantalla from './Pantalla.jsx';
 import MasSheet from './MasSheet.jsx';
 
@@ -12,7 +15,9 @@ export default function Recibir() {
   const config = useConfig();
   const { resumen } = useResumen();
   const porEntregar = resumen?.porEntregar ?? 0;
-  const { texto, tecla, resultados, buscando, error, hayConsulta } = useRecibir();
+  const { texto, tecla, resultados, buscando, error, hayConsulta, directo } = useRecibir();
+  // Guardado directo (Estándar preseleccionado) cuando hay una sola sugerencia y el apto está completo.
+  const g = useGuardarPaquete({ residenteId: directo?.id ?? null, residente: directo ?? undefined }, 0);
   const [sinDueno, setSinDueno] = useState(false);
   const [etiqueta, setEtiqueta] = useState('');
   const [masAbierto, setMasAbierto] = useState(false);
@@ -73,11 +78,22 @@ export default function Recibir() {
                 <Icon nombre="siguiente" size={22} trazo={2.5} />
               </button>
             ))}
+            {directo && (
+              <div className="op-directo">
+                <p className="op-directo__tamano">
+                  Tamaño: <b>{NOMBRES_CORTOS.ESTANDAR.nombre}</b>
+                  {config?.tarifas ? ` · ${formatCOP(config.tarifas.ESTANDAR)}` : ''}
+                </p>
+                {g.error && <Toast tipo="error">{g.error}</Toast>}
+                <Button onClick={g.guardar} disabled={g.guardando || !config}>{g.guardando ? 'Guardando' : 'Guardar'}</Button>
+                <button type="button" className="op-link" onClick={() => elegir(directo)}>Cambiar tamaño</button>
+              </div>
+            )}
             {error && <p className="op-vacio" role="alert">{error}</p>}
             {hayConsulta && !buscando && !error && resultados.length === 0 && (
               <p className="op-vacio">No hay residentes con ese apartamento. Revisa el número.</p>
             )}
-            <button type="button" className="op-link" onClick={() => setSinDueno(true)}>Registrar sin dueño</button>
+            {!directo && <button type="button" className="op-link" onClick={() => setSinDueno(true)}>Registrar sin dueño</button>}
           </div>
           <div className="op__relleno" />
           <div className="op-teclado">

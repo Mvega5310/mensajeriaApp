@@ -118,15 +118,45 @@ export async function resolverCobro(tx, { conjunto, residente, categoria, paquet
 }
 
 /**
- * Ids de los paquetes del conjunto que se llevaron la cortesía, para el listado
- * del operador y el CSV ("Primera vez"). Lee TODOS los paquetes (el primer cobrado
- * de un apartamento puede quedar fuera de un filtro de estado o de fechas) y los
- * eventos RECIBIR/ASIGNAR (motivoCobro). Fuera de transacción; usa el contexto.
+ * Cuentas (ids) de los apartamentos físicos a los que pertenecen `residenteIds`,
+ * en UNA lectura de usuarios (el filtro por apto en la base solo acota; la igualdad
+ * real es por clave normalizada, igual que idsDelApartamento).
+ */
+async function idsDeApartamentosDe(residenteIds) {
+  const base = await prisma.user.findMany({
+    where: { id: { in: residenteIds } },
+    select: { id: true, torre: true, apto: true },
+  });
+  const claves = new Set(base.map((u) => claveDeResidente(u)));
+  const aptos = [...new Set(base.map((u) => normalizarApto(u.apto)).filter(Boolean))];
+  const ids = new Set(base.map((u) => u.id));
+  if (aptos.length) {
+    const candidatos = await prisma.user.findMany({
+      where: { role: 'RESIDENT', OR: aptos.map((a) => ({ apto: { contains: a } })) },
+      select: { id: true, torre: true, apto: true },
+    });
+    for (const u of candidatos) if (claves.has(claveDeResidente(u))) ids.add(u.id);
+  }
+  return [...ids];
+}
+
+/**
+ * Ids de los paquetes que se llevaron la cortesía de primera entrega, para el
+ * listado del operador y el CSV ("Primera vez"). La cortesía es del primer paquete
+ * COBRADO del apartamento (que puede estar fuera de un filtro de estado o de
+ * fechas), así que se lee el historial completo, pero SOLO de los apartamentos de
+ * `residenteIds` (los que se están mostrando), no de todo el conjunto, y solo los
+ * eventos RECIBIR/ASIGNAR de esos paquetes. Nada de fotoUrl/pin. Fuera de
+ * transacción; usa el contexto.
+ * @param {{residenteIds: Array<string|null>}} p
  * @returns {Promise<Set<string>>}
  */
-export async function idsPrimeraEntrega() {
+export async function idsPrimeraEntrega({ residenteIds }) {
+  const alcance = [...new Set((residenteIds ?? []).filter(Boolean))];
+  if (!alcance.length) return new Set();
+  const cuentas = await idsDeApartamentosDe(alcance);
   const paquetes = await prisma.package.findMany({
-    where: { residenteId: { not: null }, estado: { in: [...ESTADOS_COBRADOS] } },
+    where: { residenteId: { in: cuentas }, estado: { in: [...ESTADOS_COBRADOS] } },
     select: {
       id: true, estado: true, residenteId: true, createdAt: true, recibidoEn: true,
       residente: { select: { id: true, torre: true, apto: true } },
@@ -134,7 +164,7 @@ export async function idsPrimeraEntrega() {
   });
   if (!paquetes.length) return new Set();
   const eventos = await prisma.paqueteEvento.findMany({
-    where: { tipo: { in: [EVENTOS.RECIBIR, EVENTOS.ASIGNAR] } },
+    where: { paqueteId: { in: paquetes.map((p) => p.id) }, tipo: { in: [EVENTOS.RECIBIR, EVENTOS.ASIGNAR] } },
     orderBy: { creadoEn: 'desc' },
     select: { paqueteId: true, datos: true, creadoEn: true },
   });

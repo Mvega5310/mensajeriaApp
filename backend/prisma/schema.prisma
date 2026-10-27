@@ -268,6 +268,9 @@ model Package {
   @@index([conjuntoId, estado])
   // Búsqueda de pre-alertas abiertas por guía dentro del conjunto (T2.3).
   @@index([conjuntoId, guia])
+  // Paquetes de un residente por estado: listMine, /api/p/paquetes (sondeo cada 20 s),
+  // schedule y la cuenta de pendientes (M5, revisión final T8.1).
+  @@index([conjuntoId, residenteId, estado])
 }
 
 // Bitácora auditable de cambios de estado del paquete (T1.3). SOLO INSERCIÓN:

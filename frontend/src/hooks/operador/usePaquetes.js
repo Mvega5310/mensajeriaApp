@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/api.js';
 
-// Listado de paquetes del operador (sin fotos ni PIN). Cache de módulo de 20 s para
+// Listado de paquetes ABIERTOS del operador (sin fotos ni PIN). Pide solo los estados
+// abiertos: así el servidor no lee toda la historia (revisión final T8.1, A1). El
+// historial va por la bitácora (paginada) y el CSV. Cache de módulo de 20 s para
 // que cambiar de pantalla no vuelva a pedirlo; `refrescar()` fuerza la lectura.
 let cache = { datos: null, en: 0 };
 const VIGENCIA_MS = 20000;
+export const ESTADOS_ABIERTOS = ['EN_RECEPCION', 'PROGRAMADO', 'SIN_ASIGNAR', 'PREALERTADO'];
 
 export function invalidarPaquetes() {
   cache = { datos: null, en: 0 };
@@ -18,7 +21,7 @@ export default function usePaquetes() {
 
   const refrescar = useCallback(async () => {
     try {
-      const lista = await api('/packages');
+      const lista = await api(`/packages?estado=${ESTADOS_ABIERTOS.join(',')}`);
       cache = { datos: lista, en: Date.now() };
       setPaquetes(lista);
       setError('');

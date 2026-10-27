@@ -246,7 +246,9 @@ export async function solicitarEnlace(req, res) {
     // correo) va en segundo plano: el tiempo de respuesta no revela la cuenta.
     enSegundoPlano('enlaceAcceso', async () => {
       const user = await buscarUsuarioPorEmailSinTenant(email);
-      if (!user) return;
+      // M4: el enlace sin contraseña es solo para residentes; un operador entra con
+      // su clave (misma respuesta genérica, simplemente no se envía ni se crea token).
+      if (!user || user.role !== 'RESIDENT') return;
       const rawToken = crypto.randomBytes(32).toString('hex');
       await prisma.passwordResetToken.create({
         data: { userId: user.id, tokenHash: hashToken(rawToken), proposito: 'ACCESO', expiresAt: new Date(Date.now() + ENLACE_TTL_MS) },

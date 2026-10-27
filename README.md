@@ -129,6 +129,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `tenantIsolation.integration.test.js` | integración | aislamiento CRUD entre dos conjuntos (findUnique/update/findMany, falla-cerrado). |
 | `registroLogin.integration.test.js` | integración | registro por código, login en dos conjuntos, 409 email cross-conjunto. |
 | `almacen.test.js` / `fotos.integration.test.js` | unitaria / integración | T5.1: decodificar y validar data-URI, selección s3/fake/legado, adaptador S3 con cliente simulado y firma local; recepción con 2 fotos → 2 `PaqueteFoto`, fotos legadas, 413, fallo del almacén sin paquete a medias, aislamiento. |
+| `listadosSinFotos.integration.test.js` | integración | regresión T8.1: con una foto de 500 KB sembrada, ningún listado/lectura devuelve `fotoUrl` ni `data:image` y ninguna consulta de `Package` selecciona la columna; CSV sin inyección de fórmulas; filtros de fecha del CSV. |
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
@@ -664,8 +665,12 @@ Métodos: `avisarLlegada({ residente, paquete, conjunto, aviso })`,
 | `/op/entregar/lote` | Cobrar | Lote, total, Efectivo/Transferencia (de `metodosPago`) y **Entregar todo** (`/entregas/confirmar`). El `tokenEntrega` vive solo en memoria del módulo. |
 | `/op/pendientes` | Pendientes | Buscador, "Sin asignar" (Asignar → `PATCH /packages/:id/asignar`), "Por entregar" por apartamento (detalle con fotos y bonos si `bonosHabilitados`), avisos de residentes. "Más": tema, exportar CSV, buzón de comentarios, QR de invitación, salir. |
 
-Recibir con un residente toma 4 toques cuando el apartamento tiene un solo
-dígito (dígito → sugerencia → tamaño → Guardar); cada dígito extra suma un toque.
+**Recibir en 4 toques (T8.1).** Cuando la búsqueda devuelve **una única** sugerencia y lo escrito
+tiene ≥ 3 dígitos de apartamento (o torre + el apto exacto del residente), Recibir muestra ya el
+botón principal **Guardar** con "Estándar" preseleccionado (y su tarifa) y el enlace "Cambiar
+tamaño" (lleva a la pantalla de tamaño). "304" + Guardar = 4 toques. Con varias sugerencias o el
+apto a medias sigue el flujo normal (dígitos → sugerencia → tamaño → Guardar). La sugerencia sigue
+siendo tocable (va a la pantalla de tamaño).
 Detalles: con torre el backend compara el apartamento exacto (sin prefijo);
 `api()` acepta `headers` y `sinCierreDeSesion` (un 401 de `/entregas/confirmar`
 puede ser del token de entrega, no de la sesión).
@@ -721,6 +726,29 @@ sistema de diseño (`base.css`, `pages/auth.css`, `components/photoGallery.css`)
   instrucciones de uso están en la cabecera del script; requiere un backend con base desechable.
 - **Títulos de página** por pantalla ("Recibir · Puertayá") desde `App.jsx`; ya no llevan nombre de conjunto.
 
+### Listados sin fotos ni PIN desde la consulta (revisión final T8.1, A1)
+
+Las fotos legadas (`Package.fotoUrl`, base64) pesan cientos de KB por fila. Leerlas de la base en
+cada listado y descartarlas en JS repite la caída de producción, así que ninguna lectura de listado
+las pide: `selectSinFoto()` (`services/paquete.service.js`) arma un `select` con todas las columnas de
+`Package` salvo `fotoUrl` y `pin` (el PIN solo se incluye para el dueño o el correo de llegada). Lo usan
+`listAll`, `listMine`, `exportCsv` (columnas explícitas), `verificarPinLote`, `armarRespuesta`, el correo
+de llegada y las lecturas dentro de transacciones; la foto solo sale por `GET /packages/:id/foto`.
+`verificarPinLote` filtra por PIN y estado **en la base** y solo carga los entregables de los
+apartamentos de los paquetes que coinciden (el lote sigue siendo por apartamento).
+`idsPrimeraEntrega({ residenteIds })` (cortesía "Primera vez") lee el historial solo de los
+apartamentos mostrados. `GET /packages?estado=` acepta varios estados separados por coma;
+Pendientes pide solo `EN_RECEPCION,PROGRAMADO,SIN_ASIGNAR,PREALERTADO`. Regresión:
+`listadosSinFotos.integration.test.js` (500 KB de foto sembrada: ninguna respuesta contiene `fotoUrl`
+ni `data:image`, y se espía `prisma.package.*` para exigir `select` sin `fotoUrl`).
+
+**CSV (M1, M2).** Las celdas de texto que empiezan por `=`, `+`, `-`, `@`, tab o retorno de carro se
+prefijan con `'` (Excel no las ejecuta como fórmula); los números no se tocan. `desde`/`hasta` usan
+`domain/fechas.js` (día de Bogotá; `hasta` incluye todo ese día; fecha inválida → 400 `DATOS_INVALIDOS`).
+**Enlace de acceso (M4).** `POST /api/auth/enlace` solo envía a cuentas RESIDENT; para un operador
+responde el mismo 200 genérico sin enviar ni crear token. **Índice (M5).** `Package(conjuntoId,
+residenteId, estado)` (ver DEPLOY.md).
+
 ### Pruebas E2E (T6.1)
 
 Suite Playwright del recorrido principal en `frontend/e2e/` (`npm run e2e`, desde `frontend/`). Corre cada
@@ -728,7 +756,7 @@ escenario en dos proyectos: `movil` (390x844) y `escritorio` (1280x800). 14 esce
 
 **Escenarios** (`e2e/recorrido.spec.mjs`, cada uno con residente y apartamento propios; día por defecto, "noche"
 en recibir con residente y en la entrega por lote): registro con código de invitación (y código inválido);
-recibir con residente (aviso con `waUrl`, sin PIN, toques <= 3 + dígitos del apto); recibir sin dueño y asignar;
+recibir con residente (aviso con `waUrl`, sin PIN, toques <= 3 + dígitos del apto; el recorrido corto "apto + Guardar" de T8.1 son 4 toques con 3 dígitos); recibir sin dueño y asignar;
 pre-alerta del residente que se vincula por la guía (un solo paquete); cortesía en el primer paquete y tarifa en el
 segundo; residente por enlace `/p#token` (PIN visible, el hash desaparece, Pedir entrega -> franja -> "Programado")
 y "Prefiero recogerlo en portería"; entrega por lote (PIN -> Transferencia -> Entregar todo -> historial del

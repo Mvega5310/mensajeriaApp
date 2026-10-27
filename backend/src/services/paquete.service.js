@@ -10,9 +10,26 @@
 // extensión) y el llamador es quien abre la transacción y hace `await` dentro del
 // contexto de tenant (invariante 4).
 
+import { Prisma } from '@prisma/client';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { prisma } from '../config/db.js';
 import { EVENTOS, transicionar } from '../domain/paquete.machine.js';
+
+/**
+ * `select` de Package para listados y lecturas que NO necesitan la foto: todas las
+ * columnas escalares salvo `fotoUrl` (base64 de cientos de KB en datos legados; ver
+ * CLAUDE.md, "Fotos fuera de los listados") y `pin` (solo el residente dueño lo ve).
+ * Se calcula desde el esquema, así una columna nueva entra sola; `fotoUrl` y `pin`
+ * solo se piden por nombre. `omit` de Prisma sigue en vista previa en 5.x: no se usa.
+ * @param {{conPin?:boolean, quitar?:string[]}} [o]  conPin: incluye `pin` (dueño o correo
+ *   de llegada); quitar: columnas adicionales a excluir.
+ */
+export function selectSinFoto({ conPin = false, quitar = [] } = {}) {
+  const fuera = new Set(['fotoUrl', ...(conPin ? [] : ['pin']), ...quitar]);
+  return Object.fromEntries(
+    Object.values(Prisma.PackageScalarFieldEnum).filter((c) => !fuera.has(c)).map((c) => [c, true]),
+  );
+}
 
 /**
  * Aplica `evento` a un paquete existente.
@@ -54,7 +71,7 @@ export async function aplicarEvento(tx, paquete, evento, { actorId, datos, cambi
     },
   });
 
-  return tx.package.findUnique({ where: { id: paquete.id } });
+  return tx.package.findUnique({ where: { id: paquete.id }, select: selectSinFoto({ conPin: true }) });
 }
 
 /**
@@ -66,7 +83,7 @@ export async function aplicarEvento(tx, paquete, evento, { actorId, datos, cambi
  */
 export async function crearConEvento(tx, evento, { data, actorId, datos }) {
   const aEstado = transicionar(null, evento);
-  const paquete = await tx.package.create({ data: { ...data, estado: aEstado } });
+  const paquete = await tx.package.create({ data: { ...data, estado: aEstado }, select: selectSinFoto({ conPin: true }) });
   await tx.paqueteEvento.create({
     data: {
       paqueteId: paquete.id,

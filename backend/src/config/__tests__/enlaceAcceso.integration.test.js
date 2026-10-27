@@ -83,6 +83,9 @@ test('setup', { skip }, async () => {
   ctx.res = await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () => prisma.user.create({
     data: { email: 'ana@acceso.local', passwordHash, role: 'RESIDENT', nombre: 'Ana', telefono: '3001112233', torre: 'T1', apto: '101', termsAcceptedAt: new Date() },
   }));
+  ctx.op = await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () => prisma.user.create({
+    data: { email: 'op@acceso.local', passwordHash, role: 'OPERATOR', nombre: 'Operador', telefono: '3001110000', termsAcceptedAt: new Date() },
+  }));
   notificador = crearNotificadorFake();
   const app = createApp({ notificador });
   await new Promise((resolve) => {
@@ -118,6 +121,16 @@ test('email inexistente: 200 idéntico y 0 correos', { skip }, async () => {
   assert.deepEqual(await vacio.json(), { message: MSG });
   await espera();
   assert.equal(notificador.obtenerEnviados().length, 0);
+});
+
+test('M4: un operador recibe el mismo 200 genérico pero NO se le envía enlace ni se crea token', { skip }, async () => {
+  notificador.limpiar();
+  const r = await pedir('op@acceso.local');
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), { message: MSG });
+  await espera();
+  assert.equal(notificador.obtenerEnviados().length, 0);
+  assert.equal(await prisma.passwordResetToken.count({ where: { userId: ctx.op.id, proposito: 'ACCESO' } }), 0);
 });
 
 test('canjear: JWT normal (sin scope) que funciona en /me y en rutas de residente', { skip }, async () => {
