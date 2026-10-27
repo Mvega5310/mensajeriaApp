@@ -261,6 +261,8 @@
 .ds-field__input--mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ds-field__input::placeholder { color: var(--muted); }
 .ds-field__input:focus-visible { border-color: var(--action); }
+/* Campo de fecha: el botón del calendario también recibe foco con Tab. */
+.ds-field__input::-webkit-calendar-picker-indicator:focus-visible { outline: var(--focus-w) solid var(--action); outline-offset: var(--focus-offset); }
 .ds-field--error .ds-field__input { border-color: var(--danger); }
 .ds-field__ayuda { font-size: var(--fs-apoyo); color: var(--muted); }
 .ds-field__error { display: flex; align-items: center; gap: 6px; font-size: var(--fs-texto); color: var(--danger); font-weight: 700; }

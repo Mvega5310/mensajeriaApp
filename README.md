@@ -707,6 +707,20 @@ historial, bonos ni "+ Avisar" (se ofrece "entra con tu correo").
 Recuperar, Restablecer, Términos, `PasswordField` y `PhotoGallery` usan tokens y componentes del
 sistema de diseño (`base.css`, `pages/auth.css`, `components/photoGallery.css`).
 
+### Accesibilidad, textos y cola por operador (T4.6)
+
+- **Cola por operador.** Cada registro sin enviar guarda el `operadorId` (y el nombre) de quien lo encoló. La
+  `Idempotency-Key` es única por operador en el backend, así que la cola SOLO reenvía los del operador en sesión:
+  si otro operador entra en el mismo dispositivo, los pendientes ajenos se muestran en la hoja "Por enviar" como
+  "De otra sesión (Nombre)" con la opción de descartarlos y nunca se envían con otra sesión. Al tocar "Salir" con
+  registros sin enviar se pide confirmación ("Tienes N registros sin enviar. Si sales, se enviarán cuando vuelvas
+  a entrar."). Un elemento sin `operadorId` (anterior a este cambio) cuenta como de otra sesión.
+- **Auditoría automática.** `frontend/e2e/a11y.audit.mjs` recorre todas las pantallas del operador y del residente
+  (390x844 y 1280x800, día y noche, con `prefers-reduced-motion`) con axe-core y comprobaciones propias (controles
+  de 48 px, foco visible, título de página, textos de 16 px, hojas con foco atrapado, contraste de tokens). Las
+  instrucciones de uso están en la cabecera del script; requiere un backend con base desechable.
+- **Títulos de página** por pantalla ("Recibir · Puertayá") desde `App.jsx`; ya no llevan nombre de conjunto.
+
 ## Pendiente
 
 - **WhatsApp automático**: decisión consciente de no implementarlo por

@@ -4,7 +4,8 @@
 import { useSyncExternalStore } from 'react';
 import { api } from '../services/api.js';
 import { invalidarPaquetes } from '../hooks/operador/usePaquetes.js';
-import { almacenMemoria, clasificarError, crearCola, nuevaClave } from './colaPura.js';
+import { usuarioId, usuarioNombre } from '../services/auth.js';
+import { almacenMemoria, clasificarError, crearCola, nuevaClave, separarPorOperador } from './colaPura.js';
 
 export { nuevaClave };
 
@@ -84,6 +85,7 @@ async function iniciar() {
         sinCierreDeSesion: true,
         timeoutMs: TIMEOUT_MS,
       }),
+      operadorActual: usuarioId,
       onEnviado: (el, resp) => { enviados.set(el.claveIdempotencia, resp); invalidarPaquetes(); },
     });
     emitir({ persistente: almacen.persistente, listo: true });
@@ -129,7 +131,7 @@ export function enviarPendientes({ forzar = false } = {}) {
 export async function guardarRecepcion({ claveIdempotencia, body, resumen }) {
   await iniciar();
   const encolar = async () => {
-    await cola.encolar({ claveIdempotencia, body, resumen });
+    await cola.encolar({ claveIdempotencia, body, resumen, operadorId: usuarioId(), operadorNombre: usuarioNombre() });
     await refrescar();
     return { enviado: false, clave: claveIdempotencia };
   };
@@ -155,12 +157,15 @@ function suscribir(f) {
   return () => oyentes.delete(f);
 }
 
-/** Estado de la cola: { items, pendientes, fallidos, enviando, sinSenal, persistente, listo }. */
+/** Estado de la cola: { items, pendientes, fallidos, ajenos, enviando, sinSenal, persistente, listo }.
+ *  `pendientes` y `fallidos` son solo del operador en sesión; `ajenos` son de otra sesión y nunca se envían. */
 export function useCola() {
   const s = useSyncExternalStore(suscribir, () => snapshot);
+  const { propios, ajenos } = separarPorOperador(s.items, usuarioId());
   return {
     ...s,
-    pendientes: s.items.filter((x) => x.estado === 'pendiente'),
-    fallidos: s.items.filter((x) => x.estado === 'fallido'),
+    pendientes: propios.filter((x) => x.estado === 'pendiente'),
+    fallidos: propios.filter((x) => x.estado === 'fallido'),
+    ajenos,
   };
 }

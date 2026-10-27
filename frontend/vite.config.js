@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Puertaya Ipanema',
+        name: 'Puertayá',
         short_name: 'Puertaya',
-        description: 'Recepción, custodia y entrega de paquetes — Conjunto Ipanema',
+        description: 'Recepción, custodia y entrega de paquetes de tu conjunto',
         theme_color: '#1E63C9',
         background_color: '#F4F6F9',
         display: 'standalone',

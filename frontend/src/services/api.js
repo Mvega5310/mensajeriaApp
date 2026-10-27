@@ -19,6 +19,14 @@ export async function api(path, { method = 'GET', body, headers, sinCierreDeSesi
       body: body ? JSON.stringify(body) : undefined,
       signal: ctl?.signal,
     });
+  } catch (e) {
+    // Sin respuesta del servidor (sin señal o tiempo agotado): mensaje en español, sin `status`
+    // (la cola sin señal lo clasifica como falla de red).
+    const err = new Error(e?.name === 'AbortError'
+      ? 'La conexión tardó demasiado. Revisa tu señal e intenta de nuevo.'
+      : 'No hay conexión con el servidor. Revisa tu señal e intenta de nuevo.');
+    err.cause = e;
+    throw err;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -31,7 +39,7 @@ export async function api(path, { method = 'GET', body, headers, sinCierreDeSesi
   if (!res.ok) {
     // Contrato de error de la API: { code, message, details? }. `error` es
     // respaldo para respuestas viejas (antes de T0.2).
-    const err = new Error(data.message || data.error || 'Error de red');
+    const err = new Error(data.message || data.error || 'No pudimos completar la acción. Intenta de nuevo.');
     // Conserva el código estable (ej. 'INVITACION_INVALIDA') para que la UI no
     // dependa del texto del mensaje, y los detalles si vienen.
     if (data.code) err.code = data.code;
@@ -49,7 +57,7 @@ export async function downloadFile(path, filename) {
   const res = await fetch(`${BASE_URL}${path}`, { headers: authHeaders() });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || data.error || 'No se pudo descargar el archivo. Intenta de nuevo.');
+    throw new Error(data.message || data.error || 'No pudimos descargar el archivo. Intenta de nuevo.');
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

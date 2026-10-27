@@ -7,7 +7,8 @@
 .auth-card form { display: flex; flex-direction: column; gap: var(--sp-2); }
 .auth-sub { margin: 0; color: var(--muted); font-size: 17px; }
 .auth-switch { margin: 0; text-align: center; color: var(--muted); }
-.auth-switch a, .auth-card a { color: var(--ink); font-weight: 700; }
+.auth-card a:not(.ds-btn) { color: var(--ink); font-weight: 700; }
+.auth-switch a { display: inline-flex; align-items: center; min-height: var(--tap-min); }
 .auth-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-1); }
 .auth-check { display: flex; align-items: flex-start; gap: 12px; min-height: var(--tap-min); }
 .auth-check input { width: 24px; height: 24px; flex: none; margin-top: 2px; accent-color: var(--action); }
@@ -17,7 +18,7 @@
 .legal { max-width: 680px; margin: 0 auto; padding: var(--sp-4) var(--sp-2) 96px; box-sizing: border-box; }
 .legal-back { display: inline-flex; align-items: center; min-height: var(--tap-min); margin-bottom: var(--sp-1); color: var(--ink); font-weight: 700; }
 .legal h1 { font: 800 24px var(--font-titulo); margin: 0 0 4px; line-height: 1.3; letter-spacing: -0.02em; }
-.legal .updated { font-size: var(--fs-apoyo); color: var(--muted); margin: 0 0 var(--sp-2); }
+.legal .updated { font-size: var(--fs-texto); color: var(--muted); margin: 0 0 var(--sp-2); }
 .legal h2 { font: 800 18px var(--font-titulo); margin: 28px 0 8px; }
 .legal p, .legal li { font-size: var(--fs-texto); line-height: 1.7; margin: 0 0 10px; }
 .legal ul { padding-left: 20px; margin: 0 0 12px; }

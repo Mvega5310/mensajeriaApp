@@ -59,7 +59,7 @@ export default function Avisar() {
           <Field label="Número de guía (si lo tienes)" mono value={form.guia} onChange={(e) => set('guia', e.target.value)} maxLength={60} />
           {detalles ? <DetallesAviso form={form} set={set} /> : (
             <button type="button" className="res-link res-link--tinta" onClick={() => setDetalles(true)}>
-              + Agregar detalles (contra entrega, nota)
+              Agregar detalles
             </button>
           )}
         </div>
