@@ -133,6 +133,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
 | `recepcionSinPrealerta.integration.test.js` | integración | T2.1: paquete sin residente (SIN_ASIGNAR / EN_RECEPCION directo) se crea y lista con `etiquetaNombre`, checkin/entrega lo toleran (409 o TARIFA, sin 500), aislamiento, y `GET /conjunto/config` con los defaults nuevos. |
+| `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
 | `migracionRecepcion.integration.test.js` | integración | T2.1: la migración aplica sobre datos existentes en una base desechable; el rollback aborta con mensaje si hay paquetes sin residente y, sin ellos, revierte. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
@@ -385,6 +386,66 @@ aparecen):
 - Tildes: el nombre se compara en memoria sin tildes ni mayúsculas (sin
   `unaccent` ni SQL crudo, invariante 3) sobre una lectura acotada (solo
   `RESIDENT`, 4 columnas, tope 3000).
+
+### Recepción sin pre-alerta, asignar e idempotencia (T2.3)
+
+Solo `OPERATOR`. El cobro (cortesía por apartamento, bono atómico, tarifa) lo
+calcula `services/cobro.service.js#resolverCobro`, **la misma función** que usa
+`PATCH /packages/:id/checkin`; ambos validan fotos contra `Conjunto.maxFotos`
+(ya no hay un `3` fijo). Las fotos siguen en `fotoUrl` (base64; T5.1 lo cambia) y
+los listados siguen sin `fotoUrl` ni `pin`.
+
+**`POST /api/packages/recepcion`**: cabecera opcional `Idempotency-Key`.
+
+```json
+{ "residenteId": "…|null", "etiquetaNombre": "Carlos Pérez", "categoriaPeso": "ESTANDAR",
+  "guia": "AB-123", "transportadora": "Servientrega", "fotos": ["data:image/jpeg;base64,…"] }
+```
+
+- `categoriaPeso` obligatoria (`MANO|ESTANDAR|VOLUMEN|PESADO`). Sin `residenteId`,
+  `etiquetaNombre` es obligatoria (400 si falta). Lógica en `domain/recepcion.js`.
+- **Con `residenteId`** (debe ser `RESIDENT` del conjunto; si no, 404
+  `NO_ENCONTRADO`): busca sus pre-alertas `PREALERTADO`; elige la de la misma
+  `guia` (comparada sin espacios/guiones y en mayúsculas; "Sin Guía" nunca
+  coincide) y, si no hay, la más antigua. La pasa a `EN_RECEPCION` con `RECIBIR`
+  (conserva su PIN; rellena `transportadora`/`guia` si estaban vacías). Si no hay
+  pre-alerta, crea el paquete directo en `EN_RECEPCION` (evento `RECIBIR` con
+  `deEstado` null, `proveedor` = transportadora o "Sin especificar", PIN nuevo).
+- **Sin `residenteId`**: crea `SIN_ASIGNAR` con `RECIBIR_SIN_DUENO`. Aún no hay
+  cobro (`costoServicio = 0`; se calcula al asignar). El PIN se genera ya (columna
+  obligatoria) pero **no se devuelve** (`pin: null`, `aviso: null`).
+- **Idempotencia**: con `Idempotency-Key` (1-128 caracteres sin espacios) un
+  reintento del mismo operador y conjunto dentro de 24 h devuelve el mismo
+  paquete (mismo 201 y cabecera `Idempotent-Replayed: true`) sin crear otro ni
+  gastar otro bono. La clave (`ClaveIdempotencia`, con tenant) se guarda en la
+  misma transacción que el paquete; dos envíos simultáneos con la misma clave
+  crean uno solo.
+
+Respuesta `201`:
+
+```json
+{ "paquete": { "id": "…", "estado": "EN_RECEPCION", "residenteId": "…",
+    "nombre": "Ana Gómez", "torre": "TORRE 2", "apto": "304", "etiquetaApto": "T2 · 304",
+    "etiquetaNombre": null, "categoriaPeso": "ESTANDAR", "costo": 4500,
+    "motivoCobro": "TARIFA", "guia": "AB-123", "transportadora": "Servientrega",
+    "pin": "4821", "recibidoEn": "2026-10-29T15:04:05.000Z" },
+  "aviso": { "texto": "Hola Ana, llegó tu paquete a portería (Paquete estándar). Tu PIN de entrega es 4821.",
+             "waUrl": "https://wa.me/573001234567?text=Hola%20Ana%2C…" } }
+```
+
+`motivoCobro`: `TARIFA|CORTESIA|BONO` (null en `SIN_ASIGNAR`). `waUrl` es `null`
+si el residente no tiene teléfono; `aviso` es `null` sin residente. El enlace lo
+arma `domain/whatsapp.js#construirEnlace` con `Conjunto.prefijoPais`
+(provisional: T2.4 completa los avisos y T3.1 el enlace firmado).
+
+**`PATCH /api/packages/:id/asignar`** con `{ "residenteId": "…" }`: `ASIGNAR`
+(`SIN_ASIGNAR` -> `EN_RECEPCION`), pone el residente y calcula el cobro en ese
+momento. Responde `200` con el mismo `{ paquete, aviso }`. Paquete que no está
+`SIN_ASIGNAR`: 409 `TRANSICION_INVALIDA` (sin gastar bono); residente de otro
+conjunto o inexistente: 404.
+
+**`GET /api/packages?estado=SIN_ASIGNAR`**: filtro opcional por estado (cualquiera
+de la máquina; otro valor -> 400). Sin parámetro devuelve todos, como antes.
 
 ## Pendiente
 

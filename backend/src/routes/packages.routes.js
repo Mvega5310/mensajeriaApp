@@ -8,6 +8,8 @@ import {
   listAll,
   schedule,
   checkin,
+  recepcion,
+  asignar,
   confirmDelivery,
   exportCsv,
   getFoto,
@@ -27,6 +29,8 @@ router.get('/:id/foto', asyncHandler(getFoto));
 
 router.get('/', requireRole('OPERATOR'), asyncHandler(listAll));
 router.get('/export', requireRole('OPERATOR'), asyncHandler(exportCsv));
+router.post('/recepcion', requireRole('OPERATOR'), asyncHandler(recepcion));
+router.patch('/:id/asignar', requireRole('OPERATOR'), asyncHandler(asignar));
 router.patch('/:id/checkin', requireRole('OPERATOR'), asyncHandler(checkin));
 router.post('/:id/confirm-delivery', requireRole('OPERATOR'), asyncHandler(confirmDelivery));
 

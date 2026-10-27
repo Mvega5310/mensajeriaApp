@@ -4,12 +4,15 @@ import { costoPara } from '../services/tariff.service.js';
 import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
 } from '../services/email.service.js';
-import { conjuntoDelContexto, operadorDelConjuntoActual, tarifasDe } from '../services/conjunto.service.js';
+import { conjuntoDelContexto, operadorDelConjuntoActual } from '../services/conjunto.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { claveApartamento } from '../services/apartamento.service.js';
-import { esPrimeraEntrega, calcularCobro, esCategoriaValida, MOTIVOS_COBRO } from '../domain/cobro.js';
-import { EVENTOS, transicionar } from '../domain/paquete.machine.js';
+import { esPrimeraEntrega, esCategoriaValida } from '../domain/cobro.js';
+import { validarFotos, mensajeMaxFotos } from '../domain/recepcion.js';
+import { resolverCobro } from '../services/cobro.service.js';
+import { EVENTOS, ESTADOS, transicionar } from '../domain/paquete.machine.js';
 import { aplicarEvento, crearConEvento } from '../services/paquete.service.js';
+import { recibirPaquete, asignarPaquete } from '../services/recepcion.service.js';
 
 // La cortesía de primera entrega es por apartamento físico, no por
 // cuenta — varias personas del mismo apto pueden registrarse con
@@ -115,7 +118,13 @@ export async function listMine(req, res) {
 // Operador: ve todos los paquetes, pero el PIN nunca viaja hacia esta
 // vista — y tampoco fotoUrl, por la misma razón que en listMine().
 export async function listAll(req, res) {
+  // Filtro opcional por estado (ej. ?estado=SIN_ASIGNAR para la sección "Sin asignar").
+  const { estado } = req.query;
+  if (estado !== undefined && !Object.values(ESTADOS).includes(estado)) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El estado no es válido. Elige uno de la lista.', 400, { campo: 'estado' });
+  }
   const packages = await prisma.package.findMany({
+    where: estado ? { estado } : undefined,
     include: {
       residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
       bono: { select: { id: true, categoriaPeso: true, cantidadTotal: true, cantidadUsada: true } },
@@ -173,18 +182,21 @@ export async function schedule(req, res) {
   res.json(updated);
 }
 
-// Hasta 3 fotos, guardadas como JSON en la misma columna fotoUrl — evita
-// una migración de esquema para algo que sigue siendo, en esencia, "la
-// evidencia visual de este paquete".
+// Hasta `Conjunto.maxFotos` fotos, guardadas como JSON en la misma columna
+// fotoUrl (T5.1 las moverá a un almacén). El cobro (cortesía por apartamento,
+// bono atómico, tarifa) lo calcula services/cobro.service.js, la MISMA función
+// que usa la recepción directa.
 export async function checkin(req, res) {
   const { categoriaPeso, fotos } = req.body;
-  if (fotos && (!Array.isArray(fotos) || fotos.length > 3)) {
-    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Puedes adjuntar hasta 3 fotos. Quita las que sobren e intenta de nuevo.', 400);
+  const conjunto = await conjuntoDelContexto();
+  if (fotos && !Array.isArray(fotos)) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, mensajeMaxFotos(conjunto.maxFotos), 400);
   }
+  if (fotos) validarFotos(fotos, conjunto.maxFotos);
 
   const actual = await prisma.package.findUnique({
     where: { id: req.params.id },
-    select: { residenteId: true, createdAt: true, residente: { select: { torre: true, apto: true } } },
+    select: { residenteId: true, createdAt: true, residente: { select: { id: true, torre: true, apto: true } } },
   });
   if (!actual) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
 
@@ -193,110 +205,62 @@ export async function checkin(req, res) {
   if (!esCategoriaValida(categoriaPeso)) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
-  const conjunto = await conjuntoDelContexto();
-
-  // Si este es el primer paquete pre-alertado por cualquier cuenta de
-  // este mismo apartamento físico, es la entrega de cortesía por
-  // afiliación (campaña de lanzamiento): gratis sin importar la
-  // categoría de peso elegida. Si torre/apto vienen incompletos, no hay
-  // con qué agrupar de forma confiable — se mantiene el comportamiento
-  // anterior, por cuenta sola.
-  // Sin residente (SIN_ASIGNAR) no hay cortesía ni bono: se cobra TARIFA. (El
-  // camino previsto para esos paquetes es ASIGNAR, T2.3; esto solo es defensa.)
-  const clave = actual.residente ? claveApartamento(actual.residente.torre, actual.residente.apto) : '';
-  let idsRelevantes = actual.residenteId ? [actual.residenteId] : [];
-  if (clave) {
-    const residentes = await prisma.user.findMany({
-      where: { role: 'RESIDENT' },
-      select: { id: true, torre: true, apto: true },
-    });
-    idsRelevantes = residentes
-      .filter((u) => claveApartamento(u.torre, u.apto) === clave)
-      .map((u) => u.id);
-  }
-
-  const primerPaquete = idsRelevantes.length
-    ? await prisma.package.findFirst({
-      where: { residenteId: { in: idsRelevantes } },
-      orderBy: { createdAt: 'asc' },
-      select: { createdAt: true },
-    })
-    : null;
-  // La regla vive en domain/cobro.js; aquí solo se leen los datos.
-  const primera = !!actual.residenteId && esPrimeraEntrega({
-    createdAt: actual.createdAt,
-    createdAtDelApto: primerPaquete ? [primerPaquete.createdAt] : [],
-  });
 
   // Todo lo que cambia (bono + estado + evento) va en UNA transacción: si la
   // transición es inválida (409) o alguien más ya recibió el paquete, el crédito
-  // consumido se revierte.
-  const { pkg, bono } = await prisma.$transaction(async (tx) => {
+  // consumido se revierte. Sin residente (SIN_ASIGNAR) la transición RECIBIR
+  // falla con 409 (el camino es ASIGNAR).
+  const { pkg, bono, esPrimera } = await prisma.$transaction(async (tx) => {
     const fresco = await tx.package.findUnique({ where: { id: req.params.id } });
     if (!fresco) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
     // Valida la transición ANTES de tocar el bono (un paquete ya recibido o
     // entregado no debe gastar créditos).
     transicionar(fresco.estado, EVENTOS.RECIBIR);
 
-    // Candidatos: bonos del residente en esta categoría con crédito, el más
-    // antiguo primero (un bono de otra categoría no aplica).
-    let candidatos = [];
-    if (!primera && conjunto.bonosHabilitados && actual.residenteId) {
-      candidatos = (await tx.bono.findMany({
-        where: { residenteId: actual.residenteId, categoriaPeso },
-        orderBy: { createdAt: 'asc' },
-      })).filter((b) => b.cantidadUsada < b.cantidadTotal);
-    }
-    let cobro = calcularCobro({
-      tarifas: tarifasDe(conjunto),
-      categoria: categoriaPeso,
-      esPrimeraEntrega: primera,
-      bonosHabilitados: conjunto.bonosHabilitados,
-      creditosBono: candidatos.length,
+    const r = await resolverCobro(tx, {
+      conjunto, residente: actual.residente, categoria: categoriaPeso, createdAt: actual.createdAt,
     });
-
-    // Decremento CONDICIONAL: solo si aún queda crédito en la base (count === 1).
-    // Si otra transacción concurrente se lo llevó, se prueba el siguiente bono;
-    // si ninguno cede crédito, el cobro se recalcula como TARIFA (decisión: no se
-    // bloquea al operador en portería; se cobra tarifa normal y queda en el evento).
-    let bono = null;
-    let usadoTras = 0;
-    if (cobro.consumeBono) {
-      for (const c of candidatos) {
-        const { count } = await tx.bono.updateMany({
-          where: { id: c.id, cantidadUsada: { lt: c.cantidadTotal } },
-          data: { cantidadUsada: { increment: 1 } },
-        });
-        if (count === 1) {
-          bono = c;
-          usadoTras = (await tx.bono.findUnique({ where: { id: c.id } })).cantidadUsada;
-          break;
-        }
-      }
-      if (!bono) {
-        cobro = { monto: tarifasDe(conjunto)[categoriaPeso], motivo: MOTIVOS_COBRO.TARIFA, consumeBono: false };
-      }
-    }
-
     const pkg = await aplicarEvento(tx, fresco, EVENTOS.RECIBIR, {
       actorId: req.user.sub,
-      datos: { categoriaPeso, motivoCobro: cobro.motivo, monto: cobro.monto, bonoId: bono?.id ?? null },
+      datos: { categoriaPeso, motivoCobro: r.cobro.motivo, monto: r.cobro.monto, bonoId: r.bonoId },
       cambios: {
         categoriaPeso,
-        costoServicio: cobro.monto,
-        bonoId: bono?.id || null,
+        costoServicio: r.cobro.monto,
+        bonoId: r.bonoId,
+        recibidoEn: new Date(),
         fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
       },
     });
-    return { pkg, bono: bono && { id: bono.id, quedan: bono.cantidadTotal - usadoTras }, cobro };
+    return { pkg, bono: r.bono, esPrimera: r.esPrimeraEntrega };
   });
 
   res.json({
     ...pkg,
     pin: undefined,
-    esPrimeraEntrega: primera,
+    esPrimeraEntrega: esPrimera,
     bonoAplicado: bono,
   });
+}
+
+// Operador: recibe un paquete con o sin pre-alerta y con o sin dueño (T2.3).
+// Cabecera opcional `Idempotency-Key`: un reintento devuelve el mismo paquete.
+export async function recepcion(req, res) {
+  const { respuesta, repetida } = await recibirPaquete({
+    operadorId: req.user.sub,
+    body: req.body,
+    claveCabecera: req.get('Idempotency-Key'),
+  });
+  if (repetida) res.set('Idempotent-Replayed', 'true');
+  res.status(201).json(respuesta);
+}
+
+// Operador: asigna un residente a un paquete que llegó sin dueño (T2.3).
+export async function asignar(req, res) {
+  res.json(await asignarPaquete({
+    operadorId: req.user.sub,
+    paqueteId: req.params.id,
+    residenteId: req.body?.residenteId,
+  }));
 }
 
 function csvEscape(value) {
