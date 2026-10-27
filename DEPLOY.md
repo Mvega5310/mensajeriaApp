@@ -48,6 +48,20 @@ git push
 
    `PORT` no se configura — Railway inyecta el suyo y `src/index.js` lo usa automático.
 
+   **Validación al arrancar (T0.3).** El backend revisa sus variables antes de
+   escuchar (`src/config/env.js`). Si falta una obligatoria (`DATABASE_URL`,
+   `JWT_SECRET`), si `JWT_SECRET` tiene menos de 32 caracteres con
+   `NODE_ENV=production`, o si `PORT` o `DATABASE_URL` son inválidos, el
+   proceso **no arranca**: el log lista todos los problemas a la vez. Las
+   opcionales ausentes (`CORS_ORIGIN`, `FRONTEND_URL`, `RESEND_API_KEY`) no
+   detienen el arranque; el log muestra un `AVISO:` por cada una. Si el deploy
+   falla justo después de cambiar variables, lo primero es leer ese mensaje en
+   Railway → Deployments → Logs.
+
+   La exigencia de 32 caracteres en `JWT_SECRET` solo se aplica si
+   `NODE_ENV=production`. Añade esa variable en el servicio del backend
+   (no la asumas: sin ella el servidor trata el entorno como desarrollo).
+
 5. Deploy. Railway corre `npm install` → `postinstall` (`prisma generate`) → `npm start` (`prisma migrate deploy && node src/index.js`).
 
 ### Migraciones de Postgres — cómo se aplican de verdad

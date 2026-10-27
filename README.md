@@ -55,6 +55,13 @@ npm run seed                # crea un Conjunto local + su operador (idempotente)
 npm run dev                 # http://localhost:4000
 ```
 
+> **Variables de entorno.** El servidor valida su configuración antes de
+> escuchar (`src/config/env.js`). Obligatorias: `DATABASE_URL` y `JWT_SECRET`.
+> Si falta alguna, el proceso se detiene y el error lista todas las que
+> faltan. Las opcionales (`CORS_ORIGIN`, `FRONTEND_URL`, `RESEND_API_KEY`)
+> dejan un aviso en el log. Todas están documentadas, con comentarios, en
+> `backend/.env.example`.
+
 > **Seed multi-conjunto (KAN-8).** `npm run seed` es **idempotente** (se puede
 > correr varias veces sin duplicar):
 > 1. busca o crea un `Conjunto` local (slug de `SEED_CONJUNTO_SLUG`, por defecto
