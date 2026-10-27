@@ -23,12 +23,12 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T1.2 | S | hecho | 455a096 | `domain/cobro.js`; primera entrega por apartamento físico (por createdAt); precedencia cortesía > bono > tarifa. |
 | T1.3 | S | hecho | 6075b49 | PaqueteEvento solo-inserción (trigger); aplicarEvento con updateMany condicional; bono atómico, sin crédito → TARIFA. |
 | T1.4 | S | hecho | 41f6159 | PIN: 5 fallos → 423 por 15 min (contador fuera de la tx). Login: 10/IP/15 min → 429; trust proxy=1 en producción. |
-| T2.1 | S | en curso | | |
-| T2.2 | S | pendiente | | |
+| T2.1 | S | hecho | 98546d6 | residenteId opcional; etiquetaNombre, transportadora, metodoPago, recibidoEn; guia/fechaEntrega reutilizados; Conjunto: prefijoPais, franjasEntrega, maxFotos, custodiaMaxDias. |
+| T2.2 | S | en curso | | |
 | T2.3 | S | pendiente | | |
 | T2.4 | S | pendiente | | |
 | T2.5 | S | pendiente | | |
-| T2.6 | H | pendiente | | |
+| T2.6 | H | en curso | | |
 | T3.1 | S | pendiente | | |
 | T3.2 | S | pendiente | | |
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
@@ -55,3 +55,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - Deuda explícita para T4.2/T4.3: `frontend/src/index.css` legado (hex y controles <48 px) se elimina al borrar OperatorView/ResidentView.
 - Deuda para F8/legal: borrar una cuenta (derecho de supresión, Ley 1581) con `PaqueteEvento` exige definir anonimización vs purga.
 - 2026-10-27: correcciones de la revisión F0/F1 integradas (e49253e): ráfaga de login 10/50, `--line-strong` ≥3:1, errores 4xx. `test:all` 239/239, build verde. **F0 y F1 cerradas.**
+- 2026-10-27: T2.1 integrada (conflicto en DEPLOY.md resuelto conservando ambas secciones). `test:all` 255/255; `migrate diff` sin drift. En paralelo: T2.2 y T2.6.
