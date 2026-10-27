@@ -133,6 +133,60 @@
 }
 .ds-nav__tab[aria-current="page"] { color: var(--action); }
 .ds-nav__tab[aria-current="page"] .ds-nav__txt { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.ds-nav__marca,
+.ds-nav__pie { display: none; }
+.ds-nav__accion {
+  min-height: var(--btn-h);
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-sm);
+  border: 2px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font: 700 17px var(--font-texto);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Escritorio: la barra inferior pasa a ser lateral fija (artboard Escritorio). */
+@media (min-width: 1024px) {
+  .ds-nav {
+    flex-direction: column;
+    align-items: stretch;
+    width: 264px;
+    height: 100dvh;
+    position: sticky;
+    top: 0;
+    align-self: start;
+    box-sizing: border-box;
+    padding: 28px 16px;
+    gap: 6px;
+    border-top: 0;
+    border-right: 2px solid var(--ink);
+    overflow-y: auto;
+  }
+  .ds-nav__marca { display: block; padding: 0 var(--sp-2) var(--sp-2); }
+  .ds-nav__tab {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    min-width: 0;
+    min-height: var(--btn-h);
+    padding: 0 14px;
+    border-radius: var(--r-sm);
+    font-size: 17px;
+  }
+  .ds-nav__tab[aria-current="page"] { background: var(--raised); box-shadow: inset 0 0 0 2px var(--ink); }
+  .ds-nav__pie {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-1);
+    margin-top: auto;
+    padding-top: var(--sp-2);
+    border-top: 2px dashed var(--line);
+  }
+  .ds-nav__pie .ds-themetoggle { align-self: flex-start; }
+}
 
 /* Toast */
 .ds-toast {
