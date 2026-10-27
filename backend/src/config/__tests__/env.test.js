@@ -97,6 +97,13 @@ test('PORT inválido se reporta junto con los demás problemas', () => {
   );
 });
 
+test('sin NODE_ENV avisa que el proxy no será de confianza (límite de login por IP)', () => {
+  const sin = validarEntorno({ ...BASE });
+  assert.ok(sin.avisos.some((a) => /NODE_ENV=production/.test(a) && /proxy/.test(a) && /IP/.test(a)));
+  const con = validarEntorno({ ...BASE, NODE_ENV: 'production' });
+  assert.ok(!con.avisos.some((a) => /NODE_ENV/.test(a)));
+});
+
 test('DATABASE_URL que no es Postgres falla', () => {
   assert.throws(
     () => validarEntorno({ ...BASE, DATABASE_URL: 'file:./dev.db' }),

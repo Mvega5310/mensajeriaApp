@@ -18,6 +18,12 @@ async function conServidor(fn) {
   app.get('/generico', asyncHandler(async () => {
     throw new Error('secreto interno: password=abc stack');
   }));
+  app.get('/con-status', (req, res, next) => next(Object.assign(new Error('x'), { status: 415, type: 'charset.unsupported' })));
+  app.get('/prisma', asyncHandler(async () => {
+    const e = new Error('fallo de BD'); e.name = 'PrismaClientKnownRequestError'; e.code = 'P2002';
+    e.meta = { email: 'persona@privada.com' };
+    throw e;
+  }));
   app.get('/ok', asyncHandler(async (req, res) => { res.json({ ok: true }); }));
   app.post('/eco', asyncHandler(async (req, res) => { res.json(req.body); }));
   app.use(manejadorErrores);
@@ -66,6 +72,35 @@ test('entity.too.large -> 413 CARGA_DEMASIADO_GRANDE', async () => {
     assert.equal(res.status, 413);
     assert.equal((await res.json()).code, 'CARGA_DEMASIADO_GRANDE');
   });
+});
+
+test('errores 4xx de middlewares (err.status) responden ese status con DATOS_INVALIDOS, no 500', async () => {
+  await conServidor(async (base) => {
+    const res = await fetch(`${base}/con-status`);
+    assert.equal(res.status, 415);
+    assert.equal((await res.json()).code, 'DATOS_INVALIDOS');
+    // Charset no soportado real de body-parser.
+    const r2 = await fetch(`${base}/eco`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json; charset=iso-8859-1' }, body: '{}',
+    });
+    assert.equal(r2.status, 415);
+    assert.equal((await r2.json()).code, 'DATOS_INVALIDOS');
+  });
+});
+
+test('el log del 500 no vuelca meta de Prisma (datos personales)', async () => {
+  const original = console.error;
+  const logs = [];
+  console.error = (...a) => logs.push(a);
+  try {
+    await conServidor(async (base) => {
+      assert.equal((await fetch(`${base}/prisma`)).status, 500);
+    });
+  } finally { console.error = original; }
+  const texto = JSON.stringify(logs);
+  assert.ok(!texto.includes('persona@privada.com'));
+  assert.match(texto, /PrismaClientKnownRequestError/);
+  assert.match(texto, /P2002/);
 });
 
 test('JSON inválido -> 400 DATOS_INVALIDOS', async () => {

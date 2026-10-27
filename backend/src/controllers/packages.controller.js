@@ -58,12 +58,10 @@ export async function createPrealert(req, res) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El PIN del proveedor puede tener hasta 30 caracteres.', 400);
   }
 
-  let costoServicio;
-  try {
-    costoServicio = await costoPara(categoriaPeso || 'ESTANDAR');
-  } catch {
+  if (!esCategoriaValida(categoriaPeso || 'ESTANDAR')) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
+  const costoServicio = await costoPara(categoriaPeso || 'ESTANDAR');
 
   const pkg = await prisma.$transaction((tx) => crearConEvento(tx, EVENTOS.PREALERTAR, {
     actorId: req.user.sub,

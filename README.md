@@ -325,8 +325,11 @@ tenant funciona dentro de transacciones interactivas). La pre-alerta
   borre y los fallos concurrentes cuenten todos.
 - **Límite de login:** 10 fallos por IP cada 15 min => `429 DEMASIADOS_INTENTOS`
   (con `Retry-After`). Limitador en memoria (`domain/limitador.js`, interfaz
-  `registrarFallo/estaBloqueado/limpiar`, reloj inyectable), inyectable en
-  `createApp({ limitadorLogin })`. Ver `trust proxy` en DEPLOY.md.
+  `intentar/devolver/limpiar`, reloj inyectable), inyectable en
+  `createApp({ limitadorLogin })`. `intentar(clave)` reserva el intento de forma
+  síncrona antes de cualquier `await` (una ráfaga paralela no lo evade); un login
+  exitoso llama `devolver(clave, reserva)`, que deshace solo su propia reserva y
+  nunca reinicia el contador. Ver `trust proxy` en DEPLOY.md.
 - **Bono atómico:** el descuento va en la misma transacción con
   `updateMany({ where: { cantidadUsada: { lt: cantidadTotal } } })` y se exige
   `count === 1`; dos recepciones concurrentes no gastan el mismo crédito. Si el
