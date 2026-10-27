@@ -342,6 +342,43 @@ test('C1: P1 (solo-conjunto) -> C1 (backfill normal) reutiliza y asigna todo', {
   assert.deepEqual(nulosDespues, { User: 0, Package: 0, Bono: 0, Comentario: 0 });
 });
 
+test('C3: un INSERT concurrente espera al lock y termina después, sin romper el backfill', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado(); // filas NULL + 1 operador
+
+  const orden = [];
+
+  // Backfill (toma LOCK SHARE ROW EXCLUSIVE dentro de su transacción).
+  const pBackfill = backfillConjunto({ config: configBase(), apply: true }).then((r) => {
+    orden.push('backfill');
+    return r;
+  });
+
+  // Tras un pequeño delay (para que el backfill ya tenga el lock), un INSERT
+  // concurrente de un User NULL (simula al código viejo). Debe QUEDAR ESPERANDO
+  // por el lock y resolver DESPUÉS del backfill.
+  const uid = cuid('u');
+  const pInsert = new Promise((resolve, reject) => {
+    setTimeout(() => {
+      prisma.$executeRaw`
+        INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt","conjuntoId")
+        VALUES (${uid}, ${uid + '@x.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
+      `.then(() => { orden.push('insert'); resolve(); }, reject);
+    }, 250);
+  });
+
+  const [rep] = await Promise.all([pBackfill, pInsert]);
+
+  // El backfill terminó correctamente...
+  assert.equal(rep.resultado, RESULTADO.APLICADO);
+  // ...y el insert concurrente resolvió DESPUÉS del backfill (esperó el lock).
+  assert.deepEqual(orden, ['backfill', 'insert']);
+
+  // La fila insertada quedó en NULL (la recogería C3), no rompió el backfill.
+  const fila = await prisma.$queryRawUnsafe(`SELECT "conjuntoId" FROM "User" WHERE "id" = '${uid}'`);
+  assert.equal(fila[0].conjuntoId, null);
+});
+
 test('teardown', { skip: omitir && razonSkip }, async () => {
   await limpiarTodo();
   await prisma.$disconnect();

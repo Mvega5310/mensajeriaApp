@@ -141,7 +141,7 @@ el *contract* se aplica **manualmente al final (C5)** y **no vive en
 | **P0** | Aplicar migración *expand* (`add_conjunto_multitenant`) en producción. Es **aditiva** (columnas nullable + tabla `Conjunto`); el código viejo la ignora. | Días antes | Inocua (no hace falta revertir) |
 | **P1** | Crear el `Conjunto` Ipanema **sin backfill** (`backfill-conjunto` reutiliza el conjunto si ya existe). Deja listo el `codigoInvitacion` para reimprimir el QR. | Días antes | `DELETE` del conjunto (aún sin filas asociadas) |
 | **C0** | Backup: `pg_dump` + conteos de las 4 tablas. | Día del corte | n/a |
-| **C1** | **Backfill #1** (transaccional, verificado): `UPDATE ... SET conjuntoId = <Ipanema> WHERE conjuntoId IS NULL`. | Día del corte | `UPDATE ... SET conjuntoId = NULL` (el script imprime este SQL) |
+| **C1** | **Backfill #1** (transaccional, verificado): `LOCK TABLE` de las 4 tablas + `UPDATE ... SET conjuntoId = <Ipanema> WHERE conjuntoId IS NULL`. | Día del corte | `UPDATE ... SET conjuntoId = NULL` (el script imprime este SQL) |
 | **C2** | **Merge a `main`** → Railway y Vercel despliegan el código con aislamiento. **Columnas siguen NULLABLE.** | Día del corte | Redeploy del commit anterior (la columna extra es inocua para el código viejo) |
 | **C3** | **Backfill #2** (idempotente): recoge lo que el código viejo escribió entre C1 y el fin del deploy de C2. | Tras C2 | Igual que C1 |
 | **C4** | Verificación: `0` NULL en las 4 tablas + smoke test en vivo (checklist del runbook). | Tras C3 | n/a |
@@ -177,6 +177,22 @@ request (§diseño §3.6). Tras C1, los `User` de Ipanema ya tienen `conjuntoId`
 que una sesión abierta de antes del corte sigue funcionando sin re-login. (Si por
 cualquier motivo un `User` quedara sin `conjuntoId`, el middleware **falla cerrado**
 con 401 — nunca opera sin tenant.)
+
+#### Backfill con tráfico vivo (C1/C3): el `LOCK TABLE`
+
+C1 y C3 corren **con el código viejo todavía escribiendo** (C1 antes del deploy;
+C3 durante la ventana del deploy). Si el conteo de "NULLs a asignar" se tomara
+fuera de la transacción, un `INSERT` del código viejo entre el conteo y el
+`UPDATE` (o entre el `UPDATE` y la verificación) haría que el backfill abortara
+por una verificación que ya no cuadra — un **aborto espurio** en plena noche del
+corte. Para evitarlo, el backfill, **dentro de su transacción y antes del
+`UPDATE`**, toma `LOCK TABLE "User","Package","Bono","Comentario" IN SHARE ROW
+EXCLUSIVE MODE` y recuenta los NULL ahí mismo. Ese modo de lock **permite
+lecturas** (la app sigue mostrando datos) pero **bloquea escrituras concurrentes**
+unos segundos: los escritores viejos esperan al `COMMIT` y luego insertan con
+`conjuntoId` NULL — exactamente lo que C3 recoge después. El lock se libera al
+terminar la transacción (en segundos, salvo que el `UPDATE` de `Package` con
+muchas fotos tarde; de ahí el `timeout` holgado del `$transaction`).
 
 ### Procedimientos operativos por conjunto
 

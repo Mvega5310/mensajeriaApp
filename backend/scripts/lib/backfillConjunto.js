@@ -15,6 +15,7 @@ import {
   contarAsignadasAOtroConjunto,
   contarInconsistenciasCruzadas,
   contarOperadoresDelConjunto,
+  bloquearTablasConTenant,
 } from './asignarConjuntoALegado.js';
 
 export const RESULTADO = Object.freeze({
@@ -219,26 +220,38 @@ export async function backfillConjunto({ config, apply = false, soloConjunto = f
       });
     }
 
-    // 2) Asignar conjuntoId a las filas de legado (SQL crudo acotado).
+    // 2) Bloquear las 4 tablas (SHARE ROW EXCLUSIVE): permite lecturas, bloquea
+    //    escrituras concurrentes del código viejo hasta el COMMIT/ROLLBACK. Evita
+    //    la carrera entre el conteo y el UPDATE en C1/C3 con tráfico vivo (ver
+    //    DEPLOY.md). Los escritores esperan y luego insertan con NULL, que C3
+    //    recogerá.
+    await bloquearTablasConTenant(tx);
+
+    // 2b) Recontar NULLs DENTRO de la transacción (post-lock): es la cifra
+    //     consistente contra la que se verifica, no la de los pre-chequeos
+    //     (tomada fuera de la txn, puede haber cambiado antes del lock).
+    const conteosEnTxn = await contarPorTabla(tx);
+
+    // 3) Asignar conjuntoId a las filas de legado (SQL crudo acotado).
     const afectadas = await asignarConjuntoALegado(tx, conjunto.id);
 
-    // 3) Verificaciones DENTRO de la transacción (si fallan -> throw -> rollback).
-    //    3a) filas afectadas == NULLs previos por tabla.
+    // 4) Verificaciones DENTRO de la transacción (si fallan -> throw -> rollback).
+    //    4a) filas afectadas == NULLs post-lock por tabla.
     for (const tabla of TABLAS_CON_TENANT) {
-      if (afectadas[tabla] !== conteosAntes[tabla].nulos) {
+      if (afectadas[tabla] !== conteosEnTxn[tabla].nulos) {
         throw new BackfillError(
-          `Verificación fallida en ${tabla}: afectadas=${afectadas[tabla]} != nulos previos=${conteosAntes[tabla].nulos}`
+          `Verificación fallida en ${tabla}: afectadas=${afectadas[tabla]} != nulos (post-lock)=${conteosEnTxn[tabla].nulos}`
         );
       }
     }
-    //    3b) 0 NULL en las 4 tablas.
+    //    4b) 0 NULL en las 4 tablas.
     const conteosDespues = await contarPorTabla(tx);
     for (const tabla of TABLAS_CON_TENANT) {
       if (conteosDespues[tabla].nulos !== 0) {
         throw new BackfillError(`Verificación fallida: quedan ${conteosDespues[tabla].nulos} NULL en ${tabla}`);
       }
     }
-    //    3c) integridad cruzada: paquetes/bonos/comentarios con el conjunto de su residente.
+    //    4c) integridad cruzada: paquetes/bonos/comentarios con el conjunto de su residente.
     const inconsistencias = await contarInconsistenciasCruzadas(tx);
     if (inconsistencias > 0) {
       throw new BackfillError(`Verificación fallida: ${inconsistencias} filas con conjunto distinto al de su residente`);
