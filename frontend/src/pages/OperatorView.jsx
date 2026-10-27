@@ -425,7 +425,7 @@ export default function OperatorView() {
           {repartoPaginado.items.map((pkg) => {
             const info = cobroInfo(pkg);
             return (
-            <div className="card" key={pkg.id} style={{ borderLeft: '4px solid var(--brand)', cursor: 'pointer' }}
+            <div className="card" key={pkg.id} style={{ borderLeft: '4px solid var(--lg-brand)', cursor: 'pointer' }}
               onClick={() => openDetail(pkg)}>
               <div className="card-head">
                 <div>
@@ -673,7 +673,7 @@ export default function OperatorView() {
               Comparte este código en carteleras o zonas comunes{config?.nombre ? ` de ${config.nombre}` : ''} para que los residentes se registren.
             </p>
             {qrDataUrl && (
-              <img src={qrDataUrl} alt="Código QR de registro" style={{ width: '100%', borderRadius: 12, border: '1px solid var(--line)' }} />
+              <img src={qrDataUrl} alt="Código QR de registro" style={{ width: '100%', borderRadius: 12, border: '1px solid var(--lg-line)' }} />
             )}
             {/* Código como texto, para la cartelera (además del QR). */}
             {codigoInvitacion && (
@@ -832,7 +832,7 @@ export default function OperatorView() {
               })
             )}
 
-            <form onSubmit={handleCrearBono} style={{ marginTop: 14, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+            <form onSubmit={handleCrearBono} style={{ marginTop: 14, borderTop: '1px solid var(--lg-line)', paddingTop: 14 }}>
               <p className="card-sub" style={{ marginBottom: 10 }}>Registrar bono nuevo (pago ya recibido)</p>
               <div className="field">
                 <label>Categoría de peso que cubre</label>

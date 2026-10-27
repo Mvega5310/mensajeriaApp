@@ -1,0 +1,138 @@
+/* Puertayá · sistema de diseño v3 · tokens.
+   Única fuente de colores del frontend nuevo (docs/research/colores.md).
+   Día por defecto; noche con [data-tema="noche"] en <html> (lo pone useTheme)
+   o con la clase .noche / .dia en un contenedor (vistas previas lado a lado).
+   Ningún otro archivo de src/design/ puede llevar colores en hex. */
+
+:root,
+.pt.dia {
+  /* Colores · día */
+  --bg: #F4F6F9;
+  --surface: #FFFFFF;
+  --raised: #E9EEF5;
+  --line: #C7D0DA;
+  --ink: #13294B;
+  --muted: #4A5872;
+  --action: #1E63C9;
+  --on-action: #FFFFFF;
+  --edge: #0C2E73;
+  --pin: #0C2E73;
+  --wa: #0F7A40;
+  --on-wa: #FFFFFF;
+  --gift: #C2410C;
+  --warn: #8A5A00;
+  --danger: #B42318;
+  --brand: #17B6C4;
+  --scrim: rgb(19 41 75 / 55%);
+}
+
+[data-tema="noche"],
+.pt.noche {
+  --bg: #12151B;
+  --surface: #1A1F28;
+  --raised: #232A36;
+  --line: #364152;
+  --ink: #E6EAF0;
+  --muted: #A6B0C0;
+  --action: #86A9F0;
+  --on-action: #0B1630;
+  --edge: #0B0E13;
+  --pin: #C7D0DA;
+  --wa: #3DBE7A;
+  --on-wa: #062414;
+  --gift: #F0A06A;
+  --warn: #E2B85C;
+  --danger: #F08A80;
+  --brand: #4FB8C1;
+  --scrim: rgb(0 0 0 / 60%);
+}
+
+:root {
+  /* Espacios: múltiplos de 8 */
+  --sp-1: 8px;
+  --sp-2: 16px;
+  --sp-3: 24px;
+  --sp-4: 32px;
+  --sp-5: 40px;
+  --sp-6: 48px;
+
+  /* Radios */
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 24px;
+
+  /* Medidas táctiles */
+  --tap-min: 48px;
+  --btn-h: 56px;
+  --key-h: 60px;
+  --field-h: 56px;
+
+  /* Tipografías */
+  --font-titulo: 'Archivo', system-ui, sans-serif;
+  --font-texto: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Texto: 16 px como mínimo; 14 px solo para apoyo secundario */
+  --fs-texto: 16px;
+  --fs-apoyo: 14px;
+  --fs-boton: 18px;
+
+  /* Foco: anillo sólido de 2 px */
+  --focus-w: 2px;
+  --focus-offset: 2px;
+
+  /* Sombra dura, nunca difusa */
+  --shadow-hard: 0 4px 0 var(--edge);
+
+  --t-rapida: 160ms;
+}
+
+/* Contenedor raíz de una vista con el sistema nuevo */
+.pt {
+  font-family: var(--font-texto);
+  font-size: var(--fs-texto);
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.pt .ds-titulo {
+  font-family: var(--font-titulo);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.mono,
+.pt .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Foco visible en todo control del sistema */
+.pt :focus-visible {
+  outline: var(--focus-w) solid var(--action);
+  outline-offset: var(--focus-offset);
+}
+
+.ds-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Sin movimiento si el usuario lo pide: aplica a todo el documento */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
