@@ -36,8 +36,8 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T4.2 | S | hecho | daa541c | 6 pantallas del operador en `pages/operador/`; OperatorView borrado. Probado con Playwright 390 px día/noche. Toques hasta Guardado: 3 + dígitos del apto (4 con apto de 1 dígito, 6 con 3 dígitos). Bitácora con filtros no replicada (queda CSV). |
 | T4.3 | S | hecho | d2b65a5 | Residente: /p (fragmento), /paquetes, /entrega, /avisar, /historial, /buzon, /acceso(/:token). 3 toques de WhatsApp a "Programado". CSS legado eliminado; auth migrado a tokens. Bonos del residente sin pantalla (deuda). |
 | T4.4 | H | hecho | f9d2b84 | Nav lateral ≥1024 px, Pendientes en dos columnas; sin scroll horizontal a 1280 y 390 (día/noche). El orquestador añadió "Entregar con PIN" al detalle. |
-| T4.5 | S | en curso | | |
-| T4.6 | H | pendiente | | |
+| T4.5 | S | hecho | 52a0d92 | Cola IndexedDB con Idempotency-Key; reenvío online/visibilidad/30 s con backoff; E2E: 1 solo paquete tras corte y doble reintento. Límite: la cola no distingue sesión de operador (se corrige en T4.6). |
+| T4.6 | S | en curso | | |
 | T2.8 | S | en curso | | |
 | T5.1 | S | hecho | 39d9705 | AlmacenFotos (s3/fake/legado) + PaqueteFoto; sin bucket en producción sigue en legado con aviso. |
 | T6.1 | S | pendiente | | |
@@ -72,3 +72,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T2.7 integrada, `test:all` 432/432, build verde. En curso: T4.3 y T4.5.
 - 2026-10-27: T4.3 integrada; build verde.
 - Tarea nueva **T2.8** (contratos que pidió el residente): fotos con la sesión del enlace, "recoger en portería", `transportadora` en la pre-alerta, `motivoCobro` en /mine, y pantalla de bonos del residente si `bonosHabilitados`.
+- 2026-10-27: T4.5 integrada; build verde; cola 7/7. En curso: T2.8 y T4.6 (accesibilidad + cola por operador).
