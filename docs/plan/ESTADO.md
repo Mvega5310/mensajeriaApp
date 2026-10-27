@@ -54,3 +54,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: **Revisión de fase F0/F1: PASA CON CORRECCIONES.** Sin críticos. Correcciones en curso: ráfaga de login evadía el límite (72/100 pasaban), aviso si falta NODE_ENV, contraste de bordes de controles (WCAG 1.4.11), errores 4xx de body-parser, logs sin datos personales, pruebas faltantes.
 - Deuda explícita para T4.2/T4.3: `frontend/src/index.css` legado (hex y controles <48 px) se elimina al borrar OperatorView/ResidentView.
 - Deuda para F8/legal: borrar una cuenta (derecho de supresión, Ley 1581) con `PaqueteEvento` exige definir anonimización vs purga.
+- 2026-10-27: correcciones de la revisión F0/F1 integradas (e49253e): ráfaga de login 10/50, `--line-strong` ≥3:1, errores 4xx. `test:all` 239/239, build verde. **F0 y F1 cerradas.**
