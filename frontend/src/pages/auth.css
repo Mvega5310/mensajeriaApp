@@ -1,0 +1,24 @@
+/* Pantallas de cuenta (login, registro, recuperar, términos). Solo tokens, cero hex. */
+.auth-root { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; }
+.auth-top { width: 100%; max-width: 440px; display: flex; justify-content: flex-end; padding: var(--sp-2) var(--sp-2) 0; box-sizing: border-box; }
+.auth-brand { display: flex; justify-content: center; padding: var(--sp-1) 0 0; }
+.auth-card { width: 100%; max-width: 440px; box-sizing: border-box; padding: var(--sp-3) var(--sp-2) var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2); }
+.auth-card h1 { margin: 0; font: 800 26px var(--font-titulo); letter-spacing: -0.02em; }
+.auth-card form { display: flex; flex-direction: column; gap: var(--sp-2); }
+.auth-sub { margin: 0; color: var(--muted); font-size: 17px; }
+.auth-switch { margin: 0; text-align: center; color: var(--muted); }
+.auth-switch a, .auth-card a { color: var(--ink); font-weight: 700; }
+.auth-dos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-1); }
+.auth-check { display: flex; align-items: flex-start; gap: 12px; min-height: var(--tap-min); }
+.auth-check input { width: 24px; height: 24px; flex: none; margin-top: 2px; accent-color: var(--action); }
+.auth-select { box-sizing: border-box; width: 100%; min-height: var(--field-h); padding: 0 var(--sp-2); border-radius: var(--r-sm); border: 2px solid var(--line-strong); background: var(--surface); color: var(--ink); font: 500 var(--fs-boton) var(--font-texto); }
+
+/* Términos: texto largo legible */
+.legal { max-width: 680px; margin: 0 auto; padding: var(--sp-4) var(--sp-2) 96px; box-sizing: border-box; }
+.legal-back { display: inline-flex; align-items: center; min-height: var(--tap-min); margin-bottom: var(--sp-1); color: var(--ink); font-weight: 700; }
+.legal h1 { font: 800 24px var(--font-titulo); margin: 0 0 4px; line-height: 1.3; letter-spacing: -0.02em; }
+.legal .updated { font-size: var(--fs-apoyo); color: var(--muted); margin: 0 0 var(--sp-2); }
+.legal h2 { font: 800 18px var(--font-titulo); margin: 28px 0 8px; }
+.legal p, .legal li { font-size: var(--fs-texto); line-height: 1.7; margin: 0 0 10px; }
+.legal ul { padding-left: 20px; margin: 0 0 12px; }
+.legal .callout { background: var(--surface); border: 2px solid var(--warn); border-radius: var(--r-sm); padding: 12px 14px; font-size: var(--fs-texto); margin: var(--sp-2) 0 var(--sp-3); }

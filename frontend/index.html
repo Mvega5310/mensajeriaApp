@@ -24,7 +24,6 @@
       var t = localStorage.getItem('puertaya-tema');
       if (t !== 'dia' && t !== 'noche') t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'noche' : 'dia';
       document.documentElement.setAttribute('data-tema', t);
-      document.documentElement.setAttribute('data-theme', t === 'noche' ? 'dark' : 'light');
     } catch (e) {}
   </script>
 </head>

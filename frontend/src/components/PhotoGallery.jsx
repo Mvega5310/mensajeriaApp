@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
+import { Icon } from '../design';
 import { parseFotos } from '../utils/fotos.js';
+import './photoGallery.css';
 
-// Miniaturas recortadas a 96x96 para escanear rápido; al tocar una se
-// abre en un lightbox de pantalla completa sin recorte (object-fit:
-// contain) — antes solo había una miniatura chica y recortada, sin
-// forma de verla más grande. Compartido entre el detalle del operador
-// y el del residente para que ambos vean las fotos de la misma forma.
+// Miniaturas recortadas para escanear rápido; al tocar una se abre en pantalla
+// completa sin recorte. Lo usa el detalle del operador. Solo tokens, sin emoji.
 export default function PhotoGallery({ fotoUrl }) {
   const fotos = parseFotos(fotoUrl);
-  const [abierta, setAbierta] = useState(null); // índice en el lightbox, o null si está cerrado
+  const [abierta, setAbierta] = useState(null); // índice en el visor, o null si está cerrado
 
   useEffect(() => {
     if (abierta === null) return;
@@ -24,30 +23,29 @@ export default function PhotoGallery({ fotoUrl }) {
   if (fotos.length === 0) return null;
 
   return (
-    <div className="field">
-      <label>{fotos.length > 1 ? `Fotos de evidencia (${fotos.length})` : 'Foto de evidencia'}</label>
-      <div className="photo-grid-view">
+    <div className="pg">
+      <span className="pg__rotulo">{fotos.length > 1 ? `Fotos de evidencia (${fotos.length})` : 'Foto de evidencia'}</span>
+      <div className="pg__grid">
         {fotos.map((src, i) => (
-          <button key={i} type="button" className="photo-thumb" onClick={() => setAbierta(i)}>
+          <button key={i} type="button" className="pg__thumb" onClick={() => setAbierta(i)} aria-label={`Ver foto ${i + 1}`}>
             <img src={src} alt={`Evidencia ${i + 1}`} />
           </button>
         ))}
       </div>
 
       {abierta !== null && (
-        <div className="lightbox-overlay" onClick={() => setAbierta(null)}>
-          <button type="button" className="lightbox-close" onClick={() => setAbierta(null)} aria-label="Cerrar">✕</button>
+        <div className="pg__visor pt" role="dialog" aria-modal="true" aria-label="Foto de evidencia" onClick={() => setAbierta(null)}>
+          <button type="button" className="pg__cerrar" onClick={() => setAbierta(null)} aria-label="Cerrar"><Icon nombre="cerrar" size={24} /></button>
           {fotos.length > 1 && (
             <>
-              <button type="button" className="lightbox-nav lightbox-prev" aria-label="Foto anterior"
-                onClick={(e) => { e.stopPropagation(); setAbierta((abierta - 1 + fotos.length) % fotos.length); }}>‹</button>
-              <button type="button" className="lightbox-nav lightbox-next" aria-label="Foto siguiente"
-                onClick={(e) => { e.stopPropagation(); setAbierta((abierta + 1) % fotos.length); }}>›</button>
+              <button type="button" className="pg__nav pg__nav--ant" aria-label="Foto anterior"
+                onClick={(e) => { e.stopPropagation(); setAbierta((abierta - 1 + fotos.length) % fotos.length); }}><Icon nombre="volver" size={24} trazo={2.5} /></button>
+              <button type="button" className="pg__nav pg__nav--sig" aria-label="Foto siguiente"
+                onClick={(e) => { e.stopPropagation(); setAbierta((abierta + 1) % fotos.length); }}><Icon nombre="siguiente" size={24} trazo={2.5} /></button>
             </>
           )}
-          <img src={fotos[abierta]} alt={`Evidencia ${abierta + 1} de ${fotos.length}`}
-            className="lightbox-img" onClick={(e) => e.stopPropagation()} />
-          {fotos.length > 1 && <div className="lightbox-counter">{abierta + 1} / {fotos.length}</div>}
+          <img src={fotos[abierta]} alt={`Evidencia ${abierta + 1} de ${fotos.length}`} className="pg__img" onClick={(e) => e.stopPropagation()} />
+          {fotos.length > 1 && <div className="pg__cuenta">{abierta + 1} / {fotos.length}</div>}
         </div>
       )}
     </div>

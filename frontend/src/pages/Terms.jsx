@@ -33,8 +33,8 @@ export default function Terms() {
   const marca = nombreConjunto ? `Puertaya · ${nombreConjunto}` : 'Puertaya';
 
   return (
-    <div className="legal-shell">
-      <Link to={codigo ? `/registro?c=${encodeURIComponent(codigo)}` : '/registro'} className="legal-back">← Volver al registro</Link>
+    <div className="legal">
+      <Link to={codigo ? `/registro?c=${encodeURIComponent(codigo)}` : '/registro'} className="legal-back">Volver al registro</Link>
       <h1>Términos y Condiciones y Aviso de Tratamiento de Datos Personales</h1>
       <p className="updated">Última actualización: agosto de 2026 · {marca}</p>
 
