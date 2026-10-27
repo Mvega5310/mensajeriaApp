@@ -1,12 +1,11 @@
-// Etiquetas de las categorías de peso (KAN-8, Fase D). SOLO etiquetas: los
-// montos NO viven aquí — salen de /conjunto/config (fuente única). El precio
-// que se cobra de verdad siempre lo recalcula el servidor con las tarifas del
-// conjunto.
+// Etiquetas de presentación de las categorías de peso. Los rangos de peso y
+// los montos NO viven aquí: los montos salen de /conjunto/config (tarifas) y
+// el precio que se cobra de verdad siempre lo recalcula el servidor.
 export const TIERS = [
-  { value: 'MANO', label: 'Artículo de Mano (hasta 1 kg)' },
-  { value: 'ESTANDAR', label: 'Paquete Estándar (1 a 5 kg)' },
-  { value: 'VOLUMEN', label: 'Paquete Voluminoso (5 a 15 kg)' },
-  { value: 'PESADO', label: 'Carga Especial (más de 15 kg)' },
+  { value: 'MANO', label: 'Artículo de mano' },
+  { value: 'ESTANDAR', label: 'Paquete estándar' },
+  { value: 'VOLUMEN', label: 'Paquete voluminoso' },
+  { value: 'PESADO', label: 'Carga especial' },
 ];
 
 // Combina las etiquetas con el mapa de tarifas del conjunto ({ MANO, ESTANDAR,
