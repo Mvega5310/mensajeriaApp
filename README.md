@@ -721,6 +721,50 @@ sistema de diseño (`base.css`, `pages/auth.css`, `components/photoGallery.css`)
   instrucciones de uso están en la cabecera del script; requiere un backend con base desechable.
 - **Títulos de página** por pantalla ("Recibir · Puertayá") desde `App.jsx`; ya no llevan nombre de conjunto.
 
+### Pruebas E2E (T6.1)
+
+Suite Playwright del recorrido principal en `frontend/e2e/` (`npm run e2e`, desde `frontend/`). Corre cada
+escenario en dos proyectos: `movil` (390x844) y `escritorio` (1280x800). 14 escenarios x 2 = 28 pruebas, ~40 s.
+
+**Escenarios** (`e2e/recorrido.spec.mjs`, cada uno con residente y apartamento propios; día por defecto, "noche"
+en recibir con residente y en la entrega por lote): registro con código de invitación (y código inválido);
+recibir con residente (aviso con `waUrl`, sin PIN, toques <= 3 + dígitos del apto); recibir sin dueño y asignar;
+pre-alerta del residente que se vincula por la guía (un solo paquete); cortesía en el primer paquete y tarifa en el
+segundo; residente por enlace `/p#token` (PIN visible, el hash desaparece, Pedir entrega -> franja -> "Programado")
+y "Prefiero recogerlo en portería"; entrega por lote (PIN -> Transferencia -> Entregar todo -> historial del
+residente); 5 PIN incorrectos -> 423 visible; PIN ambiguo -> chips de apartamento; acceso por enlace mágico y token
+reutilizado; enlace de WhatsApp alterado; sin señal (`setOffline`) con un solo paquete al volver. Todas las pantallas
+visitadas comprueban que no hay scroll horizontal (`sinScrollHorizontal`).
+
+**Local** (por defecto). Requiere Postgres encendido (`pg_ctlcluster 16 main start`) y el rol `puertaya_test` (el
+mismo de `backend/scripts/test-db.sh`; si no existe se crea con `TEST_DB_ADMIN_URL` o `su postgres`), `npm ci` en
+`backend/` y `frontend/` y un Chromium de Playwright (si el del paquete no está, se usa `PW_CHROMIUM_PATH` o
+`/opt/pw-browsers/chromium`; nunca se ejecuta `playwright install`). `e2e/entorno.mjs` (globalSetup/teardown):
+crea una base `puertaya_e2e_*`, `prisma migrate deploy`, `npm run seed` (conjunto `e2e`, operador
+`operador@e2e.test`), arranca el backend (`NODE_ENV=development`, correo y almacén de fotos `fake`) y `vite` en
+puertos libres (`VITE_PROXY_TARGET` apunta el proxy `/api`), y al terminar mata ambos por PID y borra la base.
+`E2E_WORKERS` cambia el paralelismo (2 por defecto).
+
+**Datos que solo llegan por correo.** No se monta ninguna ruta de prueba en el backend (cero superficie nueva en
+producción): el escenario del enlace mágico pide el enlace por la pantalla y luego inserta en la base de prueba un
+`PasswordResetToken` `ACCESO` con un token conocido (el backend solo guarda el hash); el PIN ambiguo se fuerza con
+un `UPDATE` de los PIN en la misma base.
+
+**Contra Railway** (o cualquier despliegue): con `E2E_BASE_URL` y `E2E_API_URL` definidas NO se levanta nada local.
+Variables necesarias: `E2E_OPERADOR_EMAIL`, `E2E_OPERADOR_PASSWORD` y `E2E_CODIGO_INVITACION` (código del conjunto
+de pruebas; los escenarios crean residentes `res-*@e2e.test` en él, conviene un conjunto de pruebas). Los dos
+escenarios que necesitan la base (enlace mágico y PIN ambiguo) se omiten con su razón.
+
+```bash
+cd frontend
+E2E_BASE_URL=https://web-production-2b5d05.up.railway.app \
+E2E_API_URL=https://api-production-df00.up.railway.app \
+E2E_OPERADOR_EMAIL=... E2E_OPERADOR_PASSWORD=... E2E_CODIGO_INVITACION=... npm run e2e
+```
+
+**Accesibilidad.** `npm run e2e:a11y` levanta el mismo entorno y corre `e2e/a11y.audit.mjs` (sin duplicarla) contra
+él; en modo remoto la corre contra esas URLs. Es lenta (55 pantallas x 5 variantes) y por eso no es parte de `npm run e2e`.
+
 ## Pendiente
 
 - **WhatsApp automático**: decisión consciente de no implementarlo por
