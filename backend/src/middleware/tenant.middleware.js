@@ -17,6 +17,7 @@
 // en config/tenantBootstrap.js, porque también la usa resetPassword. Ver la
 // nota de diseño y la invariante de $queryRaw en ese módulo.
 
+import { AppError, CODIGOS } from '../domain/errores.js';
 import { runWithTenant } from '../config/tenantContext.js';
 import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
 
@@ -24,7 +25,7 @@ export async function requireTenant(req, res, next) {
   const sub = req.user?.sub;
   if (!sub) {
     // No debería ocurrir si requireAuth corrió antes, pero fallamos cerrado.
-    return res.status(401).json({ error: 'No autenticado' });
+    return next(new AppError(CODIGOS.NO_AUTENTICADO, 'Inicia sesión para continuar.', 401));
   }
 
   let conjuntoId;
@@ -36,7 +37,7 @@ export async function requireTenant(req, res, next) {
 
   if (!conjuntoId) {
     // Usuario inexistente o sin conjunto backfilleado: falla cerrado.
-    return res.status(401).json({ error: 'Sesión sin conjunto válido. Inicia sesión de nuevo.' });
+    return next(new AppError(CODIGOS.SESION_INVALIDA, 'Tu sesión no está asociada a un conjunto válido. Inicia sesión de nuevo.', 401));
   }
 
   // Abre el contexto TENANT para el resto de la cadena. El role viene del JWT

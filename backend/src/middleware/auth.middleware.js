@@ -1,15 +1,16 @@
 import jwt from 'jsonwebtoken';
+import { AppError, CODIGOS } from '../domain/errores.js';
 
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'No autenticado' });
+  if (!token) return next(new AppError(CODIGOS.NO_AUTENTICADO, 'Inicia sesión para continuar.', 401));
 
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch {
-    res.status(401).json({ error: 'Token inválido o expirado' });
+    next(new AppError(CODIGOS.SESION_INVALIDA, 'Tu sesión venció. Inicia sesión de nuevo.', 401));
   }
 }
 
@@ -18,7 +19,7 @@ export function requireAuth(req, res, next) {
 export function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'No autorizado para esta acción' });
+      return next(new AppError(CODIGOS.PROHIBIDO, 'Tu cuenta no tiene permiso para esta acción.', 403));
     }
     next();
   };

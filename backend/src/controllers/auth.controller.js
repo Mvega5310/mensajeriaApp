@@ -8,6 +8,7 @@ import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
 import { PASSWORD_POLICY, PASSWORD_POLICY_MSG } from '../services/password.service.js';
 import { sendPasswordResetEmail } from '../services/email.service.js';
+import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 
 // ÚNICO punto del código autorizado a abrir el scope GLOBAL_LOOKUP
@@ -39,16 +40,16 @@ const RESET_COOLDOWN_MS = 60 * 1000; // evita reenvíos en cadena al mismo corre
 export async function register(req, res) {
   const { email, password, nombre, telefono, torre, apto, acceptedTerms, codigoInvitacion } = req.body;
   if (!email || !password || !nombre || !telefono) {
-    return res.status(400).json({ error: 'Faltan campos requeridos' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Faltan datos obligatorios. Completa correo, contraseña, nombre y teléfono.', 400);
   }
   if (!PASSWORD_POLICY.test(password)) {
-    return res.status(400).json({ error: PASSWORD_POLICY_MSG });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, PASSWORD_POLICY_MSG, 400);
   }
   // No basta con que el checkbox exista en el formulario: si alguien pega
   // directo contra la API sin aceptar, no hay cuenta. La fecha exacta
   // queda en termsAcceptedAt como constancia de la aceptación.
   if (acceptedTerms !== true) {
-    return res.status(400).json({ error: 'Debes aceptar los Términos y el Aviso de Privacidad' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Para crear tu cuenta, acepta los Términos y el Aviso de Privacidad.', 400);
   }
 
   // Flujo pre-tenant (design.md §3.4, §3.6.2): el registro ESTABLECE el tenant a
@@ -58,20 +59,20 @@ export async function register(req, res) {
   // El campo `code` estable permite que el frontend detecte este caso sin
   // depender del texto del mensaje (revisión C5).
   if (!codigoInvitacion) {
-    return res.status(400).json({ error: 'Se requiere un enlace de invitación válido', code: 'INVITACION_INVALIDA' });
+    throw new AppError(CODIGOS.INVITACION_INVALIDA, 'Necesitas el enlace de invitación de tu conjunto para registrarte. Pídelo a la administración.', 400);
   }
   // Normaliza caja y espacios para que un código tecleado a mano coincida con
   // la forma canónica persistida (revisión C5).
   const codigoNormalizado = normalizarCodigoInvitacion(codigoInvitacion);
   const conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion: codigoNormalizado } });
   if (!conjunto || !conjunto.invitacionActiva) {
-    return res.status(400).json({ error: 'Enlace de invitación inválido o vencido', code: 'INVITACION_INVALIDA' });
+    throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
   }
 
   // 2) ¿Correo ya registrado? email es @unique GLOBAL; el lookup sin sesión
   //    pasa por el único punto autorizado a resolver por email sin contexto.
   const existing = await buscarUsuarioPorEmailSinTenant(email);
-  if (existing) return res.status(409).json({ error: 'El correo ya está registrado' });
+  if (existing) throw new AppError(CODIGOS.CONFLICTO, 'Ese correo ya tiene una cuenta. Inicia sesión o usa otro correo.', 409);
 
   const passwordHash = await bcrypt.hash(password, 10);
 
@@ -99,7 +100,7 @@ export async function register(req, res) {
     // Carrera entre dos registros simultáneos con el mismo email: el @unique
     // global dispara P2002. Respondemos 409 en vez de 500.
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-      return res.status(409).json({ error: 'El correo ya está registrado' });
+      throw new AppError(CODIGOS.CONFLICTO, 'Ese correo ya tiene una cuenta. Inicia sesión o usa otro correo.', 409);
     }
     throw err;
   }
@@ -113,7 +114,7 @@ export async function login(req, res) {
   // resuelve por `sub` en cada request (§3.6).
   const user = await buscarUsuarioPorEmailSinTenant(email);
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-    return res.status(401).json({ error: 'Credenciales inválidas' });
+    throw new AppError(CODIGOS.CREDENCIALES_INVALIDAS, 'Correo o contraseña incorrectos. Revísalos e intenta de nuevo.', 401);
   }
 
   const token = jwt.sign(
@@ -132,7 +133,7 @@ const GENERIC_RESET_RESPONSE = { message: 'Si el correo existe, enviamos un enla
 
 export async function forgotPassword(req, res) {
   const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'El correo es requerido' });
+  if (!email) throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Escribe tu correo para enviarte el enlace.', 400);
 
   // Flujo sin sesión: el usuario aún no está autenticado, así que no hay
   // contexto de tenant. La búsqueda por email pasa por la única función
@@ -160,9 +161,9 @@ export async function forgotPassword(req, res) {
 
 export async function resetPassword(req, res) {
   const { token, password } = req.body;
-  if (!token || !password) return res.status(400).json({ error: 'Faltan datos' });
+  if (!token || !password) throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Faltan datos para restablecer la contraseña. Abre de nuevo el enlace del correo.', 400);
   if (!PASSWORD_POLICY.test(password)) {
-    return res.status(400).json({ error: PASSWORD_POLICY_MSG });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, PASSWORD_POLICY_MSG, 400);
   }
 
   // PasswordResetToken es un modelo SIN tenant: este findFirst no requiere
@@ -171,7 +172,7 @@ export async function resetPassword(req, res) {
   const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash } });
 
   if (!record || record.usedAt || record.expiresAt < new Date()) {
-    return res.status(400).json({ error: 'El enlace es inválido o ya venció' });
+    throw new AppError(CODIGOS.ENLACE_INVALIDO, 'El enlace no es válido o ya venció. Pide uno nuevo desde "Olvidé mi contraseña".', 400);
   }
 
   // Flujo sin sesión: no hay JWT, así que resolvemos el conjunto del dueño del
@@ -180,7 +181,7 @@ export async function resetPassword(req, res) {
   // contexto la extensión lanzaría (falla cerrado).
   const conjuntoId = await resolverConjuntoIdPorUsuario(record.userId);
   if (!conjuntoId) {
-    return res.status(400).json({ error: 'El enlace es inválido o ya venció' });
+    throw new AppError(CODIGOS.ENLACE_INVALIDO, 'El enlace no es válido o ya venció. Pide uno nuevo desde "Olvidé mi contraseña".', 400);
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -198,7 +199,7 @@ export async function resetPassword(req, res) {
 
 export async function me(req, res) {
   const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
-  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+  if (!user) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos tu usuario. Inicia sesión de nuevo.', 404);
   const { passwordHash, ...profile } = user;
   res.json(profile);
 }

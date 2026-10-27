@@ -5,6 +5,7 @@ import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
 } from '../services/email.service.js';
 import { conjuntoDelContexto, operadorDelConjuntoActual } from '../services/conjunto.service.js';
+import { AppError, CODIGOS } from '../domain/errores.js';
 import { claveApartamento } from '../services/apartamento.service.js';
 
 // La cortesía de primera entrega es por apartamento físico, no por
@@ -34,19 +35,19 @@ export async function createPrealert(req, res) {
     proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
     valorDeclarado, franjaHoraria, metodoPagoServicio, notas, pinProveedor,
   } = req.body;
-  if (!proveedor) return res.status(400).json({ error: 'El proveedor es requerido' });
+  if (!proveedor) throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Indica el proveedor del paquete.', 400);
   if (notas && notas.length > 500) {
-    return res.status(400).json({ error: 'La nota no puede pasar de 500 caracteres' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La nota puede tener hasta 500 caracteres. Acórtala e intenta de nuevo.', 400);
   }
   if (pinProveedor && pinProveedor.length > 30) {
-    return res.status(400).json({ error: 'El PIN del proveedor no puede pasar de 30 caracteres' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El PIN del proveedor puede tener hasta 30 caracteres.', 400);
   }
 
   let costoServicio;
   try {
     costoServicio = await costoPara(categoriaPeso || 'ESTANDAR');
   } catch {
-    return res.status(400).json({ error: 'Categoría de peso inválida' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
 
   const pkg = await prisma.package.create({
@@ -133,9 +134,9 @@ export async function getFoto(req, res) {
     where: { id: req.params.id },
     select: { fotoUrl: true, residenteId: true },
   });
-  if (!pkg) return res.status(404).json({ error: 'Paquete no encontrado' });
+  if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
   if (req.user.role === 'RESIDENT' && pkg.residenteId !== req.user.sub) {
-    return res.status(403).json({ error: 'No autorizado' });
+    throw new AppError(CODIGOS.PROHIBIDO, 'No tienes permiso para ver este paquete.', 403);
   }
   res.json({ fotoUrl: pkg.fotoUrl });
 }
@@ -145,7 +146,7 @@ export async function schedule(req, res) {
   const { franjaHoraria, metodoPagoServicio } = req.body;
   const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
   if (!pkg || pkg.residenteId !== req.user.sub) {
-    return res.status(404).json({ error: 'Paquete no encontrado' });
+    throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
   }
 
   const updated = await prisma.package.update({
@@ -161,16 +162,21 @@ export async function schedule(req, res) {
 export async function checkin(req, res) {
   const { categoriaPeso, fotos } = req.body;
   if (fotos && (!Array.isArray(fotos) || fotos.length > 3)) {
-    return res.status(400).json({ error: 'Máximo 3 fotos' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Puedes adjuntar hasta 3 fotos. Quita las que sobren e intenta de nuevo.', 400);
   }
 
   const actual = await prisma.package.findUnique({
     where: { id: req.params.id },
     select: { residenteId: true, residente: { select: { torre: true, apto: true } } },
   });
-  if (!actual) return res.status(404).json({ error: 'Paquete no encontrado' });
+  if (!actual) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
 
-  const costoServicio = await costoPara(categoriaPeso);
+  let costoServicio;
+  try {
+    costoServicio = await costoPara(categoriaPeso);
+  } catch {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
+  }
 
   // Si este es el primer paquete pre-alertado por cualquier cuenta de
   // este mismo apartamento físico, es la entrega de cortesía por
@@ -304,10 +310,10 @@ export async function exportCsv(req, res) {
 export async function confirmDelivery(req, res) {
   const { pin } = req.body;
   const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
-  if (!pkg) return res.status(404).json({ error: 'Paquete no encontrado' });
+  if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
 
   if (!verifyPin(pin, pkg.pin)) {
-    return res.status(400).json({ error: 'PIN incorrecto' });
+    throw new AppError(CODIGOS.PIN_INCORRECTO, 'El PIN no coincide. Pídelo de nuevo al residente e inténtalo otra vez.', 400);
   }
 
   const updated = await prisma.package.update({

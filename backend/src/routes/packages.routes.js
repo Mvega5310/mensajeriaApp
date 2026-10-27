@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { asyncHandler } from '../domain/errores.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
 import { requireTenant } from '../middleware/tenant.middleware.js';
 import {
@@ -17,16 +18,16 @@ const router = Router();
 router.use(requireAuth);
 router.use(requireTenant);
 
-router.post('/', requireRole('RESIDENT'), createPrealert);
-router.get('/mine', requireRole('RESIDENT'), listMine);
-router.patch('/:id/schedule', requireRole('RESIDENT'), schedule);
+router.post('/', requireRole('RESIDENT'), asyncHandler(createPrealert));
+router.get('/mine', requireRole('RESIDENT'), asyncHandler(listMine));
+router.patch('/:id/schedule', requireRole('RESIDENT'), asyncHandler(schedule));
 // Ambos roles pueden pedirla; getFoto() valida por dentro que un
 // residente solo vea la foto de su propio paquete.
-router.get('/:id/foto', getFoto);
+router.get('/:id/foto', asyncHandler(getFoto));
 
-router.get('/', requireRole('OPERATOR'), listAll);
-router.get('/export', requireRole('OPERATOR'), exportCsv);
-router.patch('/:id/checkin', requireRole('OPERATOR'), checkin);
-router.post('/:id/confirm-delivery', requireRole('OPERATOR'), confirmDelivery);
+router.get('/', requireRole('OPERATOR'), asyncHandler(listAll));
+router.get('/export', requireRole('OPERATOR'), asyncHandler(exportCsv));
+router.patch('/:id/checkin', requireRole('OPERATOR'), asyncHandler(checkin));
+router.post('/:id/confirm-delivery', requireRole('OPERATOR'), asyncHandler(confirmDelivery));
 
 export default router;

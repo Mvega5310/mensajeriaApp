@@ -6,6 +6,7 @@
 // mensaje. Cómo correrla en local está documentado en el README (sección
 // "Pruebas del backend").
 
+import { AppError } from '../../domain/errores.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -142,26 +143,26 @@ test('register con código válido crea el usuario en el conjunto correcto', { s
 });
 
 test('register sin código no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {
-  const res = resFake();
-  await register(reqRegistro({ email: 'nocode@itestc.local' }), res);
-  assert.equal(res.statusCode, 400);
-  assert.equal(res.body.code, 'INVITACION_INVALIDA');
+  await assert.rejects(
+    register(reqRegistro({ email: 'nocode@itestc.local' }), resFake()),
+    (e) => e instanceof AppError && e.status === 400 && e.code === 'INVITACION_INVALIDA' && !!e.message
+  );
 });
 
 test('register con código inexistente no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {
-  const res = resFake();
-  await register(reqRegistro({ email: 'badcode@itestc.local', codigoInvitacion: 'NO-EXISTE' }), res);
-  assert.equal(res.statusCode, 400);
-  assert.equal(res.body.code, 'INVITACION_INVALIDA');
+  await assert.rejects(
+    register(reqRegistro({ email: 'badcode@itestc.local', codigoInvitacion: 'NO-EXISTE' }), resFake()),
+    (e) => e instanceof AppError && e.status === 400 && e.code === 'INVITACION_INVALIDA' && !!e.message
+  );
 });
 
 test('register con código de conjunto inactivo no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {
   const inactivo = await crearConjunto('itestc-inact', 'itestc-cod-INACT', { activa: false });
   try {
-    const res = resFake();
-    await register(reqRegistro({ email: 'inact@itestc.local', codigoInvitacion: 'itestc-cod-INACT' }), res);
-    assert.equal(res.statusCode, 400);
-    assert.equal(res.body.code, 'INVITACION_INVALIDA');
+    await assert.rejects(
+      register(reqRegistro({ email: 'inact@itestc.local', codigoInvitacion: 'itestc-cod-INACT' }), resFake()),
+      (e) => e instanceof AppError && e.status === 400 && e.code === 'INVITACION_INVALIDA' && !!e.message
+    );
   } finally {
     await prisma.conjunto.deleteMany({ where: { id: inactivo.id } });
   }
@@ -169,9 +170,10 @@ test('register con código de conjunto inactivo no crea nada (400 + code INVITAC
 
 test('register con email ya existente (en otro conjunto) responde 409', { skip: omitir && razonSkip }, async () => {
   // ra@itestc.local ya existe en A. Intentar registrarlo en B -> 409.
-  const res = resFake();
-  await register(reqRegistro({ email: 'ra@itestc.local', codigoInvitacion: COD_B }), res);
-  assert.equal(res.statusCode, 409);
+  await assert.rejects(
+    register(reqRegistro({ email: 'ra@itestc.local', codigoInvitacion: COD_B }), resFake()),
+    (e) => e instanceof AppError && e.status === 409 && e.code === 'CONFLICTO'
+  );
 });
 
 test('login funciona para usuarios de dos conjuntos distintos', { skip: omitir && razonSkip }, async () => {

@@ -1,3 +1,4 @@
+import { AppError, CODIGOS } from '../domain/errores.js';
 import { prisma } from '../config/db.js';
 import { esCategoriaValida } from '../services/tariff.service.js';
 import { conjuntoDelContexto } from '../services/conjunto.service.js';
@@ -11,26 +12,26 @@ export async function create(req, res) {
   // contexto de tenant), false por defecto.
   const conjunto = await conjuntoDelContexto();
   if (!conjunto.bonosHabilitados) {
-    return res.status(403).json({ error: 'Los bonos prepago están deshabilitados por ahora' });
+    throw new AppError(CODIGOS.FUNCION_DESHABILITADA, 'Los bonos prepago no están disponibles en este conjunto por ahora.', 403);
   }
 
   const { residenteId, categoriaPeso, cantidad, precioPagado } = req.body;
 
   if (!esCategoriaValida(categoriaPeso)) {
-    return res.status(400).json({ error: 'Categoría de peso inválida' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
   const cantidadNum = Number(cantidad);
   if (!Number.isInteger(cantidadNum) || cantidadNum < 1) {
-    return res.status(400).json({ error: 'La cantidad debe ser un entero positivo' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La cantidad debe ser un número entero mayor que cero.', 400);
   }
   const precioNum = Number(precioPagado);
   if (!Number.isInteger(precioNum) || precioNum < 0) {
-    return res.status(400).json({ error: 'El precio pagado no es válido' });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El precio pagado no es válido. Escribe un valor numérico.', 400);
   }
 
   const residente = await prisma.user.findUnique({ where: { id: residenteId } });
   if (!residente || residente.role !== 'RESIDENT') {
-    return res.status(404).json({ error: 'Residente no encontrado' });
+    throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos a ese residente en tu conjunto. Revisa e intenta de nuevo.', 404);
   }
 
   const bono = await prisma.bono.create({

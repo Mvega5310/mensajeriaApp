@@ -1,12 +1,13 @@
+import { AppError, CODIGOS } from '../domain/errores.js';
 import { prisma } from '../config/db.js';
 
 const MAX_LENGTH = 1000;
 
 export async function create(req, res) {
   const mensaje = (req.body.mensaje || '').trim();
-  if (!mensaje) return res.status(400).json({ error: 'Escribe un mensaje' });
+  if (!mensaje) throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Escribe un mensaje antes de enviar.', 400);
   if (mensaje.length > MAX_LENGTH) {
-    return res.status(400).json({ error: `Máximo ${MAX_LENGTH} caracteres` });
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, `El mensaje puede tener hasta ${MAX_LENGTH} caracteres. Acórtalo e intenta de nuevo.`, 400);
   }
 
   const comentario = await prisma.comentario.create({

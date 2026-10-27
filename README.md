@@ -134,6 +134,16 @@ invitación de su conjunto (ese formulario nunca puede crear una cuenta de
 operador — el rol lo fuerza el backend). Cada residente queda asociado al
 conjunto de su código; los conjuntos están aislados entre sí.
 
+## Formato de error de la API
+
+Toda respuesta de error de la API tiene la forma `{ "code", "message", "details"? }`:
+
+- `code`: constante estable en MAYÚSCULAS (el cliente decide por ella, nunca por el texto).
+- `message`: texto en español listo para mostrar (qué pasó y qué hacer).
+- `details`: opcional, datos de apoyo.
+
+Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
+
 ## Funcionalidades
 
 **Residente**

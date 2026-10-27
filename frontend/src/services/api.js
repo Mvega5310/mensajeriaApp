@@ -20,10 +20,14 @@ export async function api(path, { method = 'GET', body } = {}) {
     if (location.pathname !== '/login') location.href = '/login';
   }
   if (!res.ok) {
-    const err = new Error(data.error || 'Error de red');
-    // Conserva el código estable de la respuesta (ej. 'INVITACION_INVALIDA')
-    // para que la UI no dependa del texto del mensaje. Sin efecto si no viene.
+    // Contrato de error de la API: { code, message, details? }. `error` es
+    // respaldo para respuestas viejas (antes de T0.2).
+    const err = new Error(data.message || data.error || 'Error de red');
+    // Conserva el código estable (ej. 'INVITACION_INVALIDA') para que la UI no
+    // dependa del texto del mensaje, y los detalles si vienen.
     if (data.code) err.code = data.code;
+    if (data.details !== undefined) err.details = data.details;
+    err.status = res.status;
     throw err;
   }
   return data;
@@ -36,7 +40,7 @@ export async function downloadFile(path, filename) {
   const res = await fetch(`${BASE_URL}${path}`, { headers: authHeaders() });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'No se pudo descargar el archivo');
+    throw new Error(data.message || data.error || 'No se pudo descargar el archivo. Intenta de nuevo.');
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);

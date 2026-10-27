@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.routes.js';
 import packagesRoutes from './routes/packages.routes.js';
 import commentsRoutes from './routes/comments.routes.js';
 import bonosRoutes from './routes/bonos.routes.js';
+import { manejadorErrores } from './domain/errores.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
 
 // Construye la app de Express SIN arrancar el servidor. index.js hace el
@@ -28,14 +29,9 @@ export function createApp() {
   app.use('/api/conjuntos', conjuntosPublicRouter); // público (config-publica?c=)
   app.use('/api/conjunto', conjuntoAuthRouter); // auth+tenant (/config)
 
-  // Sin esto, un body demasiado grande devuelve una página HTML de Express
-  // en vez de JSON, y el frontend solo puede mostrar "Error de red".
-  app.use((err, req, res, next) => {
-    if (err.type === 'entity.too.large') {
-      return res.status(413).json({ error: 'La foto es demasiado pesada. Intenta con otra.' });
-    }
-    next(err);
-  });
+  // Manejador global: TODO error sale como { code, message, details? } (ver
+  // domain/errores.js). Incluye body demasiado grande (413) y JSON inválido (400).
+  app.use(manejadorErrores);
 
   return app;
 }

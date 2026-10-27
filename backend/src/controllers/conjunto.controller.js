@@ -1,5 +1,6 @@
 // Endpoints de configuración por conjunto (KAN-8, Fase D — design.md §4.3).
 import { prisma } from '../config/db.js';
+import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
 import { soloPresentacionales, tarifasDe, conjuntoDelContexto } from '../services/conjunto.service.js';
 
@@ -9,12 +10,12 @@ import { soloPresentacionales, tarifasDe, conjuntoDelContexto } from '../service
 export async function configPublica(req, res) {
   const c = req.query.c;
   if (!c) {
-    return res.status(400).json({ error: 'Se requiere un enlace de invitación válido', code: 'INVITACION_INVALIDA' });
+    throw new AppError(CODIGOS.INVITACION_INVALIDA, 'Necesitas el enlace de invitación de tu conjunto. Pídelo a la administración.', 400);
   }
   const codigo = normalizarCodigoInvitacion(c);
   const conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion: codigo } });
   if (!conjunto || !conjunto.invitacionActiva) {
-    return res.status(400).json({ error: 'Enlace de invitación inválido o vencido', code: 'INVITACION_INVALIDA' });
+    throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
   }
   return res.json(soloPresentacionales(conjunto));
 }

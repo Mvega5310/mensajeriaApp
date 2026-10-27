@@ -3,6 +3,7 @@
 // los servicios/controladores bajo contexto para tarifas y bonos.
 // Misma GUARDA de localhost que las demás integraciones.
 
+import { AppError } from '../../domain/errores.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -114,6 +115,7 @@ test('config-publica con código inexistente -> 400 INVITACION_INVALIDA', { skip
   assert.equal(res.status, 400);
   const body = await res.json();
   assert.equal(body.code, 'INVITACION_INVALIDA');
+  assert.ok(body.message && !('error' in body), 'contrato {code,message}');
 });
 
 test('config-publica con conjunto inactivo -> 400 INVITACION_INVALIDA', { skip: omitir && razonSkip }, async () => {
@@ -166,10 +168,12 @@ test('dos conjuntos con tarifas distintas: costoPara devuelve distinto', { skip:
 test('bonosHabilitados=false (conjunto A) bloquea create de bono con 403', { skip: omitir && razonSkip }, async () => {
   // res fake mínimo
   const res = { statusCode: 200, body: undefined, status(c) { this.statusCode = c; return this; }, json(p) { this.body = p; return this; } };
-  await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () =>
-    crearBono({ body: { residenteId: 'x', categoriaPeso: 'ESTANDAR', cantidad: 3, precioPagado: 1000 } }, res)
+  await assert.rejects(
+    runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () =>
+      crearBono({ body: { residenteId: 'x', categoriaPeso: 'ESTANDAR', cantidad: 3, precioPagado: 1000 } }, res)
+    ),
+    (e) => e instanceof AppError && e.status === 403 && e.code === 'FUNCION_DESHABILITADA'
   );
-  assert.equal(res.statusCode, 403);
 });
 
 test('teardown', { skip: omitir && razonSkip }, async () => {
