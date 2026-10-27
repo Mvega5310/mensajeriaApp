@@ -44,7 +44,7 @@ if (!omitir && !process.env.JWT_SECRET) {
 let prisma, runWithTenant, register, login;
 
 // `req.app` mínimo para el límite de login (T1.4).
-const appFake = () => ({ locals: { limitadorLogin: { estaBloqueado: () => ({ bloqueado: false }), registrarFallo() {}, limpiar() {} } } });
+const appFake = () => ({ locals: { limitadorLogin: { intentar: () => ({ permitido: true, reserva: 0 }), devolver() {}, limpiar() {} } } });
 
 // Respuesta fake de Express para capturar status/json de los controladores.
 function resFake() {

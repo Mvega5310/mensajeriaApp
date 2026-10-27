@@ -187,6 +187,65 @@ test('login: el 11.º intento fallido desde la misma IP responde 429 DEMASIADOS_
   }
 });
 
+async function conAppLimitada(fn) {
+  const { crearLimitadorMemoria } = await import('../../domain/limitador.js');
+  const app2 = createApp({ limitadorLogin: crearLimitadorMemoria({ max: 10, ventanaMs: 15 * 60 * 1000 }) });
+  const srv = await new Promise((res) => { const s = app2.listen(0, () => res(s)); });
+  try { await fn(`http://127.0.0.1:${srv.address().port}/api/auth/login`); }
+  finally { await new Promise((res) => srv.close(res)); }
+}
+
+test('login: ráfaga paralela de 50 intentos fallidos deja pasar como máximo 10 (el resto 429)', { skip }, async () => {
+  await conAppLimitada(async (url) => {
+    const rs = await Promise.all(Array.from({ length: 50 }, () => fetch(url, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'op@pl.local', password: 'mala' }),
+    })));
+    const estados = rs.map((r) => r.status);
+    const noBloqueados = estados.filter((s) => s !== 429).length;
+    assert.ok(noBloqueados <= 10, `pasaron ${noBloqueados}`);
+    assert.equal(noBloqueados, 10);
+    assert.equal(estados.filter((s) => s === 401).length, 10);
+  });
+});
+
+test('login: ráfaga paralela con la contraseña CORRECTA tampoco supera 10 y los aciertos devuelven su reserva', { skip }, async () => {
+  await conAppLimitada(async (url) => {
+    const intentar = (password) => fetch(url, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'op@pl.local', password }),
+    });
+    const rs = await Promise.all(Array.from({ length: 50 }, () => intentar(PWD)));
+    // Con acierto cada reserva se devuelve, así que las peticiones que llegan escalonadas pueden pasar;
+    // lo que no puede ocurrir es nada distinto de 200/429.
+    assert.ok(rs.every((r) => r.status === 200 || r.status === 429));
+    // Los aciertos devolvieron su reserva: el cupo vuelve a estar libre...
+    assert.equal((await intentar(PWD)).status, 200);
+    // ...pero los fallos siguen contando: 10 fallos secuenciales bloquean aunque haya habido aciertos.
+    for (let i = 0; i < 10; i++) assert.equal((await intentar('mala')).status, 401);
+    assert.equal((await intentar(PWD)).status, 429);
+  });
+});
+
+test('doble entrega concurrente con PIN correcto: un 200, un 409 y un solo evento ENTREGAR', { skip }, async () => {
+  const p = await nuevoPaquete('doble-entrega');
+  const rs = await Promise.all([entregar(p.id, p.pin), entregar(p.id, p.pin)]);
+  assert.deepEqual(rs.map((r) => r.status).sort(), [200, 409]);
+  const n = await enA(() => prisma.paqueteEvento.count({ where: { paqueteId: p.id, tipo: 'ENTREGAR' } }));
+  assert.equal(n, 1);
+  assert.equal((await leer(p.id)).estado, 'ENTREGADO');
+});
+
+test('con la bandera de purga activa, un UPDATE sobre PaqueteEvento sigue fallando', { skip }, async () => {
+  const p = await nuevoPaquete('purga-update');
+  await assert.rejects(() => prisma.$transaction([
+    prisma.$executeRaw`SELECT set_config('puertaya.purga_eventos', 'on', true)`,
+    prisma.$executeRaw`UPDATE "PaqueteEvento" SET "tipo" = 'X' WHERE "paqueteId" = ${p.id}`,
+  ]), /solo inserción/);
+  const tipos = (await enA(() => prisma.paqueteEvento.findMany({ where: { paqueteId: p.id } }))).map((e) => e.tipo);
+  assert.ok(tipos.length > 0 && !tipos.includes('X'));
+});
+
 test('teardown', { skip }, async () => {
   await limpiar();
   await new Promise((res) => server.close(res));

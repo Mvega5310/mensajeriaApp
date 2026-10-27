@@ -30,6 +30,8 @@ Fecha: 2026-10-27. Se tomó esta decisión porque al usuario no le gustaron ni e
 | WhatsApp | `#0F7A40` | 5,4:1 | `#3DBE7A` |
 | Aviso (con ícono) | `#8A5A00` | 5,5:1 | `#E2B85C` |
 | Error | `#B42318` | 5,4:1 | `#F08A80` |
+| Borde de controles (`--line-strong`): inputs, celdas de PIN vacías, interruptor de tema | `#7A889D` | 3,32:1 contra fondo, 3,60:1 contra tarjeta | `#6B7890` (4,10:1 y 3,71:1) |
+| Separadores decorativos (`--line`) | `#C7D0DA` | 1,56:1 sobre tarjeta, no se usa en controles | `#364152` |
 | Marca, solo decorativo | `#17B6C4` turquesa | no se usa en texto | igual |
 
 **Qué hace que no se vea genérica:** no lleva degradados ni brillos neón. El botón principal tiene una sombra dura en azul profundo, los números van en tipografía monoespaciada como en una guía impresa y la cortesía aparece como un sello naranja inclinado. La tipografía es Atkinson Hyperlegible, pensada para baja visión, sobre una base clara y limpia.

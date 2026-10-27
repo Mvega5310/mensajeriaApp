@@ -78,9 +78,22 @@ export function manejadorErrores(err, req, res, next) {
     });
   }
 
-  // Cualquier otro error: se registra en consola y se responde genérico, sin
-  // stack ni detalles internos.
-  console.error('Error no controlado:', err);
+  // Errores 4xx de middlewares (body-parser: charset no soportado, 415, etc.):
+  // traen su propio status; se devuelve ese, nunca un 500.
+  const st = err?.status ?? err?.statusCode;
+  if (Number.isInteger(st) && st >= 400 && st < 500) {
+    return res.status(st).json({
+      code: CODIGOS.DATOS_INVALIDOS,
+      message: 'No pudimos leer los datos enviados. Revisa el formulario e intenta de nuevo.',
+    });
+  }
+
+  // Cualquier otro error: se registra y se responde genérico, sin stack ni
+  // detalles internos. No se vuelca el objeto completo: los errores de Prisma
+  // traen `meta`/parámetros que pueden contener datos personales.
+  console.error('Error no controlado:', {
+    name: err?.name, message: err?.message, code: err?.code, stack: err?.stack,
+  });
   return res.status(500).json({
     code: CODIGOS.ERROR_INTERNO,
     message: 'Algo salió mal de nuestro lado. Intenta de nuevo en unos minutos.',

@@ -11,6 +11,11 @@
   --surface: #FFFFFF;
   --raised: #E9EEF5;
   --line: #C7D0DA;
+  /* --line-strong: borde de controles (WCAG 1.4.11, >=3:1 contra --bg y --surface).
+     Luminancia relativa L = 0.2126R + 0.7152G + 0.0722B (canales sRGB linealizados);
+     contraste = (L1 + 0.05) / (L2 + 0.05).
+     #7A889D: L = 0.2418; --bg #F4F6F9 -> 3,32:1; --surface #FFFFFF -> 3,60:1. */
+  --line-strong: #7A889D;
   --ink: #13294B;
   --muted: #4A5872;
   --action: #1E63C9;
@@ -32,6 +37,8 @@
   --surface: #1A1F28;
   --raised: #232A36;
   --line: #364152;
+  /* #6B7890: L = 0.1857; --bg #12151B -> 4,10:1; --surface #1A1F28 -> 3,71:1. */
+  --line-strong: #6B7890;
   --ink: #E6EAF0;
   --muted: #A6B0C0;
   --action: #86A9F0;

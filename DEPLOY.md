@@ -149,7 +149,9 @@ Postgres (sin diferencias con `schema.prisma`).
   (`NODE_ENV=production`) la app fija `trust proxy = 1` (un solo salto: el proxy
   de Railway), de modo que la IP es la que Railway añade y un `X-Forwarded-For`
   del cliente no la falsifica. Si hubiera otro proxy delante (CDN), ajustar con
-  la variable opcional `TRUST_PROXY` (número de saltos, o `false`).
+  la variable opcional `TRUST_PROXY` (número de saltos, o `false`). **Define
+  `NODE_ENV=production` en Railway:** sin ella no se confía en el proxy y todos
+  los usuarios comparten IP para el límite de login (el arranque lo avisa en el log).
 - El limitador de login vive en memoria del proceso: se reinicia con cada
   despliegue y no se comparte entre réplicas (cambiable por Redis luego).
 

@@ -24,7 +24,8 @@ export function validarEntorno(env = process.env) {
   const problemas = [];
   const avisos = [];
 
-  const nodeEnv = leer(env, 'NODE_ENV') || 'development';
+  const nodeEnvCrudo = leer(env, 'NODE_ENV');
+  const nodeEnv = nodeEnvCrudo || 'development';
   const esProduccion = nodeEnv === 'production';
 
   // Obligatorias.
@@ -58,6 +59,9 @@ export function validarEntorno(env = process.env) {
   const jwtExpiresIn = leer(env, 'JWT_EXPIRES_IN') || '8h';
 
   // Opcionales: si faltan, la app sigue, pero se avisa en el log.
+  if (!nodeEnvCrudo) {
+    avisos.push('NODE_ENV no está definida: define NODE_ENV=production en Railway; sin él no se confía en el proxy y todos los usuarios comparten IP para el límite de login.');
+  }
   const corsOrigin = leer(env, 'CORS_ORIGIN');
   if (!corsOrigin) {
     avisos.push('CORS_ORIGIN no está definida: la API acepta peticiones desde cualquier origen. Ponla con la URL del frontend.');
