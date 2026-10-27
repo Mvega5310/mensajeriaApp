@@ -33,7 +33,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T3.2 | S | hecho | 91068de | POST /auth/enlace (200 genérico, 5/15 min) y /auth/enlace/canjear (un solo uso, atómico); PasswordResetToken.proposito RESET/ACCESO. |
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
 | T4.2 | S | hecho | daa541c | 6 pantallas del operador en `pages/operador/`; OperatorView borrado. Probado con Playwright 390 px día/noche. Toques hasta Guardado: 3 + dígitos del apto (4 con apto de 1 dígito, 6 con 3 dígitos). Bitácora con filtros no replicada (queda CSV). |
-| T4.3 | S | pendiente | | |
+| T4.3 | S | en curso | | |
 | T4.4 | H | hecho | f9d2b84 | Nav lateral ≥1024 px, Pendientes en dos columnas; sin scroll horizontal a 1280 y 390 (día/noche). El orquestador añadió "Entregar con PIN" al detalle. |
 | T4.5 | S | pendiente | | |
 | T4.6 | H | pendiente | | |
@@ -66,3 +66,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T4.2 integrada; build verde.
 - Contratos que pidió el frontend (tarea nueva **T2.7**, tras las correcciones de F2): resumen "hoy" liviano, `GET /packages/:id` para el operador, búsqueda con torre por prefijo, y bitácora filtrable.
 - 2026-10-27: T4.4 integrada; build verde.
+- 2026-10-27: correcciones de la revisión F2 integradas (cae914b): cortesía = primer paquete cobrado del apto, reservada en `CortesiaApartamento`; "T2" = "TORRE 2"; PIN fuera de las respuestas al operador; enlace `/p#token` + `POST /api/p/abrir`; JSON 1 MB general y ~9,6 MB solo en recepción/checkin; falla si Railway sin NODE_ENV. `test:all` 417/417. **F2 cerrada.** En curso: T4.3 y T2.7.
