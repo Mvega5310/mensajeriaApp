@@ -41,7 +41,8 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/api': 'http://localhost:4000',
+      // VITE_PROXY_TARGET lo usa la suite E2E (e2e/entorno.mjs) para apuntar a un backend en puerto libre.
+      '/api': process.env.VITE_PROXY_TARGET || 'http://localhost:4000',
     },
   },
 });
