@@ -16,7 +16,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 
 | Id | Modelo | Estado | Commit | Nota |
 |---|---|---|---|---|
-| T0.1 | S | en curso | | |
+| T0.1 | S | hecho | (ver log) | `npm run test:all`: 119 pass, 0 fail, 0 omitidas (base propia por ejecución; hash: git log --grep T0.1). Se corrigió el helper SQL de contractConjunto (psql). |
 | T0.2 | S | pendiente | | |
 | T0.3 | H | pendiente | | |
 | T1.1 | S | pendiente | | |

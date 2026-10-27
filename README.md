@@ -97,8 +97,16 @@ npm test                 # runner integrado de Node (node --test); NO usar
 Las pruebas **unitarias/estáticas** corren sin base de datos. Las de
 **integración** (`*.integration.test.js`) **crean y borran datos**, así que solo
 se ejecutan si `DATABASE_URL` apunta a `localhost`/`127.0.0.1`/`::1` (si no, se
-omiten con un mensaje). Con el Postgres local de Docker (arriba) más
-`npx prisma migrate deploy`, `npm test` las incluye.
+omiten con un mensaje, y `npm test` a secas las omite si no hay Postgres local).
+
+**Todas las pruebas, sin omitidas: `npm run test:all`.** Ejecuta
+`backend/scripts/test-db.sh`: crea una base propia `puertaya_test_<pid>` en el
+Postgres local (puerto 5432; el rol `puertaya_test` se crea solo), aplica el
+esquema con `prisma migrate deploy`, exporta `DATABASE_URL`, corre `node --test`
+(archivo por archivo, porque comparten esa base) y borra la base al terminar,
+incluso si fallan. Requiere `psql` y Postgres encendido; como root usa
+`su postgres`, o define `TEST_DB_ADMIN_URL` con un usuario administrador. La
+prueba de la migración contract ejecuta el SQL real con `psql`.
 
 Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 
@@ -211,11 +219,11 @@ conjunto de su código; los conjuntos están aislados entre sí.
   lo decide caso a caso; el pago pasa por fuera de la app). Cada paquete
   de esa categoría descontaría 1 crédito y quedaría en $0 hasta
   agotarse; la cortesía de primera entrega siempre tiene prioridad y no
-  gasta bono. Queda apagado con un interruptor
-  (`BONOS_HABILITADOS` en `backend/src/config/features.js` y
-  `frontend/src/utils/features.js`) hasta que haga falta manejar más de
-  un residente frecuente a la vez — activarlo es cambiar ese valor a
-  `true` en ambos archivos y desplegar, sin tocar el resto del código.
+  gasta bono. Queda apagado **por conjunto**: la única fuente es
+  `Conjunto.bonosHabilitados` (`false` por defecto). El backend lo lee del
+  conjunto del contexto y el frontend de `GET /conjunto/config`; no hay constante
+  global (la antigua `BONOS_HABILITADOS` se eliminó en KAN-8). Activarlo es
+  cambiar ese campo del conjunto, sin desplegar.
 - Recepción: hasta 3 fotos por paquete (comprimidas en el navegador antes
   de subir) y categoría real — la tarifa final se recalcula server-side.
   Solo muestra lo pre-alertado que falta recibir; apenas se hace el

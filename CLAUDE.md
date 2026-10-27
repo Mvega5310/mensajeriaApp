@@ -67,20 +67,19 @@ usuario, no opcional.
 ## Estructura
 
 ```
-backend/     # Express + Prisma — PostgreSQL en producción, SQLite solo para probar en local
+backend/     # Express + Prisma — PostgreSQL en producción y en local (SQLite ya no sirve desde KAN-8)
 frontend/    # Vite + React (PWA) — sin lógica de negocio propia, todo vía la API
 docs/        # Prototipo original, flyer de campaña, logo — referencia histórica
 ```
 
 ## Flujo de trabajo esperado en cada cambio
 
-1. **Probar en local con SQLite** antes de tocar producción:
-   - `backend/prisma/schema.prisma`: cambiar `provider` a `"sqlite"` (nunca comitear así — el commiteado siempre es `"postgresql"`).
-   - Crear `backend/.env` a partir de `.env.example` con `DATABASE_URL="file:./dev.db"` (gitignorado, no se comitea).
-   - `npx prisma db push --skip-generate && npx prisma generate && npm run seed`.
+1. **Probar en local con Postgres** antes de tocar producción (SQLite ya no sirve: la extensión de tenant usa SQL propio de Postgres):
+   - Pruebas: `cd backend && npm run test:all` — crea una base propia `puertaya_test_<pid>`, aplica `prisma migrate deploy`, corre TODAS las pruebas (integración incluida, 0 omitidas) y la borra al terminar. Requiere Postgres local encendido (`pg_ctlcluster 16 main start`). `npm test` a secas omite las de integración.
+   - Para levantar la app a mano: `backend/.env` a partir de `.env.example` con un `DATABASE_URL` de Postgres local (gitignorado), `npx prisma migrate deploy && npm run seed`. El `provider` de `schema.prisma` es siempre `"postgresql"`.
    - Si el cambio toca UI: levantar `npm run dev` en `backend/` y `frontend/`, y verificar en un navegador real — no solo `npm run build`. Playwright con Chromium ya está cacheado en esta máquina (`C:\Users\ACER\AppData\Local\ms-playwright\`); solo falta `npm install playwright@1.61.1` en el scratchpad de la sesión si no está.
-   - Limpiar al terminar: matar `nodemon`/`vite`, volver el `provider` a `"postgresql"`, borrar `backend/.env` y `backend/prisma/dev.db*`, `npx prisma generate`.
-2. **Si el cambio requiere migración de esquema**, aplicarla contra Postgres de producción vía túnel SSH de Railway — `railway run` NO funciona para esto (ver DEPLOY.md, sección "Migraciones de Postgres"). Nunca commitear migraciones generadas contra SQLite.
+   - Limpiar al terminar: matar `nodemon`/`vite`, borrar `backend/.env` y la base de desarrollo que hayas creado.
+2. **Si el cambio requiere migración de esquema**, aplicarla contra Postgres de producción vía túnel SSH de Railway — `railway run` NO funciona para esto (ver DEPLOY.md, sección "Migraciones de Postgres"). Nunca commitear migraciones generadas contra una base que no sea Postgres.
 3. **Commit + push a `develop`** (ver "Regla de ramas" arriba — nunca a `main` sin que el usuario lo pida). Nunca force-push, nunca amend de un commit ya publicado — siempre un commit nuevo.
 4. Solo cuando el usuario pida explícitamente pasar algo a producción: merge de `develop` a `main` y push. Ahí sí, **verificar en vivo** después: sondear el bundle/API de producción hasta confirmar que el deploy nuevo está activo (los hashes de archivo cambian con cada build), no asumir que terminó por el solo hecho de haber hecho push.
 5. **Actualizar README.md/DEPLOY.md** en el mismo commit (ver regla de oro arriba), sea en `develop` o al mergear a `main`.

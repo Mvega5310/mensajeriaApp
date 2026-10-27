@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,9 +61,15 @@ async function sembrarBackfilleado() {
   return { conj, uid };
 }
 
-// Ejecuta un script SQL (con BEGIN/COMMIT y DO $$) como una sola sentencia.
+// Ejecuta un script SQL (con BEGIN/COMMIT y DO $$) tal como lo corre el runbook:
+// con psql. Prisma ($executeRawUnsafe) NO sirve aquí: usa sentencias preparadas
+// y Postgres rechaza varios comandos en una ("cannot insert multiple commands").
+// ON_ERROR_STOP aborta en el primer error; al cerrarse la sesión, Postgres revierte
+// la transacción abierta (igual que el guard del script real).
 async function ejecutarScript(sql) {
-  await prisma.$executeRawUnsafe(sql);
+  const r = spawnSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-q'], { input: sql, encoding: 'utf8' });
+  if (r.error) throw r.error;
+  if (r.status !== 0) throw new Error(r.stderr || `psql salió con código ${r.status}`);
 }
 
 test('setup', { skip: omitir && razonSkip }, async () => {
@@ -87,13 +94,13 @@ test('contract: aplica sobre dataset backfilleado y endurece el esquema', { skip
       INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt")
       VALUES (${uid}, ${uid + '@x.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW())
     `,
-    /not-null|null value/i
+    /23502|not-null|null value/i
   );
 
   // (b) borrar un conjunto con datos FALLA (RESTRICT).
   await assert.rejects(
     prisma.$executeRaw`DELETE FROM "Conjunto" WHERE "id" = ${conj.id}`,
-    /violates foreign key|restrict/i
+    /23503|23001|violates foreign key|restrict/i
   );
 });
 

@@ -9,6 +9,7 @@
     "start": "prisma migrate deploy && node src/index.js",
     "prisma:migrate": "prisma migrate dev",
     "test": "node --test",
+    "test:all": "bash scripts/test-db.sh",
     "seed": "node prisma/seed.js",
     "alta-conjunto": "node scripts/altaConjunto.js",
     "backfill-conjunto": "node scripts/backfillConjunto.js"
