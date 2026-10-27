@@ -596,8 +596,29 @@ Métodos: `avisarLlegada({ residente, paquete, conjunto, aviso })`,
   `escaparHtml`; el nombre del conjunto sale de `Conjunto`, no del código;
   español, tuteo, sin emoji ni exclamaciones.
 - `backendSinFijos.test.js` falla si "Ipanema" aparece en `backend/src`.
-- El armado de `wa.me` del frontend (`frontend/src/utils/whatsapp.js`, usado en
-  `OperatorView.jsx`) se deja para T4.2, que rehace las pantallas.
+- El armado de `wa.me` del frontend (`frontend/src/utils/whatsapp.js`) lo usa el
+  buzón del operador; el aviso de llegada usa `aviso.waUrl` del backend.
+
+### Pantallas del operador (T4.2)
+
+`OperatorView.jsx` se borró. El login del operador aterriza en `/op/recibir`
+(`/` redirige según el rol). Cada pantalla vive en `frontend/src/pages/operador/`
+(≤ 200 líneas) con su hook de datos en `frontend/src/hooks/operador/`:
+
+| Ruta | Pantalla | Qué hace |
+|---|---|---|
+| `/op/recibir` | Recibir | Teclado + "Torre", búsqueda con debounce (`/residentes/buscar`), "No sé de quién es" (sin dueño), contador "Hoy: N · M por entregar". |
+| `/op/recibir/:residenteId` | Peso | 4 tiles con la tarifa del conjunto, foto opcional (`maxFotos`, `utils/image.js`), "+ Guía", **Guardar** (`POST /packages/recepcion` con `Idempotency-Key`). `residenteId = sin-dueno` para el flujo sin dueño. |
+| `/op/guardado/:id` | Guardado | Resumen, `motivoCobro` (sello de cortesía), vista previa del aviso y **Avisar por WhatsApp** (`aviso.waUrl`). |
+| `/op/entregar` | Entregar | PIN de 4 dígitos; verifica solo (`/entregas/verificar-pin`); `PIN_AMBIGUO` muestra chips de apartamento. |
+| `/op/entregar/lote` | Cobrar | Lote, total, Efectivo/Transferencia (de `metodosPago`) y **Entregar todo** (`/entregas/confirmar`). El `tokenEntrega` vive solo en memoria del módulo. |
+| `/op/pendientes` | Pendientes | Buscador, "Sin asignar" (Asignar → `PATCH /packages/:id/asignar`), "Por entregar" por apartamento (detalle con fotos y bonos si `bonosHabilitados`), avisos de residentes. "Más": tema, exportar CSV, buzón de comentarios, QR de invitación, salir. |
+
+Recibir con un residente toma 4 toques cuando el apartamento tiene un solo
+dígito (dígito → sugerencia → tamaño → Guardar); cada dígito extra suma un toque.
+Detalles: con torre el backend compara el apartamento exacto (sin prefijo);
+`api()` acepta `headers` y `sinCierreDeSesion` (un 401 de `/entregas/confirmar`
+puede ser del token de entrega, no de la sesión).
 
 ## Pendiente
 

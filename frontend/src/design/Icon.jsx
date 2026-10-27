@@ -1,6 +1,13 @@
 // Íconos de trazo, inline, decorativos (aria-hidden). Sin emoji.
 const PATHS = {
   volver: <path d="M15 6l-6 6 6 6" />,
+  siguiente: <path d="M9 6l6 6-6 6" />,
+  lupa: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-4-4" />
+    </>
+  ),
   borrar: <path d="M21 5H9l-6 7 6 7h12zM12 9l6 6M18 9l-6 6" />,
   cerrar: <path d="M6 6l12 12M18 6L6 18" />,
   recibir: <path d="M3 8l9-5 9 5v10l-9 5-9-5zM3 8l9 5 9-5M12 13v10" />,
