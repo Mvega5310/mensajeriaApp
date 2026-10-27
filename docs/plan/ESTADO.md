@@ -6,17 +6,17 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 
 | Id | Estado |
 |---|---|
-| D1 Enlace de WhatsApp muestra el PIN sin contraseña | por defecto: sí (sin confirmar) |
-| D2 Estado SIN_ASIGNAR y custodia de 30 días | por defecto: sí (sin confirmar) |
-| D3 Correo automático de llegada | por defecto: sí (sin confirmar) |
-| D4 Fotos en bucket de Railway | por defecto: sí (sin confirmar) |
-| D5 Paleta de marca v3 | por defecto: sí (sin confirmar) |
+| D1 Enlace de WhatsApp muestra el PIN sin contraseña | sí (por defecto; el usuario ordenó iniciar el 2026-10-27) |
+| D2 Estado SIN_ASIGNAR y custodia de 30 días | sí (por defecto; el usuario ordenó iniciar el 2026-10-27) |
+| D3 Correo automático de llegada | sí (por defecto; el usuario ordenó iniciar el 2026-10-27) |
+| D4 Fotos en bucket de Railway | sí (por defecto; el usuario ordenó iniciar el 2026-10-27) |
+| D5 Paleta de marca v3 | sí (por defecto; el usuario ordenó iniciar el 2026-10-27) |
 
 ## Tareas
 
 | Id | Modelo | Estado | Commit | Nota |
 |---|---|---|---|---|
-| T0.1 | S | pendiente | | |
+| T0.1 | S | en curso | | |
 | T0.2 | S | pendiente | | |
 | T0.3 | H | pendiente | | |
 | T1.1 | S | pendiente | | |
@@ -45,3 +45,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 ## Bitácora del orquestador
 
 - 2026-10-27: investigación, diagnóstico, diseño (12 artboards) y plan listos.
+- 2026-10-27: paleta v3 + modo noche grafito aprobados; arranca F0.
