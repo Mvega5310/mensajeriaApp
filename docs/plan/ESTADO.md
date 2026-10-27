@@ -22,7 +22,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T1.1 | S | hecho | 62f86a8 | 42 combinaciones probadas; TRANSICION_INVALIDA 409. Nota para T1.3: checkin/schedule/confirmDelivery quedarán restringidos. |
 | T1.2 | S | hecho | 455a096 | `domain/cobro.js`; primera entrega por apartamento físico (por createdAt); precedencia cortesía > bono > tarifa. |
 | T1.3 | S | hecho | 6075b49 | PaqueteEvento solo-inserción (trigger); aplicarEvento con updateMany condicional; bono atómico, sin crédito → TARIFA. |
-| T1.4 | S | en curso | | |
+| T1.4 | S | hecho | 41f6159 | PIN: 5 fallos → 423 por 15 min (contador fuera de la tx). Login: 10/IP/15 min → 429; trust proxy=1 en producción. |
 | T2.1 | S | en curso | | |
 | T2.2 | S | pendiente | | |
 | T2.3 | S | pendiente | | |
@@ -50,3 +50,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T0.3, T1.1 y T1.2 integradas; `test:all` 198/198. F0 cerrada. Arranca T1.3.
 - 2026-10-27: T4.1 integrada, build verde.
 - 2026-10-27: T1.3 integrada, `test:all` 208/208. En paralelo: T1.4 y T2.1.
+- 2026-10-27: T1.4 integrada, `test:all` 229/229. F1 completa → revisión de fase en curso.
