@@ -51,3 +51,6 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T4.1 integrada, build verde.
 - 2026-10-27: T1.3 integrada, `test:all` 208/208. En paralelo: T1.4 y T2.1.
 - 2026-10-27: T1.4 integrada, `test:all` 229/229. F1 completa → revisión de fase en curso.
+- 2026-10-27: **Revisión de fase F0/F1: PASA CON CORRECCIONES.** Sin críticos. Correcciones en curso: ráfaga de login evadía el límite (72/100 pasaban), aviso si falta NODE_ENV, contraste de bordes de controles (WCAG 1.4.11), errores 4xx de body-parser, logs sin datos personales, pruebas faltantes.
+- Deuda explícita para T4.2/T4.3: `frontend/src/index.css` legado (hex y controles <48 px) se elimina al borrar OperatorView/ResidentView.
+- Deuda para F8/legal: borrar una cuenta (derecho de supresión, Ley 1581) con `PaqueteEvento` exige definir anonimización vs purga.
