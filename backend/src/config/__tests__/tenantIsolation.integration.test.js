@@ -20,6 +20,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { purgarEventos } from '../../../test-support/purgarEventos.js';
 
 // GUARDA DE SEGURIDAD: esta prueba CREA y BORRA datos. db.js carga dotenv, así
 // que sin protección podría correr contra la base configurada en .env (incluida
@@ -91,6 +92,7 @@ async function limpiar() {
     where: { slug: { in: [SLUG_A, SLUG_B] } },
   });
   for (const c of conjuntos) {
+    await purgarEventos(prisma, c.id);
     // Dentro del contexto del conjunto, borrar sus filas hijas.
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.package.deleteMany({});

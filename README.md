@@ -131,6 +131,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
+| `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
 `npm install`, que lo dispara) aunque no toquen la base de datos.
@@ -149,7 +150,7 @@ Toda respuesta de error de la API tiene la forma `{ "code", "message", "details"
 - `message`: texto en español listo para mostrar (qué pasó y qué hacer).
 - `details`: opcional, datos de apoyo.
 
-Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
+Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `TRANSICION_INVALIDA`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
 
 ## Funcionalidades
 
@@ -296,6 +297,31 @@ Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION
   ~1.7MB), lo que sobrecargaba el servidor en producción — reinicios
   frecuentes del backend y la app "poniéndose oscura"/quedándose sin
   responder en el celular.
+
+### Estados del paquete y bitácora de eventos (T1.3)
+
+Todo cambio de estado pasa por `services/paquete.service.js#aplicarEvento`, que
+valida la transición con la máquina pura (`domain/paquete.machine.js`; si no
+aplica responde `409 TRANSICION_INVALIDA`), actualiza el paquete y escribe un
+`PaqueteEvento` (`tipo`, `deEstado`, `aEstado`, `actorId`, `datos`, `creadoEn`) en
+la misma transacción (`prisma.$transaction` del cliente extendido: la extensión de
+tenant funciona dentro de transacciones interactivas). La pre-alerta
+(`POST /packages`) registra `PREALERTAR` con `deEstado` nulo.
+
+- `PATCH /packages/:id/checkin` = `RECIBIR` (solo desde PREALERTADO); `PATCH
+  /packages/:id/schedule` = `PROGRAMAR` (desde EN_RECEPCION/PROGRAMADO);
+  `POST /packages/:id/confirm-delivery` = `ENTREGAR` (desde EN_RECEPCION/PROGRAMADO).
+  En la entrega la transición se valida **antes** que el PIN, así un paquete no
+  entregable no gasta intentos de PIN.
+- **Bono atómico:** el descuento va en la misma transacción con
+  `updateMany({ where: { cantidadUsada: { lt: cantidadTotal } } })` y se exige
+  `count === 1`; dos recepciones concurrentes no gastan el mismo crédito. Si el
+  crédito se agota en la carrera, el paquete se cobra como `TARIFA` (no se
+  bloquea al operador) y el evento `RECIBIR` lo deja registrado en `datos`. Un
+  re-checkin da 409 y no descuenta de nuevo.
+- `PaqueteEvento` es **solo inserción**: un trigger Postgres rechaza `UPDATE` y
+  `DELETE` (la FK a `User` es `RESTRICT`). Lleva `conjuntoId` y está en
+  `MODELOS_CON_TENANT`. Las pruebas lo limpian con `test-support/purgarEventos.js`.
 
 ## Pendiente
 

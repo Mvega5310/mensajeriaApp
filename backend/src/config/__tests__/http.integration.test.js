@@ -7,6 +7,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { purgarEventos } from '../../../test-support/purgarEventos.js';
 
 function hostDeDatabaseUrl(url) {
   if (!url) return null;
@@ -62,6 +63,7 @@ async function crearConjunto(slug, codigo) {
 async function limpiar() {
   const conjuntos = await prisma.conjunto.findMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
   for (const c of conjuntos) {
+    await purgarEventos(prisma, c.id);
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.package.deleteMany({});
       await prisma.user.deleteMany({});
