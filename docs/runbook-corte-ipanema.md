@@ -199,9 +199,16 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   `NOT NULL` y FKs `RESTRICT`.
 - **Después — orden EXACTO del registro (no invertir):**
   1. **Aplicar el SQL manual** (el paso anterior) contra producción por el túnel.
-  2. **`npx prisma migrate resolve --applied <nombre>`** contra producción (por el
-     túnel), para marcar la migración como ya aplicada en el historial.
-  3. **Solo entonces** `commit` + `push` con la carpeta `prisma/migrations/<nombre>/`
+  2. **Crear la carpeta de migración LOCALMENTE** `prisma/migrations/<timestamp>_contract_conjunto/`
+     con un `migration.sql` **idéntico** al SQL aplicado a mano en el paso 1 (y su
+     entrada en `migration_lock.toml` si falta). `prisma migrate resolve --applied`
+     **necesita que esa carpeta exista en el disco** desde donde se corre el
+     comando — aunque todavía NO esté commiteada/subida: Prisma lee el nombre de
+     migración del árbol local, no del repo remoto.
+  3. **`npx prisma migrate resolve --applied <timestamp>_contract_conjunto`**
+     contra producción (por el túnel), para marcar esa migración como ya aplicada
+     en el historial `_prisma_migrations`.
+  4. **Solo entonces** `commit` + `push` con esa carpeta `prisma/migrations/<...>/`
      y `schema.prisma` en `conjuntoId String` (relación obligatoria).
 
   > **Por qué este orden:** si la carpeta llega a `main` **antes** del `resolve`,

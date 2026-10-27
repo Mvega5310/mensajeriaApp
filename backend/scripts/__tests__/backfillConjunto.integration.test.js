@@ -346,37 +346,57 @@ test('C3: un INSERT concurrente espera al lock y termina después, sin romper el
   await limpiarTodo();
   await sembrarLegado(); // filas NULL + 1 operador
 
+  // Trigger temporal que hace DORMIR el UPDATE de "User" ~2s. Como el backfill
+  // ya tomó el LOCK TABLE antes del UPDATE, durante ese sleep SOSTIENE el lock
+  // de forma determinista (no depende de que haya muchos datos). Así el INSERT
+  // concurrente choca de verdad contra el lock. Sin este sleep, con pocos datos
+  // el backfill terminaría antes de que el insert llegue a competir y la prueba
+  // no probaría nada (mismo motivo por el que 5b usa un trigger).
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE FUNCTION itestbf_sleep() RETURNS trigger AS $$
+    BEGIN PERFORM pg_sleep(2); RETURN NEW; END;
+    $$ LANGUAGE plpgsql;
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER itestbf_sleep_trg BEFORE UPDATE ON "User"
+    FOR EACH ROW EXECUTE FUNCTION itestbf_sleep();
+  `);
+
   const orden = [];
-
-  // Backfill (toma LOCK SHARE ROW EXCLUSIVE dentro de su transacción).
-  const pBackfill = backfillConjunto({ config: configBase(), apply: true }).then((r) => {
-    orden.push('backfill');
-    return r;
-  });
-
-  // Tras un pequeño delay (para que el backfill ya tenga el lock), un INSERT
-  // concurrente de un User NULL (simula al código viejo). Debe QUEDAR ESPERANDO
-  // por el lock y resolver DESPUÉS del backfill.
   const uid = cuid('u');
-  const pInsert = new Promise((resolve, reject) => {
-    setTimeout(() => {
-      prisma.$executeRaw`
-        INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt","conjuntoId")
-        VALUES (${uid}, ${uid + '@x.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
-      `.then(() => { orden.push('insert'); resolve(); }, reject);
-    }, 250);
-  });
+  try {
+    // Backfill (toma el lock y luego duerme en el UPDATE de User sosteniéndolo).
+    const pBackfill = backfillConjunto({ config: configBase(), apply: true }).then((r) => {
+      orden.push('backfill');
+      return r;
+    });
 
-  const [rep] = await Promise.all([pBackfill, pInsert]);
+    // Tras 500ms (el backfill ya tiene el lock y está dormido), un INSERT
+    // concurrente de User NULL (código viejo). Debe ESPERAR el lock y resolver
+    // DESPUÉS del backfill. Se usa otra conexión ($executeRawUnsafe del cliente
+    // global; si el pool serializa, ver nota al pie).
+    const pInsert = new Promise((resolve, reject) => {
+      setTimeout(() => {
+        prisma.$executeRaw`
+          INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt","conjuntoId")
+          VALUES (${uid}, ${uid + '@x.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
+        `.then(() => { orden.push('insert'); resolve(); }, reject);
+      }, 500);
+    });
 
-  // El backfill terminó correctamente...
-  assert.equal(rep.resultado, RESULTADO.APLICADO);
-  // ...y el insert concurrente resolvió DESPUÉS del backfill (esperó el lock).
-  assert.deepEqual(orden, ['backfill', 'insert']);
+    const [rep] = await Promise.all([pBackfill, pInsert]);
 
-  // La fila insertada quedó en NULL (la recogería C3), no rompió el backfill.
-  const fila = await prisma.$queryRawUnsafe(`SELECT "conjuntoId" FROM "User" WHERE "id" = '${uid}'`);
-  assert.equal(fila[0].conjuntoId, null);
+    assert.equal(rep.resultado, RESULTADO.APLICADO);
+    // El insert resolvió DESPUÉS del backfill: esperó el lock (no se coló).
+    assert.deepEqual(orden, ['backfill', 'insert']);
+
+    // La fila insertada quedó en NULL (la recogería C3), no rompió el backfill.
+    const fila = await prisma.$queryRawUnsafe(`SELECT "conjuntoId" FROM "User" WHERE "id" = '${uid}'`);
+    assert.equal(fila[0].conjuntoId, null);
+  } finally {
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS itestbf_sleep_trg ON "User"`);
+    await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS itestbf_sleep()`);
+  }
 });
 
 test('teardown', { skip: omitir && razonSkip }, async () => {

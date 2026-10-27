@@ -194,6 +194,13 @@ unos segundos: los escritores viejos esperan al `COMMIT` y luego insertan con
 terminar la transacción (en segundos, salvo que el `UPDATE` de `Package` con
 muchas fotos tarde; de ahí el `timeout` holgado del `$transaction`).
 
+Además, antes del `LOCK TABLE` el backfill fija `SET LOCAL lock_timeout = '10s'`:
+si una **transacción vieja** tuviera sostenido un lock incompatible, el backfill
+**aborta a los 10s** (y revierte, sin dejar nada escrito) en vez de quedarse
+esperando indefinidamente y **encolar detrás las escrituras de la app** en
+producción. Un abort así es recuperable: se investiga qué transacción quedó
+colgada y se reintenta el backfill (es idempotente).
+
 ### Procedimientos operativos por conjunto
 
 > El multi-conjunto aún no está en producción; estos procedimientos aplican una

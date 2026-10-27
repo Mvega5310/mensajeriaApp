@@ -101,6 +101,10 @@ export async function contarAsignadasAOtroConjunto(tx, conjuntoId) {
  * @param {import('@prisma/client').Prisma.TransactionClient} tx
  */
 export async function bloquearTablasConTenant(tx) {
+  // lock_timeout acotado (SET LOCAL: solo esta transacción): si una transacción
+  // vieja sostiene un lock incompatible, el backfill ABORTA a los 10s en vez de
+  // quedarse esperando y encolar detrás las escrituras de la app en producción.
+  await tx.$executeRaw`SET LOCAL lock_timeout = '10s'`;
   // Un solo LOCK con las 4 tablas; literal fijo, sin interpolación de entrada.
   await tx.$executeRaw`LOCK TABLE "User", "Package", "Bono", "Comentario" IN SHARE ROW EXCLUSIVE MODE`;
 }
