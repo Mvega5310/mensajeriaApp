@@ -6,13 +6,10 @@
 
 import { conjuntoDelContexto, tarifasDe } from './conjunto.service.js';
 
-// Categorías válidas (sin montos): sirve para validar la categoría sin exponer
-// ni duplicar tarifas.
-export const CATEGORIAS_VALIDAS = Object.freeze(['MANO', 'ESTANDAR', 'VOLUMEN', 'PESADO']);
-
-export function esCategoriaValida(categoriaPeso) {
-  return CATEGORIAS_VALIDAS.includes(categoriaPeso);
-}
+// Categorías válidas (sin montos): viven en domain/cobro.js (T1.2); se reexportan
+// aquí para no tocar a quienes ya las importan de este servicio.
+import { CATEGORIAS_VALIDAS, esCategoriaValida } from '../domain/cobro.js';
+export { CATEGORIAS_VALIDAS, esCategoriaValida };
 
 /**
  * Costo del servicio para una categoría, según las tarifas del conjunto ACTIVO.

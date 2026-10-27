@@ -4,9 +4,10 @@ import { costoPara } from '../services/tariff.service.js';
 import {
   sendNewPackageOperatorEmail, sendPrealertConfirmationEmail, sendDeliveryThanksEmail,
 } from '../services/email.service.js';
-import { conjuntoDelContexto, operadorDelConjuntoActual } from '../services/conjunto.service.js';
+import { conjuntoDelContexto, operadorDelConjuntoActual, tarifasDe } from '../services/conjunto.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { claveApartamento } from '../services/apartamento.service.js';
+import { esPrimeraEntrega, calcularCobro, esCategoriaValida } from '../domain/cobro.js';
 
 // La cortesía de primera entrega es por apartamento físico, no por
 // cuenta — varias personas del mismo apto pueden registrarse con
@@ -16,6 +17,18 @@ import { claveApartamento } from '../services/apartamento.service.js';
 // cuenta también incompleta, como si fueran el mismo apartamento).
 function claveDeGrupo(residenteId, torre, apto) {
   return claveApartamento(torre, apto) || `cuenta:${residenteId}`;
+}
+
+// Agrupa los createdAt por apartamento físico (ver claveDeGrupo) para
+// alimentar esPrimeraEntrega() en los listados.
+function createdAtPorGrupo(paquetes) {
+  const grupos = new Map();
+  for (const p of paquetes) {
+    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
+    if (!grupos.has(clave)) grupos.set(clave, []);
+    grupos.get(clave).push(p.createdAt);
+  }
+  return grupos;
 }
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
@@ -110,18 +123,13 @@ export async function listAll(req, res) {
   // cuenta — ver claveDeGrupo) es la entrega de cortesía por afiliación
   // (ver flyer de campaña) — se marca aquí para que el operador vea de
   // un vistazo a quién no debe cobrarle.
-  const primeraFechaPorGrupo = new Map();
-  for (const p of packages) {
-    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
-    const actual = primeraFechaPorGrupo.get(clave);
-    if (!actual || p.createdAt < actual) primeraFechaPorGrupo.set(clave, p.createdAt);
-  }
+  const grupos = createdAtPorGrupo(packages);
 
   res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => {
     const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
     return {
       ...p,
-      esPrimeraEntrega: primeraFechaPorGrupo.get(clave).getTime() === p.createdAt.getTime(),
+      esPrimeraEntrega: esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) }),
     };
   }));
 }
@@ -167,16 +175,16 @@ export async function checkin(req, res) {
 
   const actual = await prisma.package.findUnique({
     where: { id: req.params.id },
-    select: { residenteId: true, residente: { select: { torre: true, apto: true } } },
+    select: { residenteId: true, createdAt: true, residente: { select: { torre: true, apto: true } } },
   });
   if (!actual) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
 
-  let costoServicio;
-  try {
-    costoServicio = await costoPara(categoriaPeso);
-  } catch {
+  // Se valida antes de consultar bonos (categoriaPeso es un enum en la base);
+  // calcularCobro() la vuelve a validar como defensa.
+  if (!esCategoriaValida(categoriaPeso)) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
+  const conjunto = await conjuntoDelContexto();
 
   // Si este es el primer paquete pre-alertado por cualquier cuenta de
   // este mismo apartamento físico, es la entrega de cortesía por
@@ -199,31 +207,43 @@ export async function checkin(req, res) {
   const primerPaquete = await prisma.package.findFirst({
     where: { residenteId: { in: idsRelevantes } },
     orderBy: { createdAt: 'asc' },
-    select: { id: true },
+    select: { createdAt: true },
   });
-  const esPrimeraEntrega = primerPaquete?.id === req.params.id;
+  // La regla vive en domain/cobro.js; aquí solo se leen los datos.
+  const primera = esPrimeraEntrega({
+    createdAt: actual.createdAt,
+    createdAtDelApto: primerPaquete ? [primerPaquete.createdAt] : [],
+  });
 
   // Si no es la cortesía de bienvenida, se descuenta de un bono prepago
   // activo en esta misma categoría de peso (el más antiguo primero) — un
   // bono de otra categoría no aplica aquí (ver Bono en schema.prisma).
   let bono = null;
-  const { bonosHabilitados } = await conjuntoDelContexto();
-  if (!esPrimeraEntrega && bonosHabilitados) {
+  if (!primera && conjunto.bonosHabilitados) {
     const bonos = await prisma.bono.findMany({
       where: { residenteId: actual.residenteId, categoriaPeso },
       orderBy: { createdAt: 'asc' },
     });
     bono = bonos.find((b) => b.cantidadUsada < b.cantidadTotal) || null;
-    if (bono) {
-      await prisma.bono.update({ where: { id: bono.id }, data: { cantidadUsada: { increment: 1 } } });
-    }
+  }
+  const cobro = calcularCobro({
+    tarifas: tarifasDe(conjunto),
+    categoria: categoriaPeso,
+    esPrimeraEntrega: primera,
+    bonosHabilitados: conjunto.bonosHabilitados,
+    creditosBono: bono ? bono.cantidadTotal - bono.cantidadUsada : 0,
+  });
+  if (cobro.consumeBono) {
+    await prisma.bono.update({ where: { id: bono.id }, data: { cantidadUsada: { increment: 1 } } });
+  } else {
+    bono = null;
   }
 
   const pkg = await prisma.package.update({
     where: { id: req.params.id },
     data: {
       categoriaPeso,
-      costoServicio: (esPrimeraEntrega || bono) ? 0 : costoServicio,
+      costoServicio: cobro.monto,
       bonoId: bono?.id || null,
       fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
       estado: 'EN_RECEPCION',
@@ -232,7 +252,7 @@ export async function checkin(req, res) {
   res.json({
     ...pkg,
     pin: undefined,
-    esPrimeraEntrega,
+    esPrimeraEntrega: primera,
     bonoAplicado: bono ? { id: bono.id, quedan: bono.cantidadTotal - bono.cantidadUsada - 1 } : null,
   });
 }
@@ -277,17 +297,12 @@ export async function exportCsv(req, res) {
   const todos = await prisma.package.findMany({
     select: { id: true, createdAt: true, residenteId: true, residente: { select: { torre: true, apto: true } } },
   });
-  const primeraFechaPorGrupo = new Map();
-  for (const p of todos) {
-    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
-    const actual = primeraFechaPorGrupo.get(clave);
-    if (!actual || p.createdAt < actual) primeraFechaPorGrupo.set(clave, p.createdAt);
-  }
+  const grupos = createdAtPorGrupo(todos);
 
   const rows = packages.map((p) => {
     const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
-    const esPrimeraEntrega = primeraFechaPorGrupo.get(clave)?.getTime() === p.createdAt.getTime();
-    const motivoGratis = esPrimeraEntrega ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
+    const primera = esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) });
+    const motivoGratis = primera ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
     return [
       p.id, p.fechaIngreso.toISOString(), p.residente.torre, p.residente.apto, p.residente.nombre,
       p.residente.telefono, p.proveedor, p.guia, p.pinProveedor || '', p.categoriaPeso, p.costoServicio,
