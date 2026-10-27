@@ -17,7 +17,10 @@ import { aplicarEvento, crearConEvento } from '../services/paquete.service.js';
 // incompletos no hay con qué agrupar de forma confiable, así que cada
 // cuenta incompleta cae en su propia clave (nunca se agrupa con otra
 // cuenta también incompleta, como si fueran el mismo apartamento).
-function claveDeGrupo(residenteId, torre, apto) {
+// Un paquete sin residente (T2.1: SIN_ASIGNAR) no pertenece a ningún grupo: cae
+// en el suyo propio (`paquete:<id>`) para no mezclarse con otros sin dueño.
+function claveDeGrupo(residenteId, torre, apto, paqueteId) {
+  if (!residenteId) return `paquete:${paqueteId}`;
   return claveApartamento(torre, apto) || `cuenta:${residenteId}`;
 }
 
@@ -26,7 +29,7 @@ function claveDeGrupo(residenteId, torre, apto) {
 function createdAtPorGrupo(paquetes) {
   const grupos = new Map();
   for (const p of paquetes) {
-    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
+    const clave = claveDeGrupo(p.residenteId, p.residente?.torre, p.residente?.apto, p.id);
     if (!grupos.has(clave)) grupos.set(clave, []);
     grupos.get(clave).push(p.createdAt);
   }
@@ -127,10 +130,13 @@ export async function listAll(req, res) {
   const grupos = createdAtPorGrupo(packages);
 
   res.json(packages.map(({ pin, bonoId, fotoUrl, ...p }) => {
-    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
+    const clave = claveDeGrupo(p.residenteId, p.residente?.torre, p.residente?.apto, p.id);
     return {
       ...p,
-      esPrimeraEntrega: esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) }),
+      // Sin residente no hay cortesía de primera entrega. `etiquetaNombre` ya
+      // viaja en `p`: la vista lo muestra cuando `residente` es null.
+      esPrimeraEntrega: !!p.residenteId
+        && esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) }),
     };
   }));
 }
@@ -195,8 +201,10 @@ export async function checkin(req, res) {
   // categoría de peso elegida. Si torre/apto vienen incompletos, no hay
   // con qué agrupar de forma confiable — se mantiene el comportamiento
   // anterior, por cuenta sola.
-  const clave = claveApartamento(actual.residente.torre, actual.residente.apto);
-  let idsRelevantes = [actual.residenteId];
+  // Sin residente (SIN_ASIGNAR) no hay cortesía ni bono: se cobra TARIFA. (El
+  // camino previsto para esos paquetes es ASIGNAR, T2.3; esto solo es defensa.)
+  const clave = actual.residente ? claveApartamento(actual.residente.torre, actual.residente.apto) : '';
+  let idsRelevantes = actual.residenteId ? [actual.residenteId] : [];
   if (clave) {
     const residentes = await prisma.user.findMany({
       where: { role: 'RESIDENT' },
@@ -207,13 +215,15 @@ export async function checkin(req, res) {
       .map((u) => u.id);
   }
 
-  const primerPaquete = await prisma.package.findFirst({
-    where: { residenteId: { in: idsRelevantes } },
-    orderBy: { createdAt: 'asc' },
-    select: { createdAt: true },
-  });
+  const primerPaquete = idsRelevantes.length
+    ? await prisma.package.findFirst({
+      where: { residenteId: { in: idsRelevantes } },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    })
+    : null;
   // La regla vive en domain/cobro.js; aquí solo se leen los datos.
-  const primera = esPrimeraEntrega({
+  const primera = !!actual.residenteId && esPrimeraEntrega({
     createdAt: actual.createdAt,
     createdAtDelApto: primerPaquete ? [primerPaquete.createdAt] : [],
   });
@@ -231,7 +241,7 @@ export async function checkin(req, res) {
     // Candidatos: bonos del residente en esta categoría con crédito, el más
     // antiguo primero (un bono de otra categoría no aplica).
     let candidatos = [];
-    if (!primera && conjunto.bonosHabilitados) {
+    if (!primera && conjunto.bonosHabilitados && actual.residenteId) {
       candidatos = (await tx.bono.findMany({
         where: { residenteId: actual.residenteId, categoriaPeso },
         orderBy: { createdAt: 'asc' },
@@ -332,12 +342,14 @@ export async function exportCsv(req, res) {
   const grupos = createdAtPorGrupo(todos);
 
   const rows = packages.map((p) => {
-    const clave = claveDeGrupo(p.residenteId, p.residente.torre, p.residente.apto);
-    const primera = esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) });
+    const clave = claveDeGrupo(p.residenteId, p.residente?.torre, p.residente?.apto, p.id);
+    const primera = !!p.residenteId
+      && esPrimeraEntrega({ createdAt: p.createdAt, createdAtDelApto: grupos.get(clave) });
     const motivoGratis = primera ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
     return [
-      p.id, p.fechaIngreso.toISOString(), p.residente.torre, p.residente.apto, p.residente.nombre,
-      p.residente.telefono, p.proveedor, p.guia, p.pinProveedor || '', p.categoriaPeso, p.costoServicio,
+      p.id, p.fechaIngreso.toISOString(), p.residente?.torre ?? '', p.residente?.apto ?? '',
+      p.residente?.nombre ?? p.etiquetaNombre ?? '',
+      p.residente?.telefono ?? '', p.proveedor, p.guia, p.pinProveedor || '', p.categoriaPeso, p.costoServicio,
       motivoGratis, p.estado, p.franjaHoraria || '', p.metodoPagoServicio || '',
       p.esContraEntregaProveedor ? 'SI' : 'NO', p.valorProductoProveedor, p.valorDeclarado,
       p.notas || '', p.fechaEntrega ? p.fechaEntrega.toISOString() : '',
@@ -405,7 +417,8 @@ export async function confirmDelivery(req, res) {
     });
   });
 
-  sendDeliveryThanksEmail(updated.residente.email, updated);
+  // Un paquete sin residente no tiene a quién agradecer.
+  if (updated.residente?.email) sendDeliveryThanksEmail(updated.residente.email, updated);
 
   const { residente, ...pkgSinResidente } = updated;
   res.json({ ...pkgSinResidente, pin: undefined });

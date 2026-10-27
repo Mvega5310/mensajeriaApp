@@ -53,6 +53,14 @@ model Conjunto {
   // nuevo (restricción dura: BONOS_HABILITADOS apagado).
   bonosHabilitados Boolean @default(false)
 
+  // Configuración de recepción/entrega (T2.1). Antes fija en el frontend.
+  prefijoPais     String @default("57")   // prefijo telefónico para armar wa.me
+  // Franjas de entrega: arreglo JSON de textos. null => el código aplica el
+  // default (domain/conjuntoConfig.js, tomado de frontend/src/utils/schedule.js).
+  franjasEntrega  Json?
+  maxFotos        Int    @default(3)      // fotos máximas por paquete al recibir
+  custodiaMaxDias Int    @default(30)     // días máximos que se custodia un paquete
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -157,8 +165,11 @@ model PasswordResetToken {
 
 model Package {
   id        String @id @default(cuid())
-  residente User   @relation(fields: [residenteId], references: [id])
-  residenteId String
+  // Opcional desde T2.1: un paquete recibido en portería SIN dueño conocido
+  // (estado SIN_ASIGNAR) aún no tiene residente. onDelete Restrict explícito
+  // para conservar la FK original (Prisma pondría SET NULL al volverla opcional).
+  residente User?  @relation(fields: [residenteId], references: [id], onDelete: Restrict)
+  residenteId String?
 
   // Tenant (KAN-8). Nullable en "expand"; obligatorio en "contract"
   // (design.md 5.2).
@@ -166,8 +177,17 @@ model Package {
   conjuntoId String?
 
   // datos del paquete
+  // proveedor = tienda/plataforma que vende (Amazon, Mercado Libre); es la
+  // pre-alerta del residente y sigue siendo obligatorio. La empresa que
+  // TRANSPORTA (Servientrega, Rappi...) es otra cosa: ver transportadora.
   proveedor                 String
+  // `guia` YA existía (T2.1 la reutiliza, no la duplica): NOT NULL con default
+  // "Sin Guía". La búsqueda de pre-alertas por guía usa el índice [conjuntoId, guia].
   guia                      String  @default("Sin Guía")
+  // Texto que el operador escribe en la etiqueta cuando no hay residente
+  // asignado (recepción sin pre-alerta, estado SIN_ASIGNAR).
+  etiquetaNombre            String?
+  transportadora            String?
   // Código que algunas plataformas (ej. Mercado Libre) generan para que
   // SU transportadora confirme la entrega — lo declara el residente para
   // que el operador lo tenga a mano cuando ese mensajero llegue a recepción.
@@ -188,6 +208,10 @@ model Package {
   estado              String @default("PREALERTADO")
   franjaHoraria        String?
   metodoPagoServicio   String?
+  // Cómo se pagó REALMENTE el servicio al entregar: "EFECTIVO" | "TRANSFERENCIA"
+  // (validado en domain/pago.js, no enum de BD). Distinto de metodoPagoServicio,
+  // que es la preferencia de texto libre del residente al programar.
+  metodoPago           String?
   // Nota puntual de este paquete (ej. "pago con billete de $100.000,
   // llevar vueltos") — distinto del Comentario general, que no está
   // ligado a un paquete específico.
@@ -201,6 +225,11 @@ model Package {
   intentosPin          Int           @default(0)
   pinBloqueadoHasta    DateTime?
   fechaIngreso         DateTime      @default(now())
+  // Cuándo el operador recibió físicamente el paquete (fechaIngreso es la
+  // creación del registro, que en una pre-alerta es anterior a la llegada).
+  recibidoEn           DateTime?
+  // fechaEntrega YA existe y se escribe en ENTREGAR: T2.1 la reutiliza como
+  // "entregadoEn" (no se agrega columna duplicada).
   fechaEntrega         DateTime?
 
   // Si este paquete se cobró $0 porque se descontó de un bono prepago
@@ -218,6 +247,8 @@ model Package {
   // conjuntoId (primera columna), asi que no se agrega un @@index([conjuntoId])
   // suelto. Acelera los listados por estado dentro de un conjunto (design.md 1.2).
   @@index([conjuntoId, estado])
+  // Búsqueda de pre-alertas abiertas por guía dentro del conjunto (T2.3).
+  @@index([conjuntoId, guia])
 }
 
 // Bitácora auditable de cambios de estado del paquete (T1.3). SOLO INSERCIÓN:
