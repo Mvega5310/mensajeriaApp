@@ -1,12 +1,13 @@
 // Pruebas de validarEntorno (T0.3). Puras: no requieren base de datos.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validarEntorno } from '../env.js';
+import { validarEntorno, secretoEnlace } from '../env.js';
 
 const SECRETO_LARGO = 'x'.repeat(32);
 const BASE = {
   DATABASE_URL: 'postgresql://u:p@localhost:5432/puertaya',
   JWT_SECRET: SECRETO_LARGO,
+  ENLACE_SECRET: 'e'.repeat(40),
   CORS_ORIGIN: 'https://app.example',
   FRONTEND_URL: 'https://app.example',
   RESEND_API_KEY: 're_realrealreal',
@@ -60,6 +61,7 @@ test('configuración válida devuelve el objeto normalizado sin avisos', () => {
     databaseUrl: BASE.DATABASE_URL,
     jwtSecret: SECRETO_LARGO,
     jwtExpiresIn: '2h',
+    enlaceSecret: BASE.ENLACE_SECRET,
     corsOrigin: BASE.CORS_ORIGIN,
     frontendUrl: BASE.FRONTEND_URL,
     resendApiKey: 're_realrealreal',
@@ -109,4 +111,22 @@ test('DATABASE_URL que no es Postgres falla', () => {
     () => validarEntorno({ ...BASE, DATABASE_URL: 'file:./dev.db' }),
     (err) => /postgresql:\/\//.test(err.message),
   );
+});
+
+test('T3.1: en producción ENLACE_SECRET es obligatoria, larga y distinta de JWT_SECRET', () => {
+  const { ENLACE_SECRET, ...sinSecreto } = BASE;
+  assert.throws(() => validarEntorno({ ...sinSecreto, NODE_ENV: 'production' }), /Falta ENLACE_SECRET/);
+  assert.throws(() => validarEntorno({ ...BASE, ENLACE_SECRET: 'corta', NODE_ENV: 'production' }), /ENLACE_SECRET debe tener al menos 32/);
+  assert.throws(() => validarEntorno({ ...BASE, ENLACE_SECRET: SECRETO_LARGO, NODE_ENV: 'production' }), /distinta de JWT_SECRET/);
+});
+
+test('T3.1: fuera de producción ENLACE_SECRET falta con aviso y se deriva de JWT_SECRET', () => {
+  const { ENLACE_SECRET, ...sinSecreto } = BASE;
+  const c = validarEntorno({ ...sinSecreto });
+  assert.ok(c.avisos.some((a) => /ENLACE_SECRET/.test(a)));
+  const derivado = secretoEnlace({ ...sinSecreto });
+  assert.notEqual(derivado, SECRETO_LARGO);
+  assert.equal(derivado, secretoEnlace({ ...sinSecreto }));
+  assert.equal(secretoEnlace(BASE), BASE.ENLACE_SECRET);
+  assert.throws(() => secretoEnlace({ ...sinSecreto, NODE_ENV: 'production' }), /ENLACE_SECRET/);
 });

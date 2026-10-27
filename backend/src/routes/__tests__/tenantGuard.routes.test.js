@@ -27,6 +27,12 @@ const RUTAS_SIN_SESION = new Set([
   'POST /api/auth/forgot-password',
   'POST /api/auth/reset-password',
   'GET /api/conjuntos/config-publica',
+  // T3.1 (excepción consciente a la invariante 5): el enlace del aviso de WhatsApp
+  // abre "Mis paquetes" sin contraseña (decisión D1). La credencial es el token
+  // HMAC firmado y con vencimiento; la ruta verifica, abre su propio contexto de
+  // tenant con el conjuntoId del token (runWithTenant) y entrega una sesión de
+  // alcance limitado ('enlace') que solo sirve en 2 rutas (ver auth.middleware).
+  'GET /api/p/:token',
 ]);
 
 // --- Aplanado del router de Express ---

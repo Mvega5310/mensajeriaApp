@@ -39,6 +39,7 @@ git push
    |---|---|
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (referencia al otro servicio) |
    | `JWT_SECRET` | valor largo y aleatorio — `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+   | `ENLACE_SECRET` | **obligatoria en producción** (≥ 32 caracteres, distinta de `JWT_SECRET`): firma los enlaces de "Mis paquetes" del aviso de WhatsApp (T3.1). Mismo comando que `JWT_SECRET`. Cambiarla invalida todos los enlaces ya enviados |
    | `JWT_EXPIRES_IN` | `8h` |
    | `CORS_ORIGIN` | URL del frontend en Vercel (paso 3 más abajo la actualiza) |
    | `FRONTEND_URL` | igual a `CORS_ORIGIN` — se usa para armar los enlaces de los correos |
@@ -50,7 +51,7 @@ git push
 
    **Validación al arrancar (T0.3).** El backend revisa sus variables antes de
    escuchar (`src/config/env.js`). Si falta una obligatoria (`DATABASE_URL`,
-   `JWT_SECRET`), si `JWT_SECRET` tiene menos de 32 caracteres con
+   `JWT_SECRET`; con `NODE_ENV=production` también `ENLACE_SECRET`), si `JWT_SECRET` tiene menos de 32 caracteres con
    `NODE_ENV=production`, o si `PORT` o `DATABASE_URL` son inválidos, el
    proceso **no arranca**: el log lista todos los problemas a la vez. Las
    opcionales ausentes (`CORS_ORIGIN`, `FRONTEND_URL`, `RESEND_API_KEY`) no

@@ -134,6 +134,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
 | `recepcionSinPrealerta.integration.test.js` | integración | T2.1: paquete sin residente (SIN_ASIGNAR / EN_RECEPCION directo) se crea y lista con `etiquetaNombre`, checkin/entrega lo toleran (409 o TARIFA, sin 500), aislamiento, y `GET /conjunto/config` con los defaults nuevos. |
 | `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
+| `enlace.integration.test.js` + `domain/__tests__/enlace.test.js` | integración + pura | T3.1: token válido/vencido/alterado/basura/otro secreto/conjunto manipulado, residente borrado, sesión limitada (schedule propio sí, ajeno 404, todas las demás rutas del app real 403), URL `/p/` en el aviso. |
 | `migracionRecepcion.integration.test.js` | integración | T2.1: la migración aplica sobre datos existentes en una base desechable; el rollback aborta con mensaje si hay paquetes sin residente y, sin ellos, revierte. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
@@ -436,7 +437,8 @@ Respuesta `201`:
 `motivoCobro`: `TARIFA|CORTESIA|BONO` (null en `SIN_ASIGNAR`). `waUrl` es `null`
 si el residente no tiene teléfono; `aviso` es `null` sin residente. El enlace lo
 arma `domain/whatsapp.js#construirEnlace` con `Conjunto.prefijoPais`
-(provisional: T2.4 completa los avisos y T3.1 el enlace firmado).
+(provisional: T2.4 completa los avisos). Con `FRONTEND_URL` definida, el texto
+termina con el enlace firmado `…/p/<token>` (ver T3.1 abajo).
 
 **`PATCH /api/packages/:id/asignar`** con `{ "residenteId": "…" }`: `ASIGNAR`
 (`SIN_ASIGNAR` -> `EN_RECEPCION`), pone el residente y calcula el cobro en ese
@@ -446,6 +448,40 @@ conjunto o inexistente: 404.
 
 **`GET /api/packages?estado=SIN_ASIGNAR`**: filtro opcional por estado (cualquiera
 de la máquina; otro valor -> 400). Sin parámetro devuelve todos, como antes.
+
+### Enlace firmado del residente (T3.1, decisión D1)
+
+El aviso de llegada de WhatsApp lleva `${FRONTEND_URL}/p/<token>`: abre "Mis paquetes"
+**sin contraseña** y muestra el PIN. El token vence a los **7 días**.
+
+- **Token** (`domain/enlace.js`, puro): `v1.<payload base64url>.<firma base64url>`;
+  payload `{ r: residenteId, c: conjuntoId, e: vencimiento ms }`, firma HMAC-SHA256
+  con `ENLACE_SECRET` (comparación en tiempo constante; la firma se verifica antes
+  de leer el contenido). Sin dependencias nuevas.
+- **`GET /api/p/:token`** (PÚBLICA, en `RUTAS_SIN_SESION`). Verifica el token,
+  abre su propio contexto de tenant con el `conjuntoId` del token (`runWithTenant`,
+  sin `GLOBAL_LOOKUP` ni SQL crudo: la firma garantiza que el conjunto lo emitimos
+  nosotros) y comprueba que el residente exista, sea `RESIDENT` y pertenezca a ese
+  conjunto. Responde `{ residente: { nombre, etiquetaApto }, conjunto: { nombre },
+  paquetes: [...], franjasEntrega, metodosPago, sesion }`. Cada paquete: `id,
+  estado, pin` (solo `EN_RECEPCION`/`PROGRAMADO`; `null` en `PREALERTADO`), `costo,
+  motivoCobro, categoriaPeso, proveedor, transportadora, guia, recibidoEn,
+  franjaHoraria, metodoPagoServicio`. Nunca devuelve email ni teléfono ni fotos.
+  Errores: `401 ENLACE_INVALIDO | ENLACE_VENCIDO`, `404` si el residente ya no existe.
+  Cabeceras `Cache-Control: no-store` y `Referrer-Policy: no-referrer`.
+- **`sesion`**: JWT firmado con `JWT_SECRET`, `scope: 'enlace'`, vence en 2 h. Solo
+  sirve en `GET /api/p/paquetes` (refresca la misma vista, sin `sesion`) y
+  `PATCH /api/packages/:id/schedule` (pedir entrega; solo paquetes propios, 404 si
+  no). `requireAuth` rechaza con **403** cualquier otra ruta (lista
+  `RUTAS_PERMITIDAS_ENLACE` en `middleware/auth.middleware.js`, recorrida por
+  `enlace.integration.test.js` sobre el app real). `requireTenant` además exige que
+  el `conjuntoId` del token coincida con el del usuario en la BD.
+- **Seguridad**: quien tenga el enlace ve los PIN del residente durante 7 días
+  (compromiso consciente de D1: sin fricción). Mitigaciones: vence, es por residente,
+  la sesión derivada es mínima y de 2 h, y rotar `ENLACE_SECRET` invalida todos los
+  enlaces emitidos. `ENLACE_SECRET` es obligatoria (≥ 32 caracteres y distinta de
+  `JWT_SECRET`) con `NODE_ENV=production`; en desarrollo/test se deriva de
+  `JWT_SECRET` con un aviso al arrancar.
 
 ## Pendiente
 

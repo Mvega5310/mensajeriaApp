@@ -6,6 +6,7 @@ import packagesRoutes from './routes/packages.routes.js';
 import commentsRoutes from './routes/comments.routes.js';
 import bonosRoutes from './routes/bonos.routes.js';
 import residentesRoutes from './routes/residentes.routes.js';
+import enlaceRoutes from './routes/enlace.routes.js';
 import { manejadorErrores } from './domain/errores.js';
 import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS } from './domain/limitador.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
@@ -45,6 +46,7 @@ export function createApp({ limitadorLogin } = {}) {
   app.use('/api/comments', commentsRoutes);
   app.use('/api/bonos', bonosRoutes);
   app.use('/api/residentes', residentesRoutes);
+  app.use('/api/p', enlaceRoutes); // enlace firmado del residente (T3.1)
   app.use('/api/conjuntos', conjuntosPublicRouter); // público (config-publica?c=)
   app.use('/api/conjunto', conjuntoAuthRouter); // auth+tenant (/config)
 
