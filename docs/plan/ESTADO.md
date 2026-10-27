@@ -42,7 +42,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T5.1 | S | hecho | 39d9705 | AlmacenFotos (s3/fake/legado) + PaqueteFoto; sin bucket en producción sigue en legado con aviso. |
 | T6.1 | S | hecho | da605e6 | `npm run e2e`: 14 escenarios × móvil/escritorio = 28/28 (verificado por el orquestador, 42 s); `e2e:a11y` envuelve la auditoría; modo Railway con E2E_BASE_URL/E2E_API_URL. |
 | T7.1 | Orq. | en curso | | Proyecto puertaya-refactor: Postgres 18, bucket `fotos` (iad), api https://api-production-df00.up.railway.app, web https://web-production-2b5d05.up.railway.app. 13 migraciones OK; correo simulado (sin RESEND_API_KEY). |
-| T8.1 | S | en curso | | |
+| T8.1 | S | hecho | b78d752 | Informe CIERRE.md + correcciones: listados con `select` sin fotoUrl/pin (prueba espía), PIN de lote filtrado en BD, CSV sin fórmulas y fechas Bogotá, enlace mágico solo a residentes, índice por residente, DEPLOY "Entorno refactor", Recibir en 4 toques con apto de 3 dígitos. |
 
 ## Bitácora del orquestador
 
@@ -79,3 +79,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: humo en Railway OK: login operador DEMO, registro con código, búsqueda, recepción con foto → bucket S3 real + URL firmada descargable, cortesía aplicada, sin PIN al operador, enlace /p#. Credenciales del operador DEMO en variables del servicio api (OPERATOR_EMAIL/OPERATOR_PASSWORD).
 - 2026-10-27: T6.1 integrada; E2E 28/28. **F6 cerrada.** En curso: E2E contra Railway y revisión final T8.1.
 - 2026-10-27: **Revisión final T8.1: LISTO CON CORRECCIONES** (sin críticos). Informe en `docs/plan/CIERRE.md`. Altos: A1 listados que leen `fotoUrl` base64 desde la BD (riesgo de repetir la caída) y A2 variables nuevas obligatorias en producción. Correcciones en curso: A1, CSV seguro (fórmulas y fechas), enlace mágico solo a residentes, índice por residente, DEPLOY "Entorno refactor", y Recibir en 4 toques con apto de 3 dígitos. Nota: la bitácora SÍ tiene pantalla (MasSheet → BitacoraVista); el informe la marcó por error como faltante.
+- 2026-10-27: correcciones de T8.1 integradas: `test:all` 451/451, build verde. Pendiente: E2E estable contra Railway (agente en curso).
