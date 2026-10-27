@@ -37,11 +37,11 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T4.3 | S | hecho | d2b65a5 | Residente: /p (fragmento), /paquetes, /entrega, /avisar, /historial, /buzon, /acceso(/:token). 3 toques de WhatsApp a "Programado". CSS legado eliminado; auth migrado a tokens. Bonos del residente sin pantalla (deuda). |
 | T4.4 | H | hecho | f9d2b84 | Nav lateral ≥1024 px, Pendientes en dos columnas; sin scroll horizontal a 1280 y 390 (día/noche). El orquestador añadió "Entregar con PIN" al detalle. |
 | T4.5 | S | hecho | 52a0d92 | Cola IndexedDB con Idempotency-Key; reenvío online/visibilidad/30 s con backoff; E2E: 1 solo paquete tras corte y doble reintento. Límite: la cola no distingue sesión de operador (se corrige en T4.6). |
-| T4.6 | S | en curso | | |
+| T4.6 | S | hecho | f5181ef | axe: 0 serias/críticas en 55 pantallas (390/1280, día/noche); títulos sin "Ipanema"; textos ≥16 px; cola solo reenvía los del operador en sesión; `frontend/e2e/a11y.audit.mjs`. |
 | T2.8 | S | hecho | bf123c5 | Fotos con sesión de enlace; schedule con `modalidad: RECOGER` (evento PROGRAMAR); `transportadora` en pre-alerta; `motivoCobro` en /mine; "Mis bonos" (GET /bonos/mine) si el conjunto los habilita. El orquestador mostró "Recoge en portería" al operador. |
 | T5.1 | S | hecho | 39d9705 | AlmacenFotos (s3/fake/legado) + PaqueteFoto; sin bucket en producción sigue en legado con aviso. |
 | T6.1 | S | pendiente | | |
-| T7.1 | Orq. | pendiente | | |
+| T7.1 | Orq. | en curso | | Proyecto puertaya-refactor: Postgres 18, bucket `fotos` (iad), api https://api-production-df00.up.railway.app, web https://web-production-2b5d05.up.railway.app. 13 migraciones OK; correo simulado (sin RESEND_API_KEY). |
 | T8.1 | S | pendiente | | |
 
 ## Bitácora del orquestador
@@ -74,3 +74,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - Tarea nueva **T2.8** (contratos que pidió el residente): fotos con la sesión del enlace, "recoger en portería", `transportadora` en la pre-alerta, `motivoCobro` en /mine, y pantalla de bonos del residente si `bonosHabilitados`.
 - 2026-10-27: T4.5 integrada; build verde; cola 7/7. En curso: T2.8 y T4.6 (accesibilidad + cola por operador).
 - 2026-10-27: T2.8 integrada, `test:all` 444/444, build verde.
+- 2026-10-27: T4.6 integrada (build verde, cola 13/13). Railway `puertaya-refactor` creado y desplegado desde la rama; /health OK.
