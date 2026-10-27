@@ -14,7 +14,8 @@ datasource db {
 // día se vuelve a probar en SQLite (que no soporta enums nativos).
 // Valores válidos:
 // Role: "RESIDENT" | "OPERATOR"
-// EstadoPaquete: "PREALERTADO" | "EN_RECEPCION" | "PROGRAMADO" | "ENTREGADO"
+// EstadoPaquete: "SIN_ASIGNAR" | "PREALERTADO" | "EN_RECEPCION" | "PROGRAMADO" | "ENTREGADO"
+// (la máquina de estados vive en src/domain/paquete.machine.js)
 
 // Tenant raíz del modelo multi-conjunto (KAN-8). Cada conjunto residencial
 // (ej. Ipanema) tiene sus propios residentes, operador y paquetes, aislados
@@ -60,6 +61,7 @@ model Conjunto {
   paquetes    Package[]
   bonos       Bono[]
   comentarios Comentario[]
+  eventos     PaqueteEvento[]
 }
 
 model User {
@@ -90,6 +92,7 @@ model User {
   resetTokens  PasswordResetToken[]
   comentarios  Comentario[]
   bonos        Bono[]
+  eventosActor PaqueteEvento[]
 
   // Indice de tenant (A3). El compuesto sirve tambien para las consultas que
   // filtran solo por conjuntoId (Postgres usa la primera columna), asi que no
@@ -202,6 +205,8 @@ model Package {
   bono                 Bono?         @relation(fields: [bonoId], references: [id])
   bonoId               String?
 
+  eventos              PaqueteEvento[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -209,4 +214,26 @@ model Package {
   // conjuntoId (primera columna), asi que no se agrega un @@index([conjuntoId])
   // suelto. Acelera los listados por estado dentro de un conjunto (design.md 1.2).
   @@index([conjuntoId, estado])
+}
+
+// Bitácora auditable de cambios de estado del paquete (T1.3). SOLO INSERCIÓN:
+// la migración instala un trigger Postgres que rechaza UPDATE y DELETE, y el
+// código no expone ninguna de las dos operaciones (se escribe únicamente desde
+// services/paquete.service.js#aplicarEvento, dentro de la misma transacción que
+// cambia el estado). Lleva tenant (conjuntoId) y está en MODELOS_CON_TENANT.
+model PaqueteEvento {
+  id         String   @id @default(cuid())
+  conjunto   Conjunto @relation(fields: [conjuntoId], references: [id])
+  conjuntoId String
+  paquete    Package  @relation(fields: [paqueteId], references: [id])
+  paqueteId  String
+  tipo       String   // evento de la máquina: PREALERTAR | RECIBIR | PROGRAMAR | ENTREGAR ...
+  deEstado   String?  // null = el paquete aún no existía
+  aEstado    String
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  actorId    String?
+  datos      Json?
+  creadoEn   DateTime @default(now())
+
+  @@index([conjuntoId, paqueteId, creadoEn])
 }

@@ -7,7 +7,9 @@ import {
 import { conjuntoDelContexto, operadorDelConjuntoActual, tarifasDe } from '../services/conjunto.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { claveApartamento } from '../services/apartamento.service.js';
-import { esPrimeraEntrega, calcularCobro, esCategoriaValida } from '../domain/cobro.js';
+import { esPrimeraEntrega, calcularCobro, esCategoriaValida, MOTIVOS_COBRO } from '../domain/cobro.js';
+import { EVENTOS, transicionar } from '../domain/paquete.machine.js';
+import { aplicarEvento, crearConEvento } from '../services/paquete.service.js';
 
 // La cortesía de primera entrega es por apartamento físico, no por
 // cuenta — varias personas del mismo apto pueden registrarse con
@@ -63,7 +65,8 @@ export async function createPrealert(req, res) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
 
-  const pkg = await prisma.package.create({
+  const pkg = await prisma.$transaction((tx) => crearConEvento(tx, EVENTOS.PREALERTAR, {
+    actorId: req.user.sub,
     data: {
       residenteId: req.user.sub,
       proveedor,
@@ -79,7 +82,7 @@ export async function createPrealert(req, res) {
       pinProveedor: pinProveedor || null,
       pin: generatePin(),
     },
-  });
+  }));
 
   // Aviso automático — no bloquea la respuesta si falla el envío (ver
   // sendEmail en email.service.js, que ya se traga sus propios errores).
@@ -152,14 +155,16 @@ export async function getFoto(req, res) {
 // Residente: programa su propia franja de entrega — se verifica dueño.
 export async function schedule(req, res) {
   const { franjaHoraria, metodoPagoServicio } = req.body;
-  const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
-  if (!pkg || pkg.residenteId !== req.user.sub) {
-    throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
-  }
-
-  const updated = await prisma.package.update({
-    where: { id: pkg.id },
-    data: { franjaHoraria, metodoPagoServicio, estado: 'PROGRAMADO' },
+  const updated = await prisma.$transaction(async (tx) => {
+    const pkg = await tx.package.findUnique({ where: { id: req.params.id } });
+    if (!pkg || pkg.residenteId !== req.user.sub) {
+      throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
+    }
+    return aplicarEvento(tx, pkg, EVENTOS.PROGRAMAR, {
+      actorId: req.user.sub,
+      datos: { franjaHoraria: franjaHoraria ?? null, metodoPagoServicio: metodoPagoServicio ?? null },
+      cambios: { franjaHoraria, metodoPagoServicio },
+    });
   });
   res.json(updated);
 }
@@ -215,45 +220,74 @@ export async function checkin(req, res) {
     createdAtDelApto: primerPaquete ? [primerPaquete.createdAt] : [],
   });
 
-  // Si no es la cortesía de bienvenida, se descuenta de un bono prepago
-  // activo en esta misma categoría de peso (el más antiguo primero) — un
-  // bono de otra categoría no aplica aquí (ver Bono en schema.prisma).
-  let bono = null;
-  if (!primera && conjunto.bonosHabilitados) {
-    const bonos = await prisma.bono.findMany({
-      where: { residenteId: actual.residenteId, categoriaPeso },
-      orderBy: { createdAt: 'asc' },
-    });
-    bono = bonos.find((b) => b.cantidadUsada < b.cantidadTotal) || null;
-  }
-  const cobro = calcularCobro({
-    tarifas: tarifasDe(conjunto),
-    categoria: categoriaPeso,
-    esPrimeraEntrega: primera,
-    bonosHabilitados: conjunto.bonosHabilitados,
-    creditosBono: bono ? bono.cantidadTotal - bono.cantidadUsada : 0,
-  });
-  if (cobro.consumeBono) {
-    await prisma.bono.update({ where: { id: bono.id }, data: { cantidadUsada: { increment: 1 } } });
-  } else {
-    bono = null;
-  }
+  // Todo lo que cambia (bono + estado + evento) va en UNA transacción: si la
+  // transición es inválida (409) o alguien más ya recibió el paquete, el crédito
+  // consumido se revierte.
+  const { pkg, bono } = await prisma.$transaction(async (tx) => {
+    const fresco = await tx.package.findUnique({ where: { id: req.params.id } });
+    if (!fresco) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
+    // Valida la transición ANTES de tocar el bono (un paquete ya recibido o
+    // entregado no debe gastar créditos).
+    transicionar(fresco.estado, EVENTOS.RECIBIR);
 
-  const pkg = await prisma.package.update({
-    where: { id: req.params.id },
-    data: {
-      categoriaPeso,
-      costoServicio: cobro.monto,
-      bonoId: bono?.id || null,
-      fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
-      estado: 'EN_RECEPCION',
-    },
+    // Candidatos: bonos del residente en esta categoría con crédito, el más
+    // antiguo primero (un bono de otra categoría no aplica).
+    let candidatos = [];
+    if (!primera && conjunto.bonosHabilitados) {
+      candidatos = (await tx.bono.findMany({
+        where: { residenteId: actual.residenteId, categoriaPeso },
+        orderBy: { createdAt: 'asc' },
+      })).filter((b) => b.cantidadUsada < b.cantidadTotal);
+    }
+    let cobro = calcularCobro({
+      tarifas: tarifasDe(conjunto),
+      categoria: categoriaPeso,
+      esPrimeraEntrega: primera,
+      bonosHabilitados: conjunto.bonosHabilitados,
+      creditosBono: candidatos.length,
+    });
+
+    // Decremento CONDICIONAL: solo si aún queda crédito en la base (count === 1).
+    // Si otra transacción concurrente se lo llevó, se prueba el siguiente bono;
+    // si ninguno cede crédito, el cobro se recalcula como TARIFA (decisión: no se
+    // bloquea al operador en portería; se cobra tarifa normal y queda en el evento).
+    let bono = null;
+    let usadoTras = 0;
+    if (cobro.consumeBono) {
+      for (const c of candidatos) {
+        const { count } = await tx.bono.updateMany({
+          where: { id: c.id, cantidadUsada: { lt: c.cantidadTotal } },
+          data: { cantidadUsada: { increment: 1 } },
+        });
+        if (count === 1) {
+          bono = c;
+          usadoTras = (await tx.bono.findUnique({ where: { id: c.id } })).cantidadUsada;
+          break;
+        }
+      }
+      if (!bono) {
+        cobro = { monto: tarifasDe(conjunto)[categoriaPeso], motivo: MOTIVOS_COBRO.TARIFA, consumeBono: false };
+      }
+    }
+
+    const pkg = await aplicarEvento(tx, fresco, EVENTOS.RECIBIR, {
+      actorId: req.user.sub,
+      datos: { categoriaPeso, motivoCobro: cobro.motivo, monto: cobro.monto, bonoId: bono?.id ?? null },
+      cambios: {
+        categoriaPeso,
+        costoServicio: cobro.monto,
+        bonoId: bono?.id || null,
+        fotoUrl: fotos && fotos.length ? JSON.stringify(fotos) : null,
+      },
+    });
+    return { pkg, bono: bono && { id: bono.id, quedan: bono.cantidadTotal - usadoTras }, cobro };
   });
+
   res.json({
     ...pkg,
     pin: undefined,
     esPrimeraEntrega: primera,
-    bonoAplicado: bono ? { id: bono.id, quedan: bono.cantidadTotal - bono.cantidadUsada - 1 } : null,
+    bonoAplicado: bono,
   });
 }
 
@@ -324,17 +358,26 @@ export async function exportCsv(req, res) {
 // El valor correcto del PIN nunca aparece en esta respuesta.
 export async function confirmDelivery(req, res) {
   const { pin } = req.body;
-  const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
-  if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
+  const updated = await prisma.$transaction(async (tx) => {
+    const pkg = await tx.package.findUnique({ where: { id: req.params.id } });
+    if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
 
-  if (!verifyPin(pin, pkg.pin)) {
-    throw new AppError(CODIGOS.PIN_INCORRECTO, 'El PIN no coincide. Pídelo de nuevo al residente e inténtalo otra vez.', 400);
-  }
+    // Primero la transición: un paquete no entregable (PREALERTADO, ya ENTREGADO)
+    // responde 409 sin gastar ni revelar nada sobre el PIN.
+    transicionar(pkg.estado, EVENTOS.ENTREGAR);
 
-  const updated = await prisma.package.update({
-    where: { id: pkg.id },
-    data: { estado: 'ENTREGADO', fechaEntrega: new Date() },
-    include: { residente: { select: { email: true } } },
+    if (!verifyPin(pin, pkg.pin)) {
+      throw new AppError(CODIGOS.PIN_INCORRECTO, 'El PIN no coincide. Pídelo de nuevo al residente e inténtalo otra vez.', 400);
+    }
+
+    await aplicarEvento(tx, pkg, EVENTOS.ENTREGAR, {
+      actorId: req.user.sub,
+      cambios: { fechaEntrega: new Date() },
+    });
+    return tx.package.findUnique({
+      where: { id: pkg.id },
+      include: { residente: { select: { email: true } } },
+    });
   });
 
   sendDeliveryThanksEmail(updated.residente.email, updated);

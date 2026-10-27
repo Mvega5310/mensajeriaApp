@@ -118,6 +118,24 @@ railway ssh keys add
    > conjunto" más abajo; el script de alta se construye en la Fase F).
 7. **Settings → Networking → Generate Domain** para obtener la URL pública del backend.
 
+### Migración `add_paquete_evento` (T1.3, refactor mobile-first)
+
+Crea la tabla `PaqueteEvento` (bitácora de cambios de estado, con `conjuntoId`) y
+un **trigger Postgres** que rechaza `UPDATE` y `DELETE` sobre ella. Es **aditiva**:
+el código anterior ignora la tabla, así que se aplica con el flujo normal
+(`prisma migrate deploy` en el `start`, o por túnel SSH como arriba). Escrita y
+probada contra Postgres (no SQLite).
+
+- **Rollback:** `backend/prisma/manual/rollback_add_paquete_evento.sql` (quita
+  trigger, función y tabla, y la fila de `_prisma_migrations`). Pierde la bitácora
+  de eventos; los paquetes no se tocan.
+- **Purga excepcional** (limpieza de pruebas o depuración legal explícita): dentro
+  de una transacción, `SELECT set_config('puertaya.purga_eventos','on',true);` y
+  luego el `DELETE`. `UPDATE` sigue prohibido incluso con la bandera. La app nunca
+  lo usa.
+- Si más adelante se borran usuarios, recordar que `PaqueteEvento.actorId` es FK
+  `RESTRICT` (no `SET NULL`, que haría un `UPDATE` bloqueado por el trigger).
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama
