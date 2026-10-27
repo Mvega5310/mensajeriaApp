@@ -21,9 +21,9 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T0.3 | H | hecho | 46ddaec | `config/env.js`; obligatorias DATABASE_URL y JWT_SECRET (≥32 en producción). |
 | T1.1 | S | hecho | 62f86a8 | 42 combinaciones probadas; TRANSICION_INVALIDA 409. Nota para T1.3: checkin/schedule/confirmDelivery quedarán restringidos. |
 | T1.2 | S | hecho | 455a096 | `domain/cobro.js`; primera entrega por apartamento físico (por createdAt); precedencia cortesía > bono > tarifa. |
-| T1.3 | S | en curso | | |
-| T1.4 | S | pendiente | | |
-| T2.1 | S | pendiente | | |
+| T1.3 | S | hecho | 6075b49 | PaqueteEvento solo-inserción (trigger); aplicarEvento con updateMany condicional; bono atómico, sin crédito → TARIFA. |
+| T1.4 | S | en curso | | |
+| T2.1 | S | en curso | | |
 | T2.2 | S | pendiente | | |
 | T2.3 | S | pendiente | | |
 | T2.4 | S | pendiente | | |
@@ -49,3 +49,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: T0.1 (119/119) y T0.2 (123/123) verificados por el orquestador. En paralelo: T0.3, T1.1, T1.2, T4.1.
 - 2026-10-27: T0.3, T1.1 y T1.2 integradas; `test:all` 198/198. F0 cerrada. Arranca T1.3.
 - 2026-10-27: T4.1 integrada, build verde.
+- 2026-10-27: T1.3 integrada, `test:all` 208/208. En paralelo: T1.4 y T2.1.
