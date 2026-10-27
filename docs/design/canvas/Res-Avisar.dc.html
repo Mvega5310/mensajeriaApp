@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Residente · Avisar un paquete</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&amp;family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&amp;family=IBM+Plex+Mono:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+.pt{--bg:#E9DFCC;--surface:#FBF8F1;--raised:#F3ECDD;--line:#CDBFA5;--ink:#13294B;--muted:#5B5446;--action:#1F4FD1;--on-action:#FFFFFF;--edge:#13294B;--pin:#0B6E75;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.pt.noche{--bg:#15130F;--surface:#1F1C17;--raised:#2A261F;--line:#3E382E;--ink:#F3ECDD;--muted:#BDB3A0;--action:#7D97FF;--on-action:#0B1020;--edge:#000000;--pin:#4FD1C5;--wa:#25D366;--on-wa:#04210F;--gift:#FF8A5B;--warn:#F2B33D;--danger:#FF6B5B}
+.h{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:-0.02em}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.btn{box-sizing:border-box;min-height:56px;padding:0 20px;border-radius:14px;font:700 18px 'Atkinson Hyperlegible Next',sans-serif;border:0;display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none}
+.btn-p{background:var(--action);color:var(--on-action);box-shadow:0 4px 0 var(--edge)}
+.chip{min-height:48px;padding:0 16px;border-radius:12px;font:700 16px 'Atkinson Hyperlegible Next',sans-serif;cursor:pointer}
+.inp{min-height:56px;box-sizing:border-box;border-radius:12px;border:2px solid var(--ink);background:var(--surface);color:var(--ink);padding:0 16px;font:500 18px 'IBM Plex Mono',monospace;width:100%}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+</style>
+</helmet>
+<div class="{{tc}}" style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:8px;padding:12px 8px 0">
+    <a href="Res-MisPaquetes.dc.html" aria-label="Volver" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--ink)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>
+  </div>
+  <div style="padding:8px 16px 0;display:flex;flex-direction:column;gap:6px">
+    <h1 class="h" style="margin:0;font-size:26px">Avisar un paquete</h1>
+    <p style="margin:0;font-size:17px;color:var(--muted)">Opcional. Si no avisas, igual lo recibimos.</p>
+  </div>
+  <div style="padding:20px 16px 0;display:flex;flex-direction:column;gap:10px">
+    <span style="font-size:15px;font-weight:700;color:var(--muted)">¿Quién lo trae?</span>
+    <div role="radiogroup" aria-label="Transportadora" style="display:flex;flex-wrap:wrap;gap:8px">
+      <sc-for list="{{carriers}}" as="c" hint-placeholder-count="6">
+        <button type="button" role="radio" class="chip" aria-checked="{{c.on}}" style="{{c.st}}" onClick="{{c.pick}}">{{c.label}}</button>
+      </sc-for>
+    </div>
+  </div>
+  <label style="padding:20px 16px 0;display:flex;flex-direction:column;gap:6px">
+    <span style="font-size:15px;font-weight:700;color:var(--muted)">Número de guía (si lo tienes)</span>
+    <input class="inp" type="text" inputmode="numeric" value="2390 4471 0021">
+  </label>
+  <button type="button" style="margin:12px 16px 0;align-self:flex-start;min-height:48px;border:0;background:transparent;color:var(--ink);font:700 16px 'Atkinson Hyperlegible Next',sans-serif;text-decoration:underline;padding:0;cursor:pointer">+ Agregar detalles (contra entrega, nota)</button>
+  <div style="flex:1"></div>
+  <div style="padding:12px 16px 28px">
+    <a class="btn btn-p" href="Res-MisPaquetes.dc.html">Avisar</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["día","noche"],"default":"día"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { sel: 'ml' }; }
+  renderVals() {
+    const on = 'background:var(--ink);color:var(--bg);border:2px solid var(--ink)';
+    const off = 'background:var(--surface);color:var(--ink);border:2px solid var(--line)';
+    const xs = [{ id: 'ml', label: 'Mercado Libre' }, { id: 'sv', label: 'Servientrega' }, { id: 'co', label: 'Coordinadora' }, { id: 'ir', label: 'Interrapidísimo' }, { id: 'am', label: 'Amazon' }, { id: 'ot', label: 'Otra' }];
+    const carriers = xs.map((c) => ({ ...c, on: this.state.sel === c.id ? 'true' : 'false', st: this.state.sel === c.id ? on : off, pick: () => this.setState({ sel: c.id }) }));
+    return { tc: (this.props.tema ?? 'día') === 'noche' ? 'pt noche' : 'pt', carriers };
+  }
+}
+</script>
+</body>
+</html>

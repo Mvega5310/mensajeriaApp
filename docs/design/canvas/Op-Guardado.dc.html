@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Operador · Guardado</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&amp;family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&amp;family=IBM+Plex+Mono:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+.pt{--bg:#E9DFCC;--surface:#FBF8F1;--raised:#F3ECDD;--line:#CDBFA5;--ink:#13294B;--muted:#5B5446;--action:#1F4FD1;--on-action:#FFFFFF;--edge:#13294B;--pin:#0B6E75;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.pt.noche{--bg:#15130F;--surface:#1F1C17;--raised:#2A261F;--line:#3E382E;--ink:#F3ECDD;--muted:#BDB3A0;--action:#7D97FF;--on-action:#0B1020;--edge:#000000;--pin:#4FD1C5;--wa:#25D366;--on-wa:#04210F;--gift:#FF8A5B;--warn:#F2B33D;--danger:#FF6B5B}
+.h{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:-0.02em}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.btn{box-sizing:border-box;min-height:56px;padding:0 20px;border-radius:16px;font:700 18px 'Atkinson Hyperlegible Next',sans-serif;border:0;display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none}
+.btn-wa{background:var(--wa);color:var(--on-wa)}
+.btn-s{background:transparent;color:var(--ink);border:2px solid var(--line)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+</style>
+</helmet>
+<div class="{{tc}}" style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column">
+  <div style="padding:56px 16px 0;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+    <div style="width:88px;height:88px;border-radius:50%;background:var(--raised);display:flex;align-items:center;justify-content:center;color:var(--action)">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>
+    </div>
+    <h1 class="h" style="margin:0;font-size:30px">Guardado</h1>
+    <p style="margin:0;font-size:18px"><b class="mono">T2 · 304</b> · Ana Gómez</p>
+    <p style="margin:0;font-size:16px;color:var(--muted)">Estándar · <span style="color:var(--gift);font-weight:700">Primera entrega gratis</span> · 10:42</p>
+  </div>
+  <div style="margin:28px 16px 0;padding:16px;border-radius:18px;background:var(--surface);display:flex;flex-direction:column;gap:10px">
+    <span style="font-size:14px;font-weight:700;color:var(--muted)">Mensaje para Ana</span>
+    <p style="margin:0;font-size:16px;line-height:1.5;background:var(--raised);border-radius:14px 14px 14px 4px;padding:12px 14px">Hola Ana, llegó tu paquete a portería (Estándar). Tu PIN de entrega es <b class="mono">4821</b>. Pide la entrega aquí: puertaya.app/p/x7k2</p>
+  </div>
+  <p style="margin:12px 16px 0;font-size:14px;color:var(--muted);text-align:center">Se abre WhatsApp con el mensaje listo. Solo tocas Enviar.</p>
+  <div style="flex:1"></div>
+  <div style="padding:12px 16px 28px;display:flex;flex-direction:column;gap:10px">
+    <a class="btn btn-wa" href="Res-MisPaquetes.dc.html"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12a9 9 0 0 1-13.5 7.8L3 21l1.3-4.4A9 9 0 1 1 21 12z"/></svg>Avisar por WhatsApp</a>
+    <a class="btn btn-s" href="Op-Recibir.dc.html">Recibir otro</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["día","noche"],"default":"día"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return { tc: (this.props.tema ?? 'día') === 'noche' ? 'pt noche' : 'pt' }; }
+}
+</script>
+</body>
+</html>

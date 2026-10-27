@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Operador · Recibir</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&amp;family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&amp;family=IBM+Plex+Mono:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+.pt{--bg:#E9DFCC;--surface:#FBF8F1;--raised:#F3ECDD;--line:#CDBFA5;--ink:#13294B;--muted:#5B5446;--action:#1F4FD1;--on-action:#FFFFFF;--edge:#13294B;--pin:#0B6E75;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.pt.noche{--bg:#15130F;--surface:#1F1C17;--raised:#2A261F;--line:#3E382E;--ink:#F3ECDD;--muted:#BDB3A0;--action:#7D97FF;--on-action:#0B1020;--edge:#000000;--pin:#4FD1C5;--wa:#25D366;--on-wa:#04210F;--gift:#FF8A5B;--warn:#F2B33D;--danger:#FF6B5B}
+.h{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:-0.02em}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.key{min-height:60px;border-radius:14px;border:0;background:var(--surface);color:var(--ink);font:700 26px 'IBM Plex Mono',monospace;display:flex;align-items:center;justify-content:center}
+.sug{display:flex;align-items:center;gap:14px;min-height:64px;padding:0 16px;border-radius:16px;background:var(--surface);color:var(--ink);text-decoration:none}
+.tab{flex:1;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:700 13px 'Atkinson Hyperlegible Next',sans-serif;color:var(--muted);text-decoration:none}
+a:focus-visible,button:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+</style>
+</helmet>
+<div class="{{tc}}" style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 0">
+    <span class="h" style="font-size:18px;font-weight:700">Puerta<span style="color:var(--action)">yá</span></span>
+    <span style="font-size:14px;color:var(--muted)">Ipanema · <b style="color:var(--warn)">DEMO</b></span>
+  </div>
+  <div style="padding:20px 16px 0;display:flex;flex-direction:column;gap:6px">
+    <h1 class="h" style="margin:0;font-size:28px">Recibir</h1>
+    <p style="margin:0;font-size:16px;color:var(--muted)">Hoy: <b class="mono" style="color:var(--ink)">12</b> recibidos · <b class="mono" style="color:var(--ink)">5</b> por entregar</p>
+  </div>
+  <label style="margin:16px 16px 0;display:flex;flex-direction:column;gap:6px">
+    <span style="font-size:14px;font-weight:700;color:var(--muted)">Apartamento</span>
+    <span class="mono" style="min-height:64px;box-sizing:border-box;border-radius:16px;border:2px solid var(--action);background:var(--surface);display:flex;align-items:center;padding:0 16px;font-size:32px;font-weight:700">T2 · 30<span style="width:2px;height:34px;background:var(--action);margin-left:2px"></span></span>
+  </label>
+  <div style="padding:12px 16px 0;display:flex;flex-direction:column;gap:8px">
+    <a class="sug" href="Op-Peso.dc.html" style="border:2px solid var(--line)">
+      <span class="mono" style="font-size:22px;font-weight:700;width:96px">T2 · 304</span>
+      <span style="flex:1;font-size:17px;font-weight:600">Ana Gómez</span>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </a>
+    <a class="sug" href="Op-Peso.dc.html">
+      <span class="mono" style="font-size:22px;font-weight:700;width:96px">T2 · 305</span>
+      <span style="flex:1;font-size:17px;font-weight:600">Luis Pérez</span>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </a>
+    <a href="Op-Pendientes.dc.html" style="min-height:48px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--muted);text-decoration:underline">No sé de quién es</a>
+  </div>
+  <div style="flex:1"></div>
+  <div style="padding:0 16px 12px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+    <button class="key" type="button">1</button><button class="key" type="button">2</button><button class="key" type="button">3</button>
+    <button class="key" type="button">4</button><button class="key" type="button">5</button><button class="key" type="button">6</button>
+    <button class="key" type="button">7</button><button class="key" type="button">8</button><button class="key" type="button">9</button>
+    <button class="key" type="button" style="font:700 18px 'Atkinson Hyperlegible Next',sans-serif">Torre</button><button class="key" type="button">0</button>
+    <button class="key" type="button" aria-label="Borrar"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 5H9l-6 7 6 7h12zM12 9l6 6M18 9l-6 6"/></svg></button>
+  </div>
+  <nav style="display:flex;border-top:1px solid var(--line);background:var(--surface);padding:4px 8px 16px">
+    <a class="tab" href="Op-Recibir.dc.html" aria-current="page" style="color:var(--action)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M3 8l9-5 9 5v10l-9 5-9-5zM3 8l9 5 9-5M12 13v10"/></svg>Recibir</a>
+    <a class="tab" href="Op-Entregar.dc.html"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Entregar</a>
+    <a class="tab" href="Op-Pendientes.dc.html"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Pendientes · 5</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["día","noche"],"default":"día"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return { tc: (this.props.tema ?? 'día') === 'noche' ? 'pt noche' : 'pt' }; }
+}
+</script>
+</body>
+</html>

@@ -14,6 +14,13 @@ sus residentes, su operador y sus paquetes, aislados entre sí (KAN-8).
 La rama de trabajo es `develop`, no `main` (ver regla de ramas abajo, es la más
 importante de este archivo).
 
+> **Refactor mobile-first (rama `refactor/mobile-first`, sale de KAN-8):** se
+> ejecuta según [docs/plan/PLAN.md](docs/plan/PLAN.md) y su tablero
+> [docs/plan/ESTADO.md](docs/plan/ESTADO.md). Diseño en `docs/design/canvas/`.
+> Recorrido fijo: LLEGA → REGISTRO (operador, 4 toques) → AVISO → ENTREGA CON
+> PIN; la pre-alerta del residente es opcional. Se despliega en el Railway
+> propio (`puertaya-refactor`), nunca en producción sin orden explícita.
+
 **Para features, funcionalidades y cómo levantar el proyecto en local:
 lee [README.md](README.md).** Para infraestructura, despliegue y cómo
 migrar la base de datos de producción: lee [DEPLOY.md](DEPLOY.md). Este

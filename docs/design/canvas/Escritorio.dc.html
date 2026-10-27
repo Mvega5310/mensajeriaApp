@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Escritorio · Pendientes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&amp;family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&amp;family=IBM+Plex+Mono:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+.pt{--bg:#E9DFCC;--surface:#FBF8F1;--raised:#F3ECDD;--line:#CDBFA5;--ink:#13294B;--muted:#5B5446;--action:#1F4FD1;--on-action:#FFFFFF;--edge:#13294B;--pin:#0B6E75;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.pt.noche{--bg:#15130F;--surface:#1F1C17;--raised:#2A261F;--line:#3E382E;--ink:#F3ECDD;--muted:#BDB3A0;--action:#7D97FF;--on-action:#0B1020;--edge:#000000;--pin:#4FD1C5;--wa:#25D366;--on-wa:#04210F;--gift:#FF8A5B;--warn:#F2B33D;--danger:#FF6B5B}
+.h{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:-0.02em}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.btn{box-sizing:border-box;min-height:56px;padding:0 24px;border-radius:14px;font:700 18px 'Atkinson Hyperlegible Next',sans-serif;border:0;display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none}
+.btn-p{background:var(--action);color:var(--on-action);box-shadow:0 4px 0 var(--edge)}
+.row{display:flex;align-items:center;gap:14px;min-height:64px;padding:8px 14px;border-radius:12px;background:var(--surface);border:2px solid var(--line);color:var(--ink);text-decoration:none}
+.nav{min-height:48px;display:flex;align-items:center;gap:10px;padding:0 14px;border-radius:12px;color:var(--ink);text-decoration:none;font-weight:700;font-size:17px}
+.sec{margin:0;font:900 13px Archivo,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+</style>
+</helmet>
+<div class="{{tc}}" style="box-sizing:border-box;min-height:800px;display:flex;flex-wrap:wrap;gap:0">
+  <nav style="flex:1 1 240px;max-width:280px;box-sizing:border-box;padding:28px 16px;display:flex;flex-direction:column;gap:6px;border-right:2px solid var(--ink)">
+    <span class="h" style="font-size:28px;font-weight:900;padding:0 14px 20px">PUERTA<span style="color:var(--action)">YÁ</span></span>
+    <a class="nav" href="Op-Recibir.dc.html">Recibir</a>
+    <a class="nav" href="Op-Entregar.dc.html">Entregar</a>
+    <a class="nav" href="#" aria-current="page" style="background:var(--surface);border:2px solid var(--ink)">Pendientes · 5</a>
+    <a class="nav" href="#">Residentes</a>
+    <a class="nav" href="#">Tarifas y conjunto</a>
+    <div style="flex:1"></div>
+    <span style="padding:0 14px;font-size:15px;color:var(--muted)">Ipanema · <b style="color:var(--warn)">DEMO</b></span>
+  </nav>
+  <main style="flex:999 1 560px;min-width:0;box-sizing:border-box;padding:28px 32px;display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px">
+      <h1 class="h" style="margin:0;font-size:34px">Pendientes</h1>
+      <label style="flex:0 1 380px;display:flex;align-items:center;gap:10px;min-height:52px;padding:0 14px;border-radius:12px;background:var(--surface);border:2px solid var(--ink)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2.5" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input type="search" placeholder="Buscar apartamento o nombre" aria-label="Buscar" style="flex:1;border:0;background:transparent;color:var(--ink);font:500 17px 'Atkinson Hyperlegible Next',sans-serif;outline:none;min-width:0">
+      </label>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+      <div style="flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:8px">
+        <p class="sec" style="color:var(--warn)">Sin asignar · 1</p>
+        <div class="row" style="border-color:var(--warn)"><span style="flex:1;font-weight:700">Etiqueta: "C. Rojas" · Coordinadora · 9:10</span><a href="#" style="font-weight:700;color:var(--ink)">Asignar</a></div>
+        <p class="sec" style="margin-top:12px">Por entregar · 5</p>
+        <a class="row" href="#" style="border:2px solid var(--ink)"><span class="mono" style="font-size:20px;font-weight:700;width:96px">T2·304</span><span style="flex:1;font-weight:700">Ana Gómez</span><span style="color:var(--pin);font-weight:700">6–8 p. m.</span><span class="mono" style="font-weight:700">2</span></a>
+        <a class="row" href="#"><span class="mono" style="font-size:20px;font-weight:700;width:96px">T1·102</span><span style="flex:1;font-weight:700">Marta Ruiz</span><span style="color:var(--muted)">2 días</span><span class="mono" style="font-weight:700">1</span></a>
+        <a class="row" href="#"><span class="mono" style="font-size:20px;font-weight:700;width:96px">T3·501</span><span style="flex:1;font-weight:700">Jorge Díaz</span><span style="color:var(--muted)">hoy</span><span class="mono" style="font-weight:700">2</span></a>
+      </div>
+      <section style="flex:1 1 360px;min-width:0;box-sizing:border-box;background:var(--surface);border:2px solid var(--ink);border-radius:16px;display:flex;flex-direction:column">
+        <div style="padding:20px;display:flex;justify-content:space-between;align-items:baseline">
+          <div style="display:flex;flex-direction:column;gap:4px"><span class="mono" style="font-size:30px;font-weight:700">T2·304</span><span style="font-size:17px;color:var(--muted)">Ana Gómez · 2 paquetes</span></div>
+          <span style="font-weight:700;color:var(--pin)">Programado 6–8 p. m.</span>
+        </div>
+        <div style="border-top:2px dashed var(--line);padding:16px 20px;display:flex;flex-direction:column;gap:10px;font-size:17px">
+          <div style="display:flex;justify-content:space-between"><span>Servientrega · Estándar · 10:42</span><span style="color:var(--gift);font-weight:700">Gratis</span></div>
+          <div style="display:flex;justify-content:space-between"><span>Mercado Libre · Volumen · ayer</span><span class="mono" style="font-weight:700">$5.000</span></div>
+        </div>
+        <div style="border-top:2px dashed var(--line);padding:20px;display:flex;align-items:center;justify-content:space-between;gap:16px">
+          <span style="font-size:17px">Total <b class="mono" style="font-size:24px">$5.000</b></span>
+          <a class="btn btn-p" href="Op-Entregar.dc.html">Entregar con PIN</a>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["día","noche"],"default":"día"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() { return { tc: (this.props.tema ?? 'día') === 'noche' ? 'pt noche' : 'pt' }; }
+}
+</script>
+</body>
+</html>

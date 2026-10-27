@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Residente · Pedir entrega</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&amp;family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&amp;family=IBM+Plex+Mono:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+.pt{--bg:#E9DFCC;--surface:#FBF8F1;--raised:#F3ECDD;--line:#CDBFA5;--ink:#13294B;--muted:#5B5446;--action:#1F4FD1;--on-action:#FFFFFF;--edge:#13294B;--pin:#0B6E75;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.pt.noche{--bg:#15130F;--surface:#1F1C17;--raised:#2A261F;--line:#3E382E;--ink:#F3ECDD;--muted:#BDB3A0;--action:#7D97FF;--on-action:#0B1020;--edge:#000000;--pin:#4FD1C5;--wa:#25D366;--on-wa:#04210F;--gift:#FF8A5B;--warn:#F2B33D;--danger:#FF6B5B}
+.h{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:-0.02em}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.btn{box-sizing:border-box;min-height:56px;padding:0 20px;border-radius:16px;font:700 18px 'Atkinson Hyperlegible Next',sans-serif;border:0;display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none}
+.btn-p{background:var(--action);color:var(--on-action);box-shadow:0 4px 0 var(--edge)}
+.chip{min-height:64px;border-radius:16px;font:700 17px 'Atkinson Hyperlegible Next',sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.sec{margin:0;font:700 13px 'Atkinson Hyperlegible Next',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+</style>
+</helmet>
+<div class="{{tc}}" style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:8px;padding:12px 8px 0">
+    <a href="Res-MisPaquetes.dc.html" aria-label="Volver" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:var(--ink)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>
+  </div>
+  <div style="padding:8px 16px 0;display:flex;flex-direction:column;gap:6px">
+    <h1 class="h" style="margin:0;font-size:26px">¿Cuándo te lo llevamos?</h1>
+    <p style="margin:0;font-size:17px;color:var(--muted)">2 paquetes a <b class="mono" style="color:var(--ink)">T2 · 304</b> · total <b class="mono" style="color:var(--ink)">$5.000</b></p>
+  </div>
+  <div style="padding:20px 16px 0;display:flex;flex-direction:column;gap:10px">
+    <p class="sec">Hoy</p>
+    <div role="radiogroup" aria-label="Franja de hoy" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+      <sc-for list="{{hoy}}" as="f" hint-placeholder-count="2">
+        <button type="button" role="radio" class="chip" aria-checked="{{f.on}}" style="{{f.st}}" onClick="{{f.pick}}"><span class="mono">{{f.label}}</span></button>
+      </sc-for>
+    </div>
+    <p class="sec" style="margin-top:10px">Mañana</p>
+    <div role="radiogroup" aria-label="Franja de mañana" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+      <sc-for list="{{manana}}" as="f" hint-placeholder-count="4">
+        <button type="button" role="radio" class="chip" aria-checked="{{f.on}}" style="{{f.st}}" onClick="{{f.pick}}"><span class="mono">{{f.label}}</span></button>
+      </sc-for>
+    </div>
+    <button type="button" style="margin-top:6px;min-height:52px;border-radius:14px;border:2px dashed var(--line);background:transparent;color:var(--ink);font:700 16px 'Atkinson Hyperlegible Next',sans-serif;cursor:pointer">Prefiero recogerlo en portería</button>
+  </div>
+  <div style="flex:1"></div>
+  <div style="padding:12px 16px 28px">
+    <a class="btn btn-p" href="Res-MisPaquetes.dc.html">Confirmar {{elegida}}</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["día","noche"],"default":"día"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { sel: 'h2' }; }
+  renderVals() {
+    const on = 'background:var(--raised);color:var(--ink);border:2px solid var(--action)';
+    const off = 'background:var(--surface);color:var(--ink);border:2px solid var(--line)';
+    const mk = (xs) => xs.map((f) => ({ ...f, on: this.state.sel === f.id ? 'true' : 'false', st: this.state.sel === f.id ? on : off, pick: () => this.setState({ sel: f.id }) }));
+    const hoy = [{ id: 'h1', label: '4–6 p. m.' }, { id: 'h2', label: '6–8 p. m.' }];
+    const manana = [{ id: 'm1', label: '8–10 a. m.' }, { id: 'm2', label: '10–12 m.' }, { id: 'm3', label: '4–6 p. m.' }, { id: 'm4', label: '6–8 p. m.' }];
+    const all = hoy.concat(manana);
+    const cur = all.find((f) => f.id === this.state.sel);
+    const pref = this.state.sel[0] === 'h' ? 'hoy ' : 'mañana ';
+    return { tc: (this.props.tema ?? 'día') === 'noche' ? 'pt noche' : 'pt', hoy: mk(hoy), manana: mk(manana), elegida: cur ? pref + cur.label : '' };
+  }
+}
+</script>
+</body>
+</html>

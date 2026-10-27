@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Residente · Acceso sin contraseña</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&amp;family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&amp;family=IBM+Plex+Mono:wght@500;700&amp;display=swap">
+<style>
+body{margin:0}
+.pt{--bg:#E9DFCC;--surface:#FBF8F1;--raised:#F3ECDD;--line:#CDBFA5;--ink:#13294B;--muted:#5B5446;--action:#1F4FD1;--on-action:#FFFFFF;--edge:#13294B;--pin:#0B6E75;--wa:#0F7A40;--on-wa:#FFFFFF;--gift:#C2410C;--warn:#8A5A00;--danger:#B42318;font-family:'Atkinson Hyperlegible Next',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+.pt.noche{--bg:#15130F;--surface:#1F1C17;--raised:#2A261F;--line:#3E382E;--ink:#F3ECDD;--muted:#BDB3A0;--action:#7D97FF;--on-action:#0B1020;--edge:#000000;--pin:#4FD1C5;--wa:#25D366;--on-wa:#04210F;--gift:#FF8A5B;--warn:#F2B33D;--danger:#FF6B5B}
+.h{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:-0.02em}
+.btn{box-sizing:border-box;min-height:56px;padding:0 20px;border-radius:16px;font:700 18px 'Atkinson Hyperlegible Next',sans-serif;border:0;display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none;cursor:pointer;width:100%}
+.btn-p{background:var(--action);color:var(--on-action);box-shadow:0 4px 0 var(--edge)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--action);outline-offset:2px}
+</style>
+</helmet>
+<div class="{{tc}}" style="width:390px;height:844px;box-sizing:border-box;display:flex;flex-direction:column;padding:0 16px">
+  <div style="padding-top:72px;display:flex;flex-direction:column;gap:10px">
+    <span class="h" style="font-size:40px;font-weight:700">Puerta<span style="color:var(--action)">yá</span></span>
+    <p style="margin:0;font-size:18px;color:var(--muted)">Tus paquetes del conjunto, sin filas ni llamadas.</p>
+  </div>
+  <sc-if value="{{enviado}}" hint-placeholder-val="{{ false }}">
+    <div style="margin-top:48px;padding:20px;border-radius:18px;background:var(--surface);display:flex;flex-direction:column;gap:10px">
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--action)" stroke-width="2" aria-hidden="true"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></svg>
+      <h1 class="h" style="margin:0;font-size:24px">Revisa tu correo</h1>
+      <p style="margin:0;font-size:17px;line-height:1.5">Te enviamos un enlace a <b>ana@correo.com</b>. Ábrelo en este teléfono para entrar. Vence en 15 minutos.</p>
+      <button type="button" onClick="{{volver}}" style="align-self:flex-start;min-height:48px;border:0;background:transparent;color:var(--muted);font:700 16px 'Atkinson Hyperlegible Next',sans-serif;text-decoration:underline;padding:0;cursor:pointer">Usar otro correo</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{form}}" hint-placeholder-val="{{ true }}">
+    <div style="margin-top:48px;display:flex;flex-direction:column;gap:16px">
+      <h1 class="h" style="margin:0;font-size:26px">Entra con tu correo</h1>
+      <label style="display:flex;flex-direction:column;gap:6px">
+        <span style="font-size:15px;font-weight:700;color:var(--muted)">Correo</span>
+        <input type="email" value="ana@correo.com" style="min-height:56px;box-sizing:border-box;border-radius:14px;border:2px solid var(--line);background:var(--surface);color:var(--ink);padding:0 16px;font:500 18px 'Atkinson Hyperlegible Next',sans-serif">
+      </label>
+      <p style="margin:0;font-size:15px;color:var(--muted)">Sin contraseña: te mandamos un enlace para entrar.</p>
+    </div>
+  </sc-if>
+  <div style="flex:1"></div>
+  <sc-if value="{{form}}" hint-placeholder-val="{{ true }}">
+    <div style="padding-bottom:28px;display:flex;flex-direction:column;gap:8px">
+      <button type="button" class="btn btn-p" onClick="{{enviar}}">Enviarme el enlace</button>
+      <a href="#" style="min-height:48px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-weight:700;font-size:16px">Entrar con contraseña</a>
+    </div>
+  </sc-if>
+  <sc-if value="{{enviado}}" hint-placeholder-val="{{ false }}">
+    <div style="padding-bottom:28px">
+      <a class="btn btn-p" href="Res-MisPaquetes.dc.html">Abrir mis paquetes</a>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"tema":{"editor":"enum","options":["día","noche"],"default":"día"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(p) { super(p); this.state = { enviado: false }; }
+  renderVals() {
+    return {
+      tc: (this.props.tema ?? 'día') === 'noche' ? 'pt noche' : 'pt',
+      enviado: this.state.enviado, form: !this.state.enviado,
+      enviar: () => this.setState({ enviado: true }), volver: () => this.setState({ enviado: false })
+    };
+  }
+}
+</script>
+</body>
+</html>
