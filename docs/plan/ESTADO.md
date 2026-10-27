@@ -29,13 +29,14 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T2.4 | S | hecho | 8a584c0 | Notificador (resend/fake) con plantillas escapadas y sin "Ipanema"; correo de llegada post-commit (no en replay). El orquestador conectó el agradecimiento del lote (un correo por lote). |
 | T2.5 | S | hecho | b213c19 | /entregas/verificar-pin y /confirmar: lote = apartamento, PIN_AMBIGUO, límite 10/15 min por operador, token de entrega 10 min. Propuesta futura: PIN por residente/apto (colisiones). |
 | T2.6 | H | hecho | dc38a49 | Franjas, métodos de pago, prefijo y maxFotos salen de /conjunto/config; guard frontendSinFijos ampliado. Pendiente para T2.3: checkin usa `fotos.length > 3` fijo. |
+| T2.7 | S | hecho | 4e654d5 | (Nueva) GET /packages/resumen, GET /packages/:id con aviso, búsqueda "T2 30" por prefijo, bitácora filtrable/paginada + vista Bitácora en "Más". |
 | T3.1 | S | hecho | c787313 | GET /api/p/:token (HMAC, 7 días) con sesión limitada `scope:enlace` (2 h) que solo permite ver y programar; enlace en el aviso. |
 | T3.2 | S | hecho | 91068de | POST /auth/enlace (200 genérico, 5/15 min) y /auth/enlace/canjear (un solo uso, atómico); PasswordResetToken.proposito RESET/ACCESO. |
 | T4.1 | S | hecho | b1cecdd | `frontend/src/design/` (tokens v3, 13 componentes, useTheme día/noche, `/_ds` en dev). Variables viejas renombradas `--lg-*` hasta T4.2/T4.3. |
 | T4.2 | S | hecho | daa541c | 6 pantallas del operador en `pages/operador/`; OperatorView borrado. Probado con Playwright 390 px día/noche. Toques hasta Guardado: 3 + dígitos del apto (4 con apto de 1 dígito, 6 con 3 dígitos). Bitácora con filtros no replicada (queda CSV). |
 | T4.3 | S | en curso | | |
 | T4.4 | H | hecho | f9d2b84 | Nav lateral ≥1024 px, Pendientes en dos columnas; sin scroll horizontal a 1280 y 390 (día/noche). El orquestador añadió "Entregar con PIN" al detalle. |
-| T4.5 | S | pendiente | | |
+| T4.5 | S | en curso | | |
 | T4.6 | H | pendiente | | |
 | T5.1 | S | hecho | 39d9705 | AlmacenFotos (s3/fake/legado) + PaqueteFoto; sin bucket en producción sigue en legado con aviso. |
 | T6.1 | S | pendiente | | |
@@ -67,3 +68,4 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - Contratos que pidió el frontend (tarea nueva **T2.7**, tras las correcciones de F2): resumen "hoy" liviano, `GET /packages/:id` para el operador, búsqueda con torre por prefijo, y bitácora filtrable.
 - 2026-10-27: T4.4 integrada; build verde.
 - 2026-10-27: correcciones de la revisión F2 integradas (cae914b): cortesía = primer paquete cobrado del apto, reservada en `CortesiaApartamento`; "T2" = "TORRE 2"; PIN fuera de las respuestas al operador; enlace `/p#token` + `POST /api/p/abrir`; JSON 1 MB general y ~9,6 MB solo en recepción/checkin; falla si Railway sin NODE_ENV. `test:all` 417/417. **F2 cerrada.** En curso: T4.3 y T2.7.
+- 2026-10-27: T2.7 integrada, `test:all` 432/432, build verde. En curso: T4.3 y T4.5.
