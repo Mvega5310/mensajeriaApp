@@ -8,7 +8,7 @@ import { esCategoriaValida } from '../domain/cobro.js';
 import { validarFotos, mensajeMaxFotos } from '../domain/recepcion.js';
 import { resolverCobro, idsPrimeraEntrega } from '../services/cobro.service.js';
 import { EVENTOS, ESTADOS, transicionar } from '../domain/paquete.machine.js';
-import { aplicarEvento, crearConEvento, motivosDeCobro } from '../services/paquete.service.js';
+import { aplicarEvento, crearConEvento, motivosDeCobro, selectSinFoto } from '../services/paquete.service.js';
 import { recibirPaquete, asignarPaquete, armarRespuesta } from '../services/recepcion.service.js';
 import { subirFotos, registrarFotos, descartarSubidas, fotosDelPaquete } from '../services/fotos.service.js';
 import { decodificarDataUri } from '../services/almacen/index.js';
@@ -102,12 +102,13 @@ export async function createPrealert(req, res) {
 export async function listMine(req, res) {
   const packages = await prisma.package.findMany({
     where: { residenteId: req.user.sub },
+    select: selectSinFoto({ conPin: true }), // la foto ni se lee de la base
     orderBy: { createdAt: 'desc' },
   });
   // motivoCobro (CORTESIA/BONO/...) sale del último evento RECIBIR/ASIGNAR, igual que
   // en listAll y en /api/p/paquetes: el historial no debe inferir "Gratis" por costo 0.
   const motivos = await motivosDeCobro(packages.map((p) => p.id));
-  res.json(packages.map(({ fotoUrl, ...p }) => ({ ...p, motivoCobro: motivos.get(p.id) ?? null })));
+  res.json(packages.map((p) => ({ ...p, motivoCobro: motivos.get(p.id) ?? null })));
 }
 
 const MODALIDADES_ENTREGA = ['DOMICILIO', 'RECOGER'];
@@ -125,7 +126,7 @@ function enteroPositivo(valor, campo, max) {
 }
 
 // Filtros de la bitácora (T2.7). Todos son opcionales y se combinan con AND.
-//  - estado: uno de ESTADOS.
+//  - estado: uno de ESTADOS, o varios separados por coma.
 //  - desde/hasta: "YYYY-MM-DD" (día de Bogotá, `hasta` incluye todo ese día) o ISO completo.
 //    Se comparan con la fecha efectiva del paquete: `recibidoEn` si ya llegó; si no
 //    (pre-alerta, aún sin recibir) `createdAt`.
@@ -134,10 +135,13 @@ function filtrosListado(query) {
   const { estado, desde, hasta, q } = query;
   const y = [];
   if (estado !== undefined) {
-    if (!Object.values(ESTADOS).includes(estado)) {
+    // Uno o varios separados por coma ("EN_RECEPCION,PROGRAMADO"): Pendientes pide solo
+    // los estados abiertos y así no lee toda la historia.
+    const lista = typeof estado === 'string' ? estado.split(',').map((e) => e.trim()) : [];
+    if (!lista.length || !lista.every((e) => Object.values(ESTADOS).includes(e))) {
       throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El estado no es válido. Elige uno de la lista.', 400, { campo: 'estado' });
     }
-    y.push({ estado });
+    y.push({ estado: lista.length === 1 ? lista[0] : { in: lista } });
   }
   const rango = {};
   for (const [campo, tipo, op] of [['desde', 'desde', 'gte'], ['hasta', 'hasta', 'lt']]) {
@@ -186,7 +190,9 @@ export async function listAll(req, res) {
   const [packages, total] = await Promise.all([
     prisma.package.findMany({
       where,
-      include: {
+      // Sin fotoUrl ni pin (ni bonoId) desde la consulta: no se leen de la base.
+      select: {
+        ...selectSinFoto({ quitar: ['bonoId'] }),
         residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
         bono: { select: { id: true, categoriaPeso: true, cantidadTotal: true, cantidadUsada: true } },
       },
@@ -199,9 +205,9 @@ export async function listAll(req, res) {
   // La cortesía es del PRIMER PAQUETE DEL APARTAMENTO QUE SE COBRA (no del más
   // antiguo en crearse; ver domain/cobro.js): se marca para que el operador vea
   // de un vistazo a quién no debe cobrarle. Coherente con resolverCobro().
-  const primeras = await idsPrimeraEntrega();
+  const primeras = await idsPrimeraEntrega({ residenteIds: packages.map((p) => p.residenteId) });
 
-  const items = packages.map(({ pin, bonoId, fotoUrl, ...p }) => ({
+  const items = packages.map((p) => ({
     ...p,
     // Sin residente no hay cortesía de primera entrega. `etiquetaNombre` ya
     // viaja en `p`: la vista lo muestra cuando `residente` es null.
@@ -260,7 +266,7 @@ export async function schedule(req, res) {
   }
   const recoger = modalidad === 'RECOGER';
   const updated = await prisma.$transaction(async (tx) => {
-    const pkg = await tx.package.findUnique({ where: { id: req.params.id } });
+    const pkg = await tx.package.findUnique({ where: { id: req.params.id }, select: selectSinFoto({ conPin: true }) });
     if (!pkg || pkg.residenteId !== req.user.sub) {
       throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
     }
@@ -316,7 +322,7 @@ export async function checkin(req, res) {
   let resultado;
   try {
   resultado = await prisma.$transaction(async (tx) => {
-    const fresco = await tx.package.findUnique({ where: { id: req.params.id } });
+    const fresco = await tx.package.findUnique({ where: { id: req.params.id }, select: selectSinFoto({ conPin: true }) });
     if (!fresco) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
     // Valida la transición ANTES de tocar el bono (un paquete ya recibido o
     // entregado no debe gastar créditos).
@@ -380,9 +386,16 @@ export async function asignar(req, res) {
   }));
 }
 
-function csvEscape(value) {
-  const str = value === null || value === undefined ? '' : String(value);
-  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+// M1: una celda de TEXTO que empiece por = + - @ (o tab / retorno de carro) la
+// ejecutaría Excel como fórmula; se neutraliza con un apóstrofo al inicio. Solo
+// aplica a texto: los números (costos, valores) nunca llegan aquí como String
+// con signo menos inicial porque se escriben como number.
+const INICIO_FORMULA = /^[=+\-@\t\r]/;
+export function csvEscape(value) {
+  if (value === null || value === undefined) return '';
+  let str = String(value);
+  if (typeof value === 'string' && INICIO_FORMULA.test(str)) str = `'${str}`;
+  return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
 }
 
 const CSV_HEADERS = [
@@ -395,17 +408,26 @@ const CSV_HEADERS = [
 // con un contador. Nunca incluye el PIN ni las fotos (serían un bloque
 // enorme de base64 sin ninguna utilidad dentro de un CSV).
 export async function exportCsv(req, res) {
-  const { desde, hasta } = req.query;
+    // M2: mismas reglas que la bitácora (día de Bogotá; `hasta` incluye todo ese día;
+  // fecha inválida => 400 DATOS_INVALIDOS, nunca 500).
   const where = {};
-  if (desde || hasta) {
-    where.fechaIngreso = {};
-    if (desde) where.fechaIngreso.gte = new Date(desde);
-    if (hasta) where.fechaIngreso.lte = new Date(`${hasta}T23:59:59`);
+  const rango = {};
+  for (const [campo, tipo, op] of [['desde', 'desde', 'gte'], ['hasta', 'hasta', 'lt']]) {
+    if (req.query[campo] === undefined || req.query[campo] === '') continue;
+    const f = parsearFiltroFecha(req.query[campo], tipo);
+    if (!f) throw new AppError(CODIGOS.DATOS_INVALIDOS, `La fecha "${campo}" no es válida. Usa el formato AAAA-MM-DD.`, 400, { campo });
+    rango[op] = f;
   }
+  if (rango.gte || rango.lt) where.fechaIngreso = rango;
 
+  // Solo las columnas que usa el CSV: ni fotoUrl ni pin se leen de la base.
   const packages = await prisma.package.findMany({
     where,
-    include: {
+    select: {
+      id: true, fechaIngreso: true, residenteId: true, etiquetaNombre: true, proveedor: true, guia: true,
+      pinProveedor: true, categoriaPeso: true, costoServicio: true, estado: true, franjaHoraria: true,
+      metodoPagoServicio: true, esContraEntregaProveedor: true, valorProductoProveedor: true,
+      valorDeclarado: true, notas: true, fechaEntrega: true,
       residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
       bono: { select: { id: true } },
     },
@@ -414,10 +436,10 @@ export async function exportCsv(req, res) {
 
   // Igual que en listAll(): el motivo de un costo en $0 (primera entrega
   // vs. bono redimido) sirve para que el contador entienda por qué no se
-  // cobró, sin tener que adivinar. Se calcula sobre TODOS los paquetes (sin el
-  // filtro desde/hasta), porque el primer paquete cobrado de un apartamento
-  // puede quedar fuera del rango exportado.
-  const primeras = await idsPrimeraEntrega();
+  // cobró, sin tener que adivinar. Se calcula sobre TODO el historial de los
+  // apartamentos exportados (sin el filtro desde/hasta), porque el primer paquete
+  // cobrado de un apartamento puede quedar fuera del rango exportado.
+  const primeras = await idsPrimeraEntrega({ residenteIds: packages.map((p) => p.residenteId) });
 
   const rows = packages.map((p) => {
     const motivoGratis = primeras.has(p.id) ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
@@ -452,7 +474,7 @@ function pinBloqueado(minutos) {
 
 export async function confirmDelivery(req, res) {
   const { pin } = req.body;
-  const pkg = await prisma.package.findUnique({ where: { id: req.params.id } });
+  const pkg = await prisma.package.findUnique({ where: { id: req.params.id }, select: selectSinFoto({ conPin: true }) });
   if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
 
   // Primero la transición: un paquete no entregable (PREALERTADO, ya ENTREGADO)
@@ -481,14 +503,14 @@ export async function confirmDelivery(req, res) {
   // El contador ya quedó en 0 (acierto); aplicarEvento relee el estado y falla
   // con 409 si otro proceso lo cambió.
   const updated = await prisma.$transaction(async (tx) => {
-    const actual = await tx.package.findUnique({ where: { id: pkg.id } });
+    const actual = await tx.package.findUnique({ where: { id: pkg.id }, select: selectSinFoto({ conPin: true }) });
     await aplicarEvento(tx, actual, EVENTOS.ENTREGAR, {
       actorId: req.user.sub,
       cambios: { fechaEntrega: new Date() },
     });
     return tx.package.findUnique({
       where: { id: pkg.id },
-      include: { residente: { select: { nombre: true, email: true } } },
+      select: { ...selectSinFoto(), residente: { select: { nombre: true, email: true } } },
     });
   });
 

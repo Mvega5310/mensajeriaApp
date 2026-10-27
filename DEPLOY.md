@@ -33,6 +33,23 @@ git push
 2. En el servicio creado, **Settings → Root Directory** → `backend`
    (el repo tiene `backend/` y `frontend/` en la misma raíz).
 3. En el mismo proyecto: **New → Database → PostgreSQL**.
+> **ATENCIÓN — variables nuevas OBLIGATORIAS en producción (refactor mobile-first).**
+> Antes de desplegar el refactor a `main`, cárgalas en el servicio de Railway; si faltan,
+> `npm start` aplica las migraciones pero el servidor **no arranca** (el despliegue "falla" y
+> Railway conserva el anterior). Hoy producción NO tiene `ENLACE_SECRET`.
+>
+> | Variable | Requisito |
+> |---|---|
+> | `NODE_ENV=production` | obligatoria en Railway (sin ella el arranque falla) |
+> | `ENLACE_SECRET` | nueva, obligatoria: ≥ 32 caracteres y **distinta** de `JWT_SECRET` |
+> | `JWT_SECRET` | revisar: ≥ 32 caracteres y no el valor de ejemplo |
+> | `FRONTEND_URL` y `CORS_ORIGIN` | la URL del frontend (Vercel); sin `FRONTEND_URL` los enlaces de los correos salen rotos |
+> | `FOTOS_S3_ENDPOINT`, `FOTOS_S3_BUCKET`, `FOTOS_S3_ACCESS_KEY`, `FOTOS_S3_SECRET`, `FOTOS_S3_REGION` (+ `FOTOS_S3_FORCE_PATH_STYLE` si el proveedor lo pide) | el grupo completo o ninguna: sin ninguna, las fotos siguen en la base (modo legado, con aviso); a medias, el servidor no arranca |
+> | `ENTREGA_SECRET` | opcional (si falta se usa `JWT_SECRET`); recomendable dedicada |
+>
+> NO configures `npm run seed` como comando de pre-despliegue en producción (eso es solo del
+> entorno de pruebas, abajo). Resto del camino y orden: `docs/plan/CIERRE.md`.
+
 4. En el servicio del backend, pestaña **Variables**, agrega:
 
    | Variable | Valor |
@@ -279,6 +296,17 @@ al pedir la entrega).
 - **Rollback:** `backend/prisma/manual/rollback_add_modalidad_entrega.sql` (con `psql`). Pierde solo
   esa preferencia; el código anterior ignora la columna.
 
+### Migración `add_paquete_residente_idx` (revisión final T8.1, M5)
+
+Agrega el índice `Package(conjuntoId, residenteId, estado)`: lo usan `GET /packages/mine`,
+`GET /api/p/paquetes` (sondeo cada 20 s por residente) y la entrega programada.
+
+- Migración **aditiva** (`20261103120000_add_paquete_residente_idx`): solo un `CREATE INDEX`,
+  `prisma migrate deploy` normal; sin cambios de datos. Con tablas muy grandes el índice bloquea
+  escrituras mientras se construye (segundos con el volumen de un conjunto).
+- **Rollback:** `backend/prisma/manual/rollback_add_paquete_residente_idx.sql` (con `psql`). Solo
+  quita el índice (el código sigue funcionando, más lento) y la fila de `_prisma_migrations`.
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama
@@ -406,6 +434,57 @@ impresos con el código anterior **dejan de funcionar** — hay que reimprimir l
 cartelera/flyers con el enlace nuevo (`/registro?c=<código nuevo>`). Los
 residentes ya registrados no se ven afectados. Regenerar el código no borra
 histórico ni cambia a quién pertenecen los datos.
+
+## Entorno refactor (Railway)
+
+Entorno de pruebas del refactor mobile-first, **separado de producción** (nunca toca la base ni los
+dominios reales). Se despliega desde la rama `refactor/mobile-first`.
+
+| Pieza | Detalle |
+|---|---|
+| Proyecto Railway | `puertaya-refactor` (entorno `production` del proyecto) |
+| `Postgres` | servicio de base de datos de Railway; acceso interno |
+| Bucket `fotos` | Railway Bucket (compatible con S3) para las fotos nuevas |
+| `api` | repo `Mvega5310/mensajeriaApp`, rama `refactor/mobile-first`, **Root Directory `/backend`**, puerto 4000 |
+| `web` | mismo repo y rama, **Root Directory `/frontend`**, builder Railpack |
+
+**Variables del servicio `api`** (solo nombres; los valores se generan/referencian, no se escriben aquí):
+
+| Variable | Origen |
+|---|---|
+| `DATABASE_URL` | referencia `${{Postgres.DATABASE_URL}}` |
+| `JWT_SECRET`, `ENLACE_SECRET`, `ENTREGA_SECRET` | secretos generados (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), distintos entre sí |
+| `NODE_ENV` | `production` (obligatoria en Railway) |
+| `PORT` | `4000` (el dominio público apunta a ese puerto) |
+| `CORS_ORIGIN`, `FRONTEND_URL` | URL pública del servicio `web` (sin barra final) |
+| `FOTOS_S3_ENDPOINT`, `FOTOS_S3_BUCKET`, `FOTOS_S3_ACCESS_KEY`, `FOTOS_S3_SECRET`, `FOTOS_S3_REGION` | referencias a las variables del bucket (`${{fotos.*}}`: endpoint, nombre, clave de acceso, secreto y región que expone el bucket) |
+| `OPERATOR_EMAIL`, `OPERATOR_PASSWORD`, `OPERATOR_NOMBRE` | cuenta del operador DEMO que crea el seed (la clave, larga y generada) |
+| `SEED_CONJUNTO_SLUG`, `SEED_CONJUNTO_NOMBRE` | conjunto DEMO que crea el seed (opcionales: `SEED_OPERADOR_WHATSAPP`, `SEED_OPERADOR_DOMICILIO`, `SEED_PUNTO_RECEPCION`) |
+
+Sin `RESEND_API_KEY` el correo se simula (no sale nada): es lo esperado en este entorno.
+
+**Variables del servicio `web`:** `VITE_API_URL` = URL pública del servicio `api` **más `/api`** (el
+frontend la lee al compilar: cambiarla exige un nuevo despliegue).
+
+**Despliegue del `api`:**
+
+- Pre-despliegue (Settings → Deploy → Pre-deploy command): `npx prisma migrate deploy && npm run seed`.
+  El seed es idempotente: crea el conjunto y el operador DEMO si no existen.
+- Healthcheck: ruta `/health`.
+- Reintentos de reinicio: 3.
+
+**Cómo correr el E2E contra este entorno** (desde `frontend/`; no levanta nada local):
+
+```bash
+E2E_BASE_URL=<URL del servicio web> \
+E2E_API_URL=<URL del servicio api> \
+E2E_OPERADOR_EMAIL=<OPERATOR_EMAIL> E2E_OPERADOR_PASSWORD=<OPERATOR_PASSWORD> \
+E2E_CODIGO_INVITACION=<código de invitación del conjunto DEMO> npm run e2e
+```
+
+El código de invitación se ve en la app del operador (Más → Invitar). Los escenarios crean residentes
+`res-*@e2e.test` en ese conjunto. Los dos que necesitan la base (enlace mágico y PIN ambiguo) se omiten
+con su razón. Más detalle en README, "Pruebas E2E (T6.1)".
 
 ## 2. Correo transaccional: Resend + dominio propio
 

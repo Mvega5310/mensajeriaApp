@@ -203,6 +203,9 @@ test('bitácora: filtros por estado, fecha (recibidoEn o createdAt) y q', { skip
   const ids = async (qs) => (await api(`/api/packages?${qs}`, { token: ctx.tOp })).body.map((p) => p.id).sort();
   assert.deepEqual(await ids('estado=SIN_ASIGNAR'), [ctx.p4.id]);
   assert.equal((await api('/api/packages?estado=NOPE', { token: ctx.tOp })).status, 400);
+  // Varios estados separados por coma (Pendientes pide solo los abiertos).
+  assert.deepEqual((await ids('estado=SIN_ASIGNAR,PREALERTADO')).sort(), [ctx.p4.id, ctx.p5.id].sort());
+  assert.equal((await api('/api/packages?estado=SIN_ASIGNAR,NOPE', { token: ctx.tOp })).status, 400);
 
   // Fecha efectiva: la pre-alerta de hace 10 días entra por createdAt, no los recibidos hoy.
   const hace10 = new Date(Date.now() - 10 * 24 * H);

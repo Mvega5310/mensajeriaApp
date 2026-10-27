@@ -38,6 +38,9 @@
 .op-sug { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 var(--sp-2); border-radius: var(--r-md); background: var(--surface); color: var(--ink); border: 2px solid var(--line); width: 100%; box-sizing: border-box; font-family: var(--font-texto); text-align: left; cursor: pointer; }
 .op-sug__apto { font: 700 22px var(--font-mono); font-variant-numeric: tabular-nums; min-width: 96px; }
 .op-sug__nombre { flex: 1; font-size: 17px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.op-directo { display: flex; flex-direction: column; gap: 6px; }
+.op-directo__tamano { margin: 0; font-size: var(--fs-texto); color: var(--muted); text-align: center; }
+.op-directo__tamano b { color: var(--ink); }
 .op-link { min-height: var(--tap-min); display: flex; align-items: center; justify-content: center; background: transparent; border: 0; color: var(--muted); font: 700 var(--fs-texto) var(--font-texto); text-decoration: underline; cursor: pointer; }
 .op-vacio { color: var(--muted); text-align: center; padding: var(--sp-1) 0; margin: 0; }
 .op-teclado { padding: 0 var(--sp-2) 12px; }

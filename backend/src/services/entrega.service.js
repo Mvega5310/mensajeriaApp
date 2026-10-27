@@ -6,16 +6,77 @@ import { prisma } from '../config/db.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { EVENTOS } from '../domain/paquete.machine.js';
 import { METODOS_PAGO, esMetodoPagoValido } from '../domain/pago.js';
-import { etiquetaApartamento } from '../domain/apartamento.js';
-import { seleccionarLote, candidatosPorDesempate, ESTADOS_ENTREGABLES } from '../domain/entregaLote.js';
+import { etiquetaApartamento, interpretarBusqueda } from '../domain/apartamento.js';
+import { normalizarApto } from './apartamento.service.js';
+import { seleccionarLote, candidatosPorDesempate, claveDeApartamento, ESTADOS_ENTREGABLES } from '../domain/entregaLote.js';
 import { firmarTokenEntrega, verificarTokenEntrega } from '../domain/tokenEntrega.js';
 import { registrarIntentoPin } from './pin.service.js';
-import { aplicarEvento } from './paquete.service.js';
+import { aplicarEvento, selectSinFoto } from './paquete.service.js';
 import { enSegundoPlano } from './avisos.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
 
 // Secreto dedicado si existe; si no, JWT_SECRET (el HMAC lleva prefijo de dominio).
 const secretoEntrega = () => process.env.ENTREGA_SECRET || process.env.JWT_SECRET;
+
+const SELECT_ENTREGABLE = {
+  ...selectSinFoto({ conPin: true }),
+  residente: { select: { id: true, nombre: true, torre: true, apto: true } },
+};
+const ENTREGABLES = { estado: { in: [...ESTADOS_ENTREGABLES] }, residenteId: { not: null } };
+
+// Filtro de residente según lo que indicó el operador (residenteId y/o apto). El
+// filtro por apto en la base solo acota ("contains" de los dígitos); la igualdad
+// exacta la aplican coincideApto/seleccionarLote en memoria.
+function filtroApuntado({ residenteId, apto }) {
+  const f = {};
+  if (residenteId) f.residenteId = residenteId;
+  if (apto) {
+    const q = interpretarBusqueda(apto);
+    // Sin dígitos de apto, coincideApto nunca acierta: no hay candidatos.
+    f.residente = { is: q.apto ? { apto: { contains: q.apto } } : { id: { in: [] } } };
+  }
+  return f;
+}
+
+/** Paquetes entregables que el operador apuntó (sin mirar el PIN), para contar el fallo por paquete. */
+async function entregablesApuntados({ residenteId, apto }) {
+  if (!residenteId && !apto) return [];
+  return prisma.package.findMany({
+    where: { ...ENTREGABLES, ...filtroApuntado({ residenteId, apto }) },
+    select: SELECT_ENTREGABLE,
+  });
+}
+
+/**
+ * Entregables relevantes para un PIN: los que coinciden (filtrados en la base) más
+ * los demás entregables de sus apartamentos (para armar el lote).
+ */
+async function entregablesParaPin({ pin, residenteId, apto }) {
+  const coincidentes = await prisma.package.findMany({
+    where: { ...ENTREGABLES, pin, ...filtroApuntado({ residenteId, apto }) },
+    select: SELECT_ENTREGABLE,
+  });
+  if (!coincidentes.length) return [];
+  // Un solo apartamento coincide en el caso normal; si hay varios es AMBIGUO y no se arma lote.
+  const claves = new Set(coincidentes.map((p) => claveDeApartamento(p.residente)));
+  if (claves.size > 1) return coincidentes;
+  const aptos = [...new Set(coincidentes.map((p) => normalizarApto(p.residente.apto)).filter(Boolean))];
+  const mismoApto = aptos.length
+    ? await prisma.package.findMany({
+      where: { ...ENTREGABLES, residente: { is: { OR: aptos.map((a) => ({ apto: { contains: a } })) } } },
+      select: SELECT_ENTREGABLE,
+    })
+    : [];
+  const porId = new Map([...coincidentes, ...mismoApto].map((p) => [p.id, p]));
+  // Cuentas con torre/apto incompletos: su "apartamento" es la cuenta sola.
+  const faltan = coincidentes.filter((p) => !normalizarApto(p.residente.apto)).map((p) => p.residenteId);
+  if (faltan.length) {
+    for (const p of await prisma.package.findMany({
+      where: { ...ENTREGABLES, residenteId: { in: faltan } }, select: SELECT_ENTREGABLE,
+    })) porId.set(p.id, p);
+  }
+  return [...porId.values()];
+}
 
 const pinBloqueado = (minutos) => new AppError(
   CODIGOS.PIN_BLOQUEADO,
@@ -41,10 +102,11 @@ export async function verificarPinLote({ operadorId, conjuntoId, pin, residenteI
     ), { retryAfter: intento.segundosRestantes });
   }
 
-  const entregables = await prisma.package.findMany({
-    where: { estado: { in: [...ESTADOS_ENTREGABLES] }, residenteId: { not: null } },
-    include: { residente: { select: { id: true, nombre: true, torre: true, apto: true } } },
-  });
+  // Sin fotoUrl desde la consulta, y el PIN se compara EN LA BASE: primero se buscan
+  // los paquetes entregables con ese PIN (+ residente/apto si el operador lo indicó);
+  // luego se cargan los entregables solo de los apartamentos de esos paquetes (el
+  // lote es por apartamento). Antes se traían todos los entregables del conjunto.
+  const entregables = await entregablesParaPin({ pin, residenteId, apto });
   const sel = seleccionarLote({ entregables, pin, residenteId, apto });
 
   if (sel.tipo === 'NINGUNO') {
@@ -52,7 +114,8 @@ export async function verificarPinLote({ operadorId, conjuntoId, pin, residenteI
     // apartamento (residenteId/apto), el fallo también cuenta contra el bloqueo
     // por paquete de T1.4, igual que /confirm-delivery: así el límite por paquete
     // rige también en lote. Sin apartamento no hay a qué paquete atribuirlo.
-    for (const p of candidatosPorDesempate({ entregables, residenteId, apto })) {
+    const apuntados = await entregablesApuntados({ residenteId, apto });
+    for (const p of candidatosPorDesempate({ entregables: apuntados, residenteId, apto })) {
       const r = await registrarIntentoPin(prisma, p.id, false, ahora);
       if (r && (!r.permitido || r.bloquear)) throw pinBloqueado(r.minutosRestantes);
     }
@@ -146,7 +209,7 @@ export async function confirmarLote({ operadorId, conjuntoId, tokenEntrega, paqu
   const resultado = await prisma.$transaction(async (tx) => {
     let total = 0;
     for (const id of ids) {
-      const actual = await tx.package.findUnique({ where: { id } });
+      const actual = await tx.package.findUnique({ where: { id }, select: selectSinFoto() });
       if (!actual) {
         throw new AppError(CODIGOS.TRANSICION_INVALIDA, 'Un paquete cambió mientras entregabas. Vuelve a ingresar el PIN.', 409);
       }
