@@ -362,6 +362,30 @@ pre-alertado (fase *expand*, ver DEPLOY.md):
   fijos: los lee de esa misma config (`utils/schedule.js` se borró). La prueba
   `frontendSinFijos.test.js` falla si vuelven a aparecer.
 
+### Buscar residentes: `GET /api/residentes/buscar?q=` (T2.2)
+
+Solo `OPERATOR` (`requireAuth` + `requireTenant` + `requireRole`). Devuelve como
+máximo 5 residentes del conjunto del operador (los de otro conjunto nunca
+aparecen):
+
+```json
+[{ "id": "…", "nombre": "Ana Gómez", "torre": "TORRE 2", "apto": "304",
+   "etiqueta": "T2 · 304", "pendientes": 2 }]
+```
+
+- `pendientes` = paquetes del residente en `EN_RECEPCION` o `PROGRAMADO`.
+  No se expone email ni teléfono.
+- `q` vacío (o de más de 60 caracteres) -> 400 `DATOS_INVALIDOS`.
+- Formatos de `q` (`domain/apartamento.js#interpretarBusqueda`): `304` (solo apto;
+  también prefijo: `30` -> 301..309), `T2 304`, `t2-304`, `2-304`, `2 304`,
+  `2/304`, `Torre 2 apto 304`, y nombre libre (`ana`, `Ana Gó`, `gomez`).
+- Orden: apto exacto primero, luego torre y apto.
+- Torre guardada hoy: `"TORRE N"` (registro, en mayúsculas); se compara por
+  token, así `TORRE 2`, `T2` y `2` son la misma torre. Apto: solo dígitos.
+- Tildes: el nombre se compara en memoria sin tildes ni mayúsculas (sin
+  `unaccent` ni SQL crudo, invariante 3) sobre una lectura acotada (solo
+  `RESIDENT`, 4 columnas, tope 3000).
+
 ## Pendiente
 
 - **WhatsApp automático**: decisión consciente de no implementarlo por
