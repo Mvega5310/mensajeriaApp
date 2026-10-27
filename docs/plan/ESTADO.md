@@ -19,7 +19,7 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 | T0.1 | S | hecho | e5909be | `npm run test:all`: 119 pass, 0 fail, 0 omitidas (base propia por ejecución; hash: git log --grep T0.1). Se corrigió el helper SQL de contractConjunto (psql). |
 | T0.2 | S | hecho | ce56516 | `test:all`: 123 pass, 0 fail, 0 omitidas. `AppError`/`asyncHandler`/manejador global en `backend/src/domain/errores.js`; 40 `{ error }` migrados; frontend lee `message`/`code`. |
 | T0.3 | H | en curso | | |
-| T1.1 | S | en curso | | |
+| T1.1 | S | hecho | 62f86a8 | 42 combinaciones probadas; TRANSICION_INVALIDA 409. Nota para T1.3: checkin/schedule/confirmDelivery quedarán restringidos. |
 | T1.2 | S | en curso | | |
 | T1.3 | S | pendiente | | |
 | T1.4 | S | pendiente | | |
