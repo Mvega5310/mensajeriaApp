@@ -6,9 +6,17 @@
 //  1. se abre el scope GLOBAL_LOOKUP fuera de buscarUsuarioPorEmailSinTenant()
 //     (archivo controllers/auth.controller.js);
 //  2. aparece una consulta cruda ($queryRaw/$executeRaw/$queryRawUnsafe/
-//     $executeRawUnsafe) fuera de resolverConjuntoIdPorUsuario()
-//     (archivo config/tenantBootstrap.js);
+//     $executeRawUnsafe) fuera de la LISTA BLANCA (ver ARCHIVOS_RAW_PERMITIDOS);
 //  3. hay más de un `new PrismaClient(` en el código de producción.
+//
+// ÁMBITO: se escanea backend/src, backend/prisma Y backend/scripts (Fase F: los
+// scripts de alta/backfill también son código de producción que puede escribir).
+//
+// LISTA BLANCA de consultas crudas (regla 2), explícita y acotada:
+//   - config/tenantBootstrap.js        -> resolverConjuntoIdPorUsuario() (bootstrap del tenant)
+//   - scripts/lib/asignarConjuntoALegado.js -> backfill de legado (Fase F): necesita SQL
+//     crudo porque la extensión no puede ver/filtrar filas con conjuntoId NULL.
+//     Nombres de tabla en literales fijos; valores siempre como parámetros.
 //
 // EXCLUSIONES (documentadas): se excluyen las carpetas __tests__ en las tres
 // reglas, porque las pruebas pueden: construir contextos GLOBAL_LOOKUP con fakes,
@@ -27,6 +35,14 @@ const aqui = dirname(fileURLToPath(import.meta.url));
 const BACKEND = join(aqui, '..', '..', '..'); // .../backend
 const SRC = join(BACKEND, 'src');
 const PRISMA = join(BACKEND, 'prisma');
+const SCRIPTS = join(BACKEND, 'scripts');
+
+// Lista blanca de archivos que SÍ pueden usar consultas crudas (regla 2).
+// Rutas relativas a backend/, con separador del SO.
+const ARCHIVOS_RAW_PERMITIDOS = [
+  join('src', 'config', 'tenantBootstrap.js'),
+  join('scripts', 'lib', 'asignarConjuntoALegado.js'),
+];
 
 function archivosJs(dir, { incluirTests }) {
   const out = [];
@@ -50,7 +66,7 @@ const rel = (f) => relative(BACKEND, f);
 
 // --- Regla 1: GLOBAL_LOOKUP solo en auth.controller.js ---
 test('E7.1: GLOBAL_LOOKUP se abre solo en buscarUsuarioPorEmailSinTenant (auth.controller.js)', () => {
-  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false })];
+  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false }), ...archivosJs(SCRIPTS, { incluirTests: false })];
   const ofensores = [];
   for (const f of archivos) {
     const lineas = readFileSync(f, 'utf8').split('\n');
@@ -68,26 +84,27 @@ test('E7.1: GLOBAL_LOOKUP se abre solo en buscarUsuarioPorEmailSinTenant (auth.c
 });
 
 // --- Regla 2: consultas crudas solo en tenantBootstrap.js ---
-test('E7.2: consultas crudas solo en resolverConjuntoIdPorUsuario (tenantBootstrap.js)', () => {
-  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false })];
+test('E7.2: consultas crudas solo en los archivos de la lista blanca', () => {
+  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false }), ...archivosJs(SCRIPTS, { incluirTests: false })];
   const CRUDAS = /\$(queryRaw|executeRaw|queryRawUnsafe|executeRawUnsafe)\b/;
+  const permitido = (f) => ARCHIVOS_RAW_PERMITIDOS.some((p) => f.endsWith(p));
   const ofensores = [];
   for (const f of archivos) {
     const lineas = readFileSync(f, 'utf8').split('\n');
     lineas.forEach((linea, i) => {
       // Ignora líneas de comentario (documentan la invariante).
       const esComentario = /^\s*(\/\/|\*|\/\*)/.test(linea);
-      if (!esComentario && CRUDAS.test(linea) && !f.endsWith(join('config', 'tenantBootstrap.js'))) {
+      if (!esComentario && CRUDAS.test(linea) && !permitido(f)) {
         ofensores.push(`${rel(f)}:${i + 1}`);
       }
     });
   }
-  assert.deepEqual(ofensores, [], `consultas crudas fuera de tenantBootstrap.js: ${ofensores.join(', ')}`);
+  assert.deepEqual(ofensores, [], `consultas crudas fuera de la lista blanca (${ARCHIVOS_RAW_PERMITIDOS.join(', ')}): ${ofensores.join(', ')}`);
 });
 
 // --- Regla 3: un único new PrismaClient( en todo el árbol (incl. tests) ---
 test('E7.3: existe exactamente un new PrismaClient( (en config/db.js)', () => {
-  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false })];
+  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false }), ...archivosJs(SCRIPTS, { incluirTests: false })];
   const hallazgos = [];
   for (const f of archivos) {
     const lineas = readFileSync(f, 'utf8').split('\n');
