@@ -26,6 +26,12 @@ const RUTAS_SIN_SESION = new Set([
   'POST /api/auth/login',
   'POST /api/auth/forgot-password',
   'POST /api/auth/reset-password',
+  // T3.2: acceso por enlace mágico. Sin sesión por naturaleza (es cómo se obtiene
+  // una). La credencial es un token aleatorio de un solo uso (solo se guarda su
+  // hash, vence en 15 min). /enlace responde siempre 200 genérico y está limitado
+  // por correo+IP; /enlace/canjear es atómico y devuelve la sesión normal.
+  'POST /api/auth/enlace',
+  'POST /api/auth/enlace/canjear',
   'GET /api/conjuntos/config-publica',
   // T3.1 (excepción consciente a la invariante 5): el enlace del aviso de WhatsApp
   // abre "Mis paquetes" sin contraseña (decisión D1). La credencial es el token

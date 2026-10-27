@@ -9,7 +9,7 @@ import residentesRoutes from './routes/residentes.routes.js';
 import entregasRoutes from './routes/entregas.routes.js';
 import enlaceRoutes from './routes/enlace.routes.js';
 import { manejadorErrores } from './domain/errores.js';
-import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS } from './domain/limitador.js';
+import { crearLimitadorMemoria, LOGIN_MAX_FALLOS, LOGIN_VENTANA_MS, ENLACE_MAX_SOLICITUDES, ENLACE_VENTANA_MS } from './domain/limitador.js';
 import { crearNotificadorDesdeEntorno } from './services/notificador/index.js';
 import { crearAlmacenDesdeEntorno } from './services/almacen/index.js';
 import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.routes.js';
@@ -18,7 +18,7 @@ import { conjuntosPublicRouter, conjuntoAuthRouter } from './routes/conjunto.rou
 // listen en producción; las pruebas de integración HTTP hacen app.listen(0)
 // contra un puerto efímero (ver __tests__/http.integration.test.js).
 // `limitadorLogin` es inyectable (pruebas, o un limitador con Redis más adelante).
-export function createApp({ limitadorLogin, limitadorPinEntrega, notificador, almacenFotos } = {}) {
+export function createApp({ limitadorLogin, limitadorPinEntrega, limitadorEnlace, notificador, almacenFotos } = {}) {
   const app = express();
 
   // Detrás del proxy de Railway, `req.ip` sería la IP del proxy para todos y el
@@ -37,6 +37,9 @@ export function createApp({ limitadorLogin, limitadorPinEntrega, notificador, al
   app.locals.limitadorLogin = limitadorLogin ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
   // Fallos de PIN en entrega por lote (T2.5): por operador, 10 / 15 min.
   app.locals.limitadorPinEntrega = limitadorPinEntrega ?? crearLimitadorMemoria({ max: LOGIN_MAX_FALLOS, ventanaMs: LOGIN_VENTANA_MS });
+
+  // Solicitudes de enlace de acceso (T3.2): por correo+IP, 5 / 15 min.
+  app.locals.limitadorEnlace = limitadorEnlace ?? crearLimitadorMemoria({ max: ENLACE_MAX_SOLICITUDES, ventanaMs: ENLACE_VENTANA_MS });
 
   // Inyectable (pruebas: fake). Sin clave de Resend => fake en memoria + aviso en el log.
   app.locals.notificador = notificador ?? crearNotificadorDesdeEntorno();

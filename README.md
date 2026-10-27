@@ -138,6 +138,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `entregaLote.test.js` | unitaria | T2.5: token de entrega (firma, vencimiento, alteración) y regla de selección del lote. |
 | `entregaLote.integration.test.js` | integración | T2.5: `/entregas/verificar-pin` y `/confirmar` (lote por apartamento, `PIN_AMBIGUO`, límite por operador, token ajeno/vencido, carrera sin entregas parciales, aislamiento). |
 | `enlace.integration.test.js` + `domain/__tests__/enlace.test.js` | integración + pura | T3.1: token válido/vencido/alterado/basura/otro secreto/conjunto manipulado, residente borrado, sesión limitada (schedule propio sí, ajeno 404, todas las demás rutas del app real 403), URL `/p/` en el aviso. |
+| `enlaceAcceso.integration.test.js` | integración | T3.2: enlace mágico (correo existente / inexistente con respuesta idéntica, canje con JWT normal, segundo canje, vencido, propósito RESET vs ACCESO en ambos sentidos, carrera de canjes, límite 5/15 min, forgot/reset intacto). |
 | `avisos.integration.test.js` | integración | T2.4: correo de llegada con notificador `fake` (recepción, `asignar`, `checkin`; 0 en replay idempotente, sin correo o sin dueño; un notificador que lanza no tumba el 201). |
 | `notificador/__tests__/plantillas.test.js` | unitaria | T2.4: `escaparHtml`, plantillas escapadas y sin "Ipanema", selección `fake`/`resend`, `construirEnlace`. |
 | `backendSinFijos.test.js` | estática | T2.4: "Ipanema" no aparece en `backend/src` fuera de pruebas. |
@@ -169,6 +170,7 @@ Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION
   (queda constancia con fecha — `termsAcceptedAt`). El selector de torre
   cubre las 6 torres del conjunto (`frontend/src/pages/Register.jsx`).
 - Recuperación de contraseña por correo (enlace de un solo uso, vence en 1h).
+- Acceso por enlace mágico (T3.2): el residente pide un enlace con su correo y entra sin contraseña (ver "Acceso por enlace mágico" abajo). El login con contraseña se conserva.
 - Pre-alerta de paquete: categoría de peso estimada (con tarifa de
   referencia), valor declarado (tope de responsabilidad por custodia),
   franja horaria preferida, método de pago del servicio, una nota libre
@@ -548,6 +550,27 @@ El aviso de llegada de WhatsApp lleva `${FRONTEND_URL}/p/<token>`: abre "Mis paq
   enlaces emitidos. `ENLACE_SECRET` es obligatoria (≥ 32 caracteres y distinta de
   `JWT_SECRET`) con `NODE_ENV=production`; en desarrollo/test se deriva de
   `JWT_SECRET` con un aviso al arrancar.
+### Acceso por enlace mágico (T3.2)
+
+Reutiliza `PasswordResetToken` con el campo `proposito` (`RESET` | `ACCESO`, por
+defecto `RESET`). Cada consulta filtra por propósito: un token de un tipo nunca
+sirve para el otro. Solo se guarda el **hash** (SHA-256) del token; el de reset ya
+funcionaba así, no se cambió.
+
+- `POST /api/auth/enlace` `{ email }` (pública): SIEMPRE 200 con
+  `{ message: "Si el correo está registrado, te llegará un enlace para entrar. Revisa tu bandeja." }`
+  exista o no la cuenta. La consulta, el token y el correo van en segundo plano
+  (el tiempo de respuesta no revela la cuenta). Si existe, envía
+  `${FRONTEND_URL}/acceso/<token>` (vence en 15 min, un solo uso). Límite: 5
+  solicitudes por correo+IP cada 15 min (limitador en memoria); pasado el cupo
+  sigue respondiendo 200 igual, pero no envía.
+- `POST /api/auth/enlace/canjear` `{ token }` (pública): marca el token usado con un
+  `updateMany` condicional (solo un canje gana) y devuelve lo mismo que el login:
+  `{ token: <JWT normal, sin scope>, user: { id, nombre, role } }`. Token
+  inválido, usado, vencido o de otro propósito: **400** `code: ENLACE_INVALIDO`,
+  "El enlace ya no sirve. Pide uno nuevo." Es POST para que los escáneres de
+  enlaces de los correos no lo consuman.
+
 ### Avisos por correo: Notificador (T2.4)
 
 Los correos pasan por la interfaz `services/notificador/` (servicio externo

@@ -61,3 +61,7 @@ export function crearLimitadorMemoria({ max, ventanaMs, ahora = () => Date.now()
 
 export const LOGIN_MAX_FALLOS = 10;
 export const LOGIN_VENTANA_MS = 15 * 60 * 1000;
+
+// Solicitudes de enlace de acceso (T3.2): 5 por correo+IP cada 15 min.
+export const ENLACE_MAX_SOLICITUDES = 5;
+export const ENLACE_VENTANA_MS = 15 * 60 * 1000;
