@@ -30,6 +30,7 @@ export function buscarUsuarioPorEmailSinTenant(email) {
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
 const RESET_COOLDOWN_MS = 60 * 1000; // evita reenvíos en cadena al mismo correo
+const ENLACE_TTL_MS = 15 * 60 * 1000; // enlace de acceso (T3.2): 15 min, un solo uso
 
 // PASSWORD_POLICY vive ahora en services/password.service.js (fuente única
 // compartida con el script de alta de conjunto).
@@ -136,13 +137,18 @@ export async function login(req, res) {
 
   limitador.devolver(req.ip, intento.reserva);
 
+  res.json(sesionDe(user));
+}
+
+// Sesión normal (la misma del login con contraseña): JWT { sub, role } SIN
+// `scope`. Lo comparten login y el canje del enlace de acceso (T3.2).
+function sesionDe(user) {
   const token = jwt.sign(
     { sub: user.id, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
   );
-
-  res.json({ token, user: { id: user.id, nombre: user.nombre, role: user.role } });
+  return { token, user: { id: user.id, nombre: user.nombre, role: user.role } };
 }
 
 // Respuesta idéntica exista o no la cuenta — si dijera "correo no
@@ -161,7 +167,7 @@ export async function forgotPassword(req, res) {
   if (!user) return res.json(GENERIC_RESET_RESPONSE);
 
   const recent = await prisma.passwordResetToken.findFirst({
-    where: { userId: user.id, createdAt: { gt: new Date(Date.now() - RESET_COOLDOWN_MS) } },
+    where: { userId: user.id, proposito: 'RESET', createdAt: { gt: new Date(Date.now() - RESET_COOLDOWN_MS) } },
   });
   if (recent) return res.json(GENERIC_RESET_RESPONSE);
 
@@ -194,7 +200,8 @@ export async function resetPassword(req, res) {
   // PasswordResetToken es un modelo SIN tenant: este findFirst no requiere
   // contexto y pasa tal cual por la extensión.
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-  const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash } });
+  // `proposito: 'RESET'`: un token de enlace de acceso no sirve para cambiar la contraseña.
+  const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash, proposito: 'RESET' } });
 
   if (!record || record.usedAt || record.expiresAt < new Date()) {
     throw new AppError(CODIGOS.ENLACE_INVALIDO, 'El enlace no es válido o ya venció. Pide uno nuevo desde "Olvidé mi contraseña".', 400);
@@ -220,6 +227,65 @@ export async function resetPassword(req, res) {
   );
 
   res.json({ message: 'Contraseña actualizada' });
+}
+
+// --- Enlace de acceso por correo (T3.2) ---
+// Respuesta idéntica exista o no la cuenta, se haya enviado o no (límite).
+const GENERIC_ENLACE_RESPONSE = { message: 'Si el correo está registrado, te llegará un enlace para entrar. Revisa tu bandeja.' };
+const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex');
+
+export async function solicitarEnlace(req, res) {
+  const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  // Límite por correo+IP, reservado de forma síncrona antes de cualquier await.
+  // Excedido (o correo vacío): misma respuesta 200, simplemente no se envía.
+  const intento = email
+    ? req.app.locals.limitadorEnlace.intentar(`${email.toLowerCase()}|${req.ip}`)
+    : { permitido: false };
+  if (intento.permitido) {
+    // Todo el trabajo que distingue "existe" de "no existe" (consulta, token,
+    // correo) va en segundo plano: el tiempo de respuesta no revela la cuenta.
+    enSegundoPlano('enlaceAcceso', async () => {
+      const user = await buscarUsuarioPorEmailSinTenant(email);
+      if (!user) return;
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      await prisma.passwordResetToken.create({
+        data: { userId: user.id, tokenHash: hashToken(rawToken), proposito: 'ACCESO', expiresAt: new Date(Date.now() + ENLACE_TTL_MS) },
+      });
+      const base = (process.env.FRONTEND_URL || '').trim().replace(/\/+$/, '');
+      // Conjunto es un modelo sin tenant (mismo patrón que forgotPassword).
+      const conjunto = user.conjuntoId
+        ? await prisma.conjunto.findUnique({ where: { id: user.conjuntoId } })
+        : null;
+      await req.app.locals.notificador.enviarEnlaceAcceso({ email: user.email, url: `${base}/acceso/${rawToken}`, conjunto });
+    });
+  }
+  res.json(GENERIC_ENLACE_RESPONSE);
+}
+
+export async function canjearEnlace(req, res) {
+  const token = req.body?.token;
+  const invalido = () => new AppError(CODIGOS.ENLACE_INVALIDO, 'El enlace ya no sirve. Pide uno nuevo.', 400);
+  if (typeof token !== 'string' || !token) throw invalido();
+
+  const tokenHash = hashToken(token);
+  // Canje atómico: solo un `updateMany` condicional gana (count === 1); dos
+  // canjes simultáneos del mismo token no pueden ser ambos válidos.
+  const ahora = new Date();
+  const { count } = await prisma.passwordResetToken.updateMany({
+    where: { tokenHash, proposito: 'ACCESO', usedAt: null, expiresAt: { gt: ahora } },
+    data: { usedAt: ahora },
+  });
+  if (count !== 1) throw invalido();
+
+  const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash, proposito: 'ACCESO' } });
+  // El usuario se lee por id dentro de su propio conjunto (bootstrap del tenant).
+  const conjuntoId = record ? await resolverConjuntoIdPorUsuario(record.userId) : null;
+  const user = conjuntoId
+    ? await runWithTenant({ conjuntoId, role: 'RESIDENT' }, () => prisma.user.findUnique({ where: { id: record.userId } }))
+    : null;
+  if (!user) throw invalido();
+
+  res.json(sesionDe(user));
 }
 
 export async function me(req, res) {

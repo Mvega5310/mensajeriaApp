@@ -156,11 +156,19 @@ model Comentario {
 // El token crudo (alta entropía, de un solo uso) solo existe en el correo
 // que se envía una vez; aquí se guarda su hash — si la tabla se filtra,
 // no sirve para tomar la cuenta de nadie.
+// T3.2: el mismo modelo sirve al enlace de acceso (proposito ACCESO). Un token de
+// un propósito NUNCA sirve para el otro: cada consulta filtra por `proposito`.
+enum PropositoToken {
+  RESET
+  ACCESO
+}
+
 model PasswordResetToken {
   id        String    @id @default(cuid())
   user      User      @relation(fields: [userId], references: [id])
   userId    String
   tokenHash String
+  proposito PropositoToken @default(RESET)
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime  @default(now())

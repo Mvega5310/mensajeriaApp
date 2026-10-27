@@ -232,6 +232,20 @@ subido (mejor esfuerzo, queda en el log).
   Ojo: las fotos nuevas solo se enlazan a su paquete por esta tabla; al borrarla
   quedan huérfanas en el bucket.
 
+### Migración `add_proposito_token` (T3.2, enlace mágico)
+
+Añade el enum `PropositoToken` (`RESET` | `ACCESO`) y la columna
+`PasswordResetToken.proposito` (default `RESET`, así los tokens de reset ya
+emitidos siguen valiendo).
+
+- Migración **aditiva** (`20261031120000_add_proposito_token`), `prisma migrate
+  deploy` normal; verificada con `prisma migrate diff` (sin drift). El código
+  anterior ignora la columna.
+- **Rollback:** `backend/prisma/manual/rollback_add_proposito_token.sql` (con
+  `psql`). Borra antes los tokens de acceso pendientes (sin la columna no se
+  distinguirían de los de reset).
+- Usa `FRONTEND_URL` para armar `/acceso/<token>`. Sin variables nuevas.
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama
