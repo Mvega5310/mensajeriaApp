@@ -8,7 +8,7 @@ import { esCategoriaValida } from '../domain/cobro.js';
 import { validarFotos, mensajeMaxFotos } from '../domain/recepcion.js';
 import { resolverCobro, idsPrimeraEntrega } from '../services/cobro.service.js';
 import { EVENTOS, ESTADOS, transicionar } from '../domain/paquete.machine.js';
-import { aplicarEvento, crearConEvento } from '../services/paquete.service.js';
+import { aplicarEvento, crearConEvento, motivosDeCobro } from '../services/paquete.service.js';
 import { recibirPaquete, asignarPaquete, armarRespuesta } from '../services/recepcion.service.js';
 import { subirFotos, registrarFotos, descartarSubidas, fotosDelPaquete } from '../services/fotos.service.js';
 import { decodificarDataUri } from '../services/almacen/index.js';
@@ -29,9 +29,21 @@ import { interpretarBusqueda } from '../domain/apartamento.js';
 // schedule().
 export async function createPrealert(req, res) {
   const {
-    proveedor, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
+    proveedor: proveedorBody, transportadora: transportadoraBody, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
     valorDeclarado, franjaHoraria, metodoPagoServicio, notas, pinProveedor,
   } = req.body;
+  const transportadora = typeof transportadoraBody === 'string' ? transportadoraBody.trim() : '';
+  if (transportadoraBody !== undefined && transportadoraBody !== null && typeof transportadoraBody !== 'string') {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La transportadora no es válida. Escríbela como texto.', 400);
+  }
+  if (transportadora.length > 60) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La transportadora puede tener hasta 60 caracteres.', 400);
+  }
+  // `proveedor` (tienda) sigue siendo obligatorio, salvo que venga la transportadora
+  // (T2.8: el residente puede avisar solo "quién lo trae"); entonces va "Sin especificar".
+  const proveedor = typeof proveedorBody === 'string' && proveedorBody.trim()
+    ? proveedorBody.trim()
+    : (transportadora ? 'Sin especificar' : '');
   if (!proveedor) throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Indica el proveedor del paquete.', 400);
   if (notas && notas.length > 500) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La nota puede tener hasta 500 caracteres. Acórtala e intenta de nuevo.', 400);
@@ -50,6 +62,7 @@ export async function createPrealert(req, res) {
     data: {
       residenteId: req.user.sub,
       proveedor,
+      transportadora: transportadora || null,
       guia: guia || 'Sin Guía',
       categoriaPeso: categoriaPeso || 'ESTANDAR',
       costoServicio,
@@ -91,9 +104,13 @@ export async function listMine(req, res) {
     where: { residenteId: req.user.sub },
     orderBy: { createdAt: 'desc' },
   });
-  res.json(packages.map(({ fotoUrl, ...p }) => p));
+  // motivoCobro (CORTESIA/BONO/...) sale del último evento RECIBIR/ASIGNAR, igual que
+  // en listAll y en /api/p/paquetes: el historial no debe inferir "Gratis" por costo 0.
+  const motivos = await motivosDeCobro(packages.map((p) => p.id));
+  res.json(packages.map(({ fotoUrl, ...p }) => ({ ...p, motivoCobro: motivos.get(p.id) ?? null })));
 }
 
+const MODALIDADES_ENTREGA = ['DOMICILIO', 'RECOGER'];
 const POR_PAGINA_DEFECTO = 20;
 const POR_PAGINA_MAX = 100;
 
@@ -230,9 +247,18 @@ export async function getFoto(req, res) {
   res.json({ fotos });
 }
 
-// Residente: programa su propia franja de entrega — se verifica dueño.
+// Residente: programa su propia entrega — se verifica dueño.
+// `modalidad` (T2.8): "DOMICILIO" (por defecto; pide franja y pago como siempre) o
+// "RECOGER" ("prefiero recogerlo en portería"). RECOGER también aplica PROGRAMAR: el
+// residente ya decidió, el paquete sale de "pendiente de decidir" y el operador lo
+// ve en Programados, pero con modalidadEntrega=RECOGER y sin franja (se limpia).
+// Se mantiene UNA sola máquina de estados y la bitácora registra la decisión.
 export async function schedule(req, res) {
-  const { franjaHoraria, metodoPagoServicio } = req.body;
+  const { franjaHoraria, metodoPagoServicio, modalidad = 'DOMICILIO' } = req.body ?? {};
+  if (!MODALIDADES_ENTREGA.includes(modalidad)) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La modalidad de entrega no es válida. Elige domicilio o recoger en portería.', 400, { campo: 'modalidad' });
+  }
+  const recoger = modalidad === 'RECOGER';
   const updated = await prisma.$transaction(async (tx) => {
     const pkg = await tx.package.findUnique({ where: { id: req.params.id } });
     if (!pkg || pkg.residenteId !== req.user.sub) {
@@ -240,8 +266,12 @@ export async function schedule(req, res) {
     }
     return aplicarEvento(tx, pkg, EVENTOS.PROGRAMAR, {
       actorId: req.user.sub,
-      datos: { franjaHoraria: franjaHoraria ?? null, metodoPagoServicio: metodoPagoServicio ?? null },
-      cambios: { franjaHoraria, metodoPagoServicio },
+      datos: recoger
+        ? { modalidad, franjaHoraria: null, metodoPagoServicio: null }
+        : { modalidad, franjaHoraria: franjaHoraria ?? null, metodoPagoServicio: metodoPagoServicio ?? null },
+      cambios: recoger
+        ? { modalidadEntrega: modalidad, franjaHoraria: null, metodoPagoServicio: null }
+        : { modalidadEntrega: modalidad, franjaHoraria, metodoPagoServicio },
     });
   });
   res.json(updated);

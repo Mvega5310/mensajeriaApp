@@ -20,10 +20,11 @@ export default function Avisar() {
 
   async function enviar(e) {
     e.preventDefault();
-    // El backend exige `proveedor`: va la tienda si la dieron; si no, la transportadora elegida.
+    // `proveedor` = tienda; `transportadora` = quién lo trae. Van por separado ("Otra" no es un nombre).
     const quien = form.transportadora && form.transportadora !== 'Otra' ? form.transportadora : '';
     const ok = await avisar({
-      proveedor: form.tienda.trim() || quien || 'Sin especificar',
+      proveedor: form.tienda.trim() || undefined,
+      transportadora: quien || undefined,
       guia: form.guia.trim() || undefined,
       categoriaPeso: form.categoriaPeso,
       esContraEntregaProveedor: form.contraEntrega,

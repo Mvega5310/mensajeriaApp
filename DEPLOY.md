@@ -269,6 +269,16 @@ cortesía de primera entrega del apartamento, y serializa recepciones paralelas.
   persistidas anteriores, así que no requiere migración de datos.
 - Variable obligatoria nueva en Railway: `NODE_ENV=production`.
 
+### Migración `add_modalidad_entrega` (T2.8)
+
+Agrega `Package.modalidadEntrega TEXT NULL` (`DOMICILIO` | `RECOGER`, preferencia del residente
+al pedir la entrega).
+
+- Migración **aditiva** (`20261102120000_add_modalidad_entrega`), `prisma migrate deploy` normal;
+  verificada con `prisma migrate diff` (sin drift). Sin backfill: null = aún no eligió.
+- **Rollback:** `backend/prisma/manual/rollback_add_modalidad_entrega.sql` (con `psql`). Pierde solo
+  esa preferencia; el código anterior ignora la columna.
+
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama

@@ -220,6 +220,10 @@ model Package {
   estado              String @default("PREALERTADO")
   franjaHoraria        String?
   metodoPagoServicio   String?
+  // Preferencia del residente al pedir la entrega (T2.8): "DOMICILIO" (por defecto
+  // al programar) o "RECOGER" (lo recoge en portería). Texto validado en
+  // el controlador (packages.controller.js), no enum de BD. Null = aún no eligió.
+  modalidadEntrega     String?
   // Cómo se pagó REALMENTE el servicio al entregar: "EFECTIVO" | "TRANSFERENCIA"
   // (validado en domain/pago.js, no enum de BD). Distinto de metodoPagoServicio,
   // que es la preferencia de texto libre del residente al programar.

@@ -15,7 +15,7 @@ function Fila({ p }) {
   return (
     <li className="res-hist">
       <div className="res-card__txt" style={{ flex: 1 }}>
-        <span className="res-linea">{quienTrajo(p)} · {p.costoServicio > 0 ? <b>{formatCOP(p.costoServicio)}</b> : <b className="res-gratis">Gratis</b>}</span>
+        <span className="res-linea">{quienTrajo(p)} · {p.motivoCobro === 'CORTESIA' || p.motivoCobro === 'BONO' ? <b className="res-gratis">Gratis</b> : <b>{formatCOP(p.costoServicio)}</b>}</span>
         <span className="res-hist__fecha">{p.fechaEntrega ? `Entregado el ${fecha(p.fechaEntrega)}` : 'Entregado'}</span>
       </div>
       <Badge estado="entregado" />

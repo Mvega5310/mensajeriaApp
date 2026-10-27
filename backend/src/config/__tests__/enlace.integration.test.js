@@ -249,11 +249,22 @@ test('sesión limitada: programa SU paquete; el de otro residente da 404', { ski
   assert.equal(intacto.estado, 'EN_RECEPCION');
 });
 
+test('sesión limitada: foto del paquete propio 200; la de otro residente no se ve (T2.8)', { skip }, async () => {
+  const propia = await api(`/api/packages/${ctx.recep1.paquete.id}/foto`, { token: ctx.sesion1 });
+  assert.equal(propia.status, 200);
+  assert.ok(Array.isArray((await propia.json()).fotos));
+  const ajena = await api(`/api/packages/${ctx.recep2.paquete.id}/foto`, { token: ctx.sesion1 });
+  assert.ok([403, 404].includes(ajena.status), `ajeno devolvió ${ajena.status}`);
+  assert.ok(!(await ajena.text()).includes('"fotos"'));
+  const inexistente = await api('/api/packages/no-existe/foto', { token: ctx.sesion1 });
+  assert.equal(inexistente.status, 404);
+});
+
 test('sesión limitada: TODAS las demás rutas del app real responden 403', { skip }, async () => {
   const rutas = [];
   recolectar(createApp()._router.stack, '', rutas);
   assert.ok(rutas.length >= 15, `rutas halladas: ${rutas.length}`);
-  const permitidas = new Set(['GET /api/p/paquetes', 'PATCH /api/packages/:id/schedule']);
+  const permitidas = new Set(['GET /api/p/paquetes', 'PATCH /api/packages/:id/schedule', 'GET /api/packages/:id/foto']);
   let probadas = 0;
   for (const r of rutas) {
     if (!r.cadena.includes('requireAuth')) continue; // públicas: no usan sesión
@@ -265,9 +276,9 @@ test('sesión limitada: TODAS las demás rutas del app real responden 403', { sk
     probadas += 1;
   }
   assert.ok(probadas >= 12, `rutas autenticadas probadas: ${probadas}`);
-  // Mismo método/otra ruta cercana y lectura de foto propia: también 403.
-  const foto = await api(`/api/packages/${ctx.recep1.paquete.id}/foto`, { token: ctx.sesion1 });
-  assert.equal(foto.status, 403);
+  // Otra ruta cercana (GET de schedule) y otro método sobre /foto: siguen en 403.
+  const fotoPost = await api(`/api/packages/${ctx.recep1.paquete.id}/foto`, { method: 'POST', token: ctx.sesion1, body: {} });
+  assert.equal(fotoPost.status, 403);
   const schedGet = await api(`/api/packages/${ctx.recep1.paquete.id}/schedule`, { token: ctx.sesion1 });
   assert.equal(schedGet.status, 403);
 });

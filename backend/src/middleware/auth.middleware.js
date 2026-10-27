@@ -8,6 +8,8 @@ export const SCOPE_ENLACE = 'enlace';
 export const RUTAS_PERMITIDAS_ENLACE = [
   { method: 'GET', patron: /^\/api\/p\/paquetes\/?$/ },
   { method: 'PATCH', patron: /^\/api\/packages\/[^/]+\/schedule\/?$/ },
+  // Fotos del paquete propio (getFoto valida el dueño: ajeno = 404). T2.8.
+  { method: 'GET', patron: /^\/api\/packages\/[^/]+\/foto\/?$/ },
 ];
 
 function rutaPermitidaParaEnlace(req) {
@@ -27,7 +29,7 @@ export function requireAuth(req, res, next) {
   }
   // Control central: un token de alcance limitado no sirve fuera de su lista.
   if (req.user.scope !== undefined && (req.user.scope !== SCOPE_ENLACE || !rutaPermitidaParaEnlace(req))) {
-    return next(new AppError(CODIGOS.PROHIBIDO, 'Este acceso por enlace solo permite ver tus paquetes y pedir la entrega. Inicia sesión para hacer otras acciones.', 403));
+    return next(new AppError(CODIGOS.PROHIBIDO, 'Este acceso por enlace solo permite ver tus paquetes (con sus fotos) y pedir la entrega. Inicia sesión para hacer otras acciones.', 403));
   }
   next();
 }

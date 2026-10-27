@@ -15,8 +15,8 @@ function estadoDe(p) {
 /** Tarjeta de un paquete (Res-MisPaquetes): estado, foto si hay, monto y PIN en grande. */
 export default function TarjetaPaquete({ p, modo, conAyuda = true }) {
   const [verFotos, setVerFotos] = useState(false);
-  // La sesión del enlace no puede pedir fotos (403 del backend): solo con sesión normal.
-  const fotos = useFotoPaquete(p.id, modo, p.estado !== 'PREALERTADO' && modo === 'normal');
+  // Funciona con la sesión del enlace y con la normal (el backend valida que sea tu paquete).
+  const fotos = useFotoPaquete(p.id, modo, p.estado !== 'PREALERTADO');
   const e = estadoDe(p);
   const gratis = p.motivoCobro === 'CORTESIA' || p.motivoCobro === 'BONO';
   const categoria = NOMBRES_CORTOS[p.categoriaPeso]?.nombre;
