@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BottomNav, ThemeToggle, useTheme } from '../../design';
 import Logo from '../../puertaya-brand/Logo.jsx';
 import useConfig from '../../hooks/operador/useConfig.js';
+import IndicadorCola from './IndicadorCola.jsx';
 import MasSheet from './MasSheet.jsx';
 import './operador.css';
 
@@ -44,6 +45,7 @@ export default function Pantalla({ activo, pendientes, ancho = 'normal', childre
           />
         )}
         <main className={`op${ancho === 'amplio' ? ' op--amplio' : ''}`}>
+          <IndicadorCola />
           <div className="op__cuerpo">{children}</div>
         </main>
       </div>

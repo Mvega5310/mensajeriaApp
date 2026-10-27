@@ -7,12 +7,21 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export async function api(path, { method = 'GET', body, headers, sinCierreDeSesion = false } = {}) {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...headers },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+export async function api(path, { method = 'GET', body, headers, sinCierreDeSesion = false, timeoutMs } = {}) {
+  // timeoutMs (opcional): corta la petición con AbortError, que se trata como falla de red.
+  const ctl = timeoutMs ? new AbortController() : null;
+  const timer = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...authHeaders(), ...headers },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ctl?.signal,
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && !sinCierreDeSesion) {

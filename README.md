@@ -670,6 +670,16 @@ puede ser del token de entrega, no de la sesión).
 
 **Escritorio (T4.4).** A partir de 1024 px la barra inferior pasa a ser lateral fija (logo arriba; "Más" y tema abajo) y Pendientes se ve en dos columnas: lista a la izquierda y detalle del apartamento a la derecha (el mismo `DetalleCuerpo` que la hoja móvil). Las demás pantallas se centran con ancho máximo de 560 px. El detalle ofrece "Entregar con PIN" cuando hay paquetes entregables.
 
+**Sin señal (T4.5).** Guardar nunca pierde un registro por falta de conexión:
+
+- Al tocar **Guardar** se genera una `Idempotency-Key` (uuid) una sola vez. Si `navigator.onLine` es falso, o la petición falla por red o supera 30 s, el registro (con sus fotos en data-URI) se guarda en una cola persistente en IndexedDB (`frontend/src/offline/`) y se abre `/op/guardado/pendiente-<clave>`: resumen local, el aviso "Sin señal. Guardamos el registro y lo enviamos al volver.", "Avisaremos cuando se envíe" y **Avisar por WhatsApp** deshabilitado. Un 4xx/5xx de la API al primer intento no se encola: se muestra el mensaje del backend.
+- Reenvío en orden y con la misma clave: al evento `online`, al volver la pestaña visible y cada 30 s mientras haya pendientes (backoff exponencial 30 s → 5 min). Cualquier 2xx (replay incluido, cabecera `Idempotent-Replayed: true`) saca el elemento de la cola; 5xx, 401, 408, 429 o red lo dejan en cola; los demás 4xx lo pasan a "No se pudieron enviar" con el mensaje del backend (Reintentar / Descartar). Un reintento nunca duplica el paquete ni reenvía el correo.
+- Cuando se envía y la pantalla Guardado de ese registro sigue abierta, se reemplaza por la respuesta real (aviso con `waUrl`).
+- Todas las pantallas del operador (`Pantalla.jsx`) muestran "N por enviar · Enviando / Sin señal" (`role="status"`); al tocarla se abre la lista de pendientes y fallidos.
+- Límites de la cola: 50 registros o ~40 MB; al llenarse, Guardar muestra que hay que conectarse antes de guardar más.
+- La lógica (orden, backoff, clasificación red/4xx/5xx, límites) está en `offline/colaPura.js` y se prueba con `cd frontend && node --test src/offline/colaPura.test.js`. El service worker de la PWA deja `/api/` en `NetworkOnly` (nunca sirve datos de la API desde caché).
+- Límites conocidos: sin IndexedDB (p. ej. algunos modos privados) la cola vive solo en memoria y el indicador lo avisa; iOS Safari puede borrar los datos del sitio tras días sin uso, y no hay sincronización en segundo plano (solo con la app abierta). La cola no distingue sesiones: si otro operador inicia sesión en el mismo dispositivo con pendientes, estos se enviarán con su sesión.
+
 ## Pendiente
 
 - **WhatsApp automático**: decisión consciente de no implementarlo por
