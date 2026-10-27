@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Badge, Button, Sheet } from '../../design';
 import PhotoGallery from '../../components/PhotoGallery.jsx';
 import useFotosPaquete from '../../hooks/operador/useFotosPaquete.js';
@@ -41,6 +42,8 @@ function Tarjeta({ p }) {
   );
 }
 
+const ENTREGABLES = new Set(['EN_RECEPCION', 'PROGRAMADO']);
+
 /** Cuerpo del detalle: fotos, cobro, notas y bonos. Lo usan la hoja (móvil) y el panel (escritorio). */
 export function DetalleCuerpo({ detalle, config, bonos, onBonos }) {
   const residente = detalle?.paquetes?.[0]?.residente ? detalle.paquetes[0] : null;
@@ -52,6 +55,9 @@ export function DetalleCuerpo({ detalle, config, bonos, onBonos }) {
       {detalle?.paquetes.map((p) => <Tarjeta key={p.id} p={p} />)}
       {config?.bonosHabilitados && residente?.residenteId && (
         <Button variante="secundario" icono="regalo" onClick={() => onBonos(true)}>Ver bonos</Button>
+      )}
+      {detalle?.paquetes.some((p) => ENTREGABLES.has(p.estado)) && (
+        <Button as={Link} to="/op/entregar">Entregar con PIN</Button>
       )}
     </div>
   );

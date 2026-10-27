@@ -620,6 +620,8 @@ Detalles: con torre el backend compara el apartamento exacto (sin prefijo);
 `api()` acepta `headers` y `sinCierreDeSesion` (un 401 de `/entregas/confirmar`
 puede ser del token de entrega, no de la sesión).
 
+**Escritorio (T4.4).** A partir de 1024 px la barra inferior pasa a ser lateral fija (logo arriba; "Más" y tema abajo) y Pendientes se ve en dos columnas: lista a la izquierda y detalle del apartamento a la derecha (el mismo `DetalleCuerpo` que la hoja móvil). Las demás pantallas se centran con ancho máximo de 560 px. El detalle ofrece "Entregar con PIN" cuando hay paquetes entregables.
+
 ## Pendiente
 
 - **WhatsApp automático**: decisión consciente de no implementarlo por
