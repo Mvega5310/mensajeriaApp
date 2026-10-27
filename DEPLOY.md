@@ -108,35 +108,75 @@ railway ssh keys add
 
 > **Estado:** el multi-conjunto está implementado y validado en la rama
 > `feature/kan-8-multiconjunto`, **NO desplegado**. Esta sección fija el ORDEN del
-> corte; la ejecución paso a paso (la Fase F) se planea y detalla aparte, y se
-> revisa antes de tocar producción. **No ejecutar nada de esto todavía.**
+> corte. El procedimiento ejecutable paso a paso está en
+> [`docs/runbook-corte-ipanema.md`](docs/runbook-corte-ipanema.md); se ensaya
+> contra una copia antes de tocar producción. **No ejecutar nada de esto todavía.**
 
-El esquema ya trae `conjuntoId` **nullable** en `User`/`Package`/`Bono`/
-`Comentario` (fase *expand*, migración `add_conjunto_multitenant`). El corte
-completa la transición en este orden **estricto** — cada paso no empieza hasta
-que el anterior está verificado:
+#### Por qué cambió el orden (ventana de fallo del orden ingenuo)
 
-1. **Backfill verificado.** Crear el `Conjunto` "Ipanema" con su config
-   (tarifas actuales, WhatsApp/domicilio, `bonosHabilitados=false`) y su
-   `codigoInvitacion`; asignar ese `conjuntoId` a **todos** los `User`, `Package`,
-   `Bono`, `Comentario` existentes. Verificar que `COUNT(*) WHERE conjuntoId IS
-   NULL = 0` en las cuatro tablas antes de continuar. (Fase F.)
-2. **Fase *contract*.** Solo con el backfill verificado: volver `conjuntoId`
-   **`NOT NULL`** en las cuatro tablas, y cambiar las claves foráneas a `Conjunto`
-   de **`ON DELETE SET NULL` a `ON DELETE RESTRICT`**. El motivo es que un
-   `SET NULL` permitiría que borrar un conjunto dejara usuarios/paquetes sin
-   conjunto (huérfanos) — justo lo que el aislamiento no debe permitir jamás;
-   `RESTRICT` hace que no se pueda borrar un conjunto con datos.
-   > La migración *expand* actual usa `ON DELETE SET NULL` **a propósito**,
-   > porque durante el backfill la columna es nullable. El cambio a `RESTRICT` es
-   > parte de *contract*, no antes.
-3. **Despliegue del código con aislamiento.** Recién ahora se despliega el código
-   que activa la extensión de tenant + `requireTenant` (Fases B–E). Desplegarlo
-   antes del backfill rompería a los usuarios legítimos (la extensión falla
-   cerrado ante `conjuntoId` nulo).
+El orden ingenuo "backfill → *contract* (`NOT NULL`) → deploy del código" tiene una
+ventana en la que **la app queda rota**: en cuanto `conjuntoId` es `NOT NULL`, el
+código **viejo** (que aún no conoce el tenant) sigue intentando `INSERT` de
+`User`/`Package`/`Bono`/`Comentario` **sin** `conjuntoId`, y Postgres los rechaza
+(`null value ... violates not-null constraint`). Nadie podría registrarse ni
+recibir paquetes hasta que termine el deploy del código nuevo.
 
-La activación del aislamiento es **orden de despliegue, no un flag**: no hay
-interruptor de runtime que lo prenda/apague (evita el "olvido silencioso").
+Peor aún en este stack: **el `start` de Railway corre `prisma migrate deploy`
+automáticamente** (ver `backend/package.json`). Si la migración *contract*
+estuviera en `prisma/migrations/` al mergear a `main`, se aplicaría **dentro del
+mismo arranque** que el código nuevo — no hay un "entre contract y deploy"
+controlable, y además la ventana de rechazo ocurre durante el propio boot.
+
+**Regla que resuelve la ventana:** el código con aislamiento se despliega
+**mientras las columnas siguen NULLABLE**. La extensión de tenant ya pone
+`conjuntoId` en cada escritura nueva (desde el contexto), así que tras el deploy
+**ningún escritor produce NULL**. Solo entonces se endurece a `NOT NULL`. Por eso
+el *contract* se aplica **manualmente al final (C5)** y **no vive en
+`prisma/migrations/`** durante el merge (si no, `migrate deploy` lo adelantaría).
+
+#### Orden del corte
+
+| # | Paso | Cuándo | Reversible con |
+|---|------|--------|----------------|
+| **P0** | Aplicar migración *expand* (`add_conjunto_multitenant`) en producción. Es **aditiva** (columnas nullable + tabla `Conjunto`); el código viejo la ignora. | Días antes | Inocua (no hace falta revertir) |
+| **P1** | Crear el `Conjunto` Ipanema **sin backfill** (`backfill-conjunto` reutiliza el conjunto si ya existe). Deja listo el `codigoInvitacion` para reimprimir el QR. | Días antes | `DELETE` del conjunto (aún sin filas asociadas) |
+| **C0** | Backup: `pg_dump` + conteos de las 4 tablas. | Día del corte | n/a |
+| **C1** | **Backfill #1** (transaccional, verificado): `UPDATE ... SET conjuntoId = <Ipanema> WHERE conjuntoId IS NULL`. | Día del corte | `UPDATE ... SET conjuntoId = NULL` (el script imprime este SQL) |
+| **C2** | **Merge a `main`** → Railway y Vercel despliegan el código con aislamiento. **Columnas siguen NULLABLE.** | Día del corte | Redeploy del commit anterior (la columna extra es inocua para el código viejo) |
+| **C3** | **Backfill #2** (idempotente): recoge lo que el código viejo escribió entre C1 y el fin del deploy de C2. | Tras C2 | Igual que C1 |
+| **C4** | Verificación: `0` NULL en las 4 tablas + smoke test en vivo (checklist del runbook). | Tras C3 | n/a |
+| **C5** | **Migración *contract*** (manual, por túnel SSH): `NOT NULL` en las 4 columnas + FKs `SET NULL → RESTRICT`. Solo ahora, porque ya ningún escritor produce NULL. | Tras C4 | SQL de rollback del contract (ver abajo) |
+
+Notas:
+- **`SET NULL → RESTRICT`** (C5): con `SET NULL`, borrar un `Conjunto` dejaría
+  usuarios/paquetes huérfanos (sin conjunto) — justo lo que el aislamiento no debe
+  permitir. `RESTRICT` impide borrar un conjunto que aún tiene datos.
+- **El *contract* no está en `prisma/migrations/`** hasta después de C5. Vive como
+  script en `backend/prisma/manual/` (ver §"Migración contract"). Tras aplicarlo en
+  C5, se registra en `migrations/` en un commit posterior y se marca como aplicado
+  con `npx prisma migrate resolve --applied <nombre>`, para que los `migrate deploy`
+  futuros no intenten re-aplicarlo.
+- La activación del aislamiento es **orden de despliegue, no un flag**: no hay
+  interruptor de runtime que lo prenda/apague.
+
+#### Matriz de compatibilidad durante C2 (versiones mezcladas)
+
+Railway (backend) y Vercel (frontend) despliegan por separado, así que durante C2
+conviven versiones. **Orden de deploy más seguro: backend primero, frontend
+después** (el frontend nuevo depende de endpoints del backend nuevo; al revés no).
+
+| Combinación | Registro `?c=` | Registro sin `?c=` | `/api/auth/me`, config | Veredicto |
+|---|---|---|---|---|
+| **Frontend viejo + backend nuevo** (ventana normal, backend desplegó primero) | El form viejo no manda `codigoInvitacion` → `register` responde `400 INVITACION_INVALIDA`. Los **QR viejos de KAN-3 apuntan a la raíz sin `?c=`**, así que un residente nuevo no podría registrarse hasta que el frontend nuevo esté arriba. **Mitigación:** ventana corta y nocturna; avisar que el registro se habilita al terminar. | Igual: `400`. | `me` funciona (no cambió su forma). El frontend viejo no llama a `/conjunto/config`; las tarifas/WhatsApp que muestra son las que ya tenía hardcodeadas — cosméticamente viejas, sin romper. | Degradado pero **seguro**: operación de paquetes intacta; solo el registro nuevo queda en pausa breve. |
+| **Frontend nuevo + backend viejo** (NO debe ocurrir si se despliega backend primero) | El backend viejo ignora `codigoInvitacion` y crea el `User` sin tenant (columna nullable). `/conjunto/config` **no existe** → el frontend nuevo falla al cargar tarifas/bonos. | — | `/conjunto/config` da 404. | **Evitar**: por eso backend primero. |
+| **Ambos nuevos** (fin de C2) | Flujo completo con código. | Muestra el campo de código. | Todo desde config. | Correcto. |
+
+**JWT existentes siguen válidos.** El token lleva `sub` y `role`, **no** un claim
+de conjunto; el middleware resuelve el `conjuntoId` por `sub` contra la BD en cada
+request (§diseño §3.6). Tras C1, los `User` de Ipanema ya tienen `conjuntoId`, así
+que una sesión abierta de antes del corte sigue funcionando sin re-login. (Si por
+cualquier motivo un `User` quedara sin `conjuntoId`, el middleware **falla cerrado**
+con 401 — nunca opera sin tenant.)
 
 ### Procedimientos operativos por conjunto
 
