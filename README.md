@@ -91,7 +91,7 @@ npm run dev              # http://localhost:5173 (proxy a /api -> :4000)
 **Pruebas del backend (KAN-8)**
 ```
 cd backend
-npm test                 # runner integrado de Node (node --test); NO usar
+npm test                 # node --test --test-concurrency=1 (en serie); NO usar
                          # 'node --test <carpeta>': no funciona en Windows.
 ```
 Las pruebas **unitarias/estáticas** corren sin base de datos. Las de
@@ -100,7 +100,16 @@ se ejecutan si `DATABASE_URL` apunta a `localhost`/`127.0.0.1`/`::1` (si no, se
 omiten con un mensaje). Con el Postgres local de Docker (arriba) más
 `npx prisma migrate deploy`, `npm test` las incluye.
 
-Qué cubre cada archivo (en `backend/src/**/__tests__/`):
+**Las pruebas corren en serie (`--test-concurrency=1`), a propósito.** Por
+defecto `node --test` ejecuta los archivos en paralelo, y todas las integraciones
+comparten la misma base. Las del backfill y el contract dependen del estado
+**global** de la base: el backfill cuenta todas las filas con `conjuntoId` NULL y
+aborta si hay filas de otro conjunto, y el guard del contract exige 0 NULL en
+toda la base y altera el esquema (NOT NULL). Si corren a la vez que otras, se
+pisan. Cada archivo limpia solo lo suyo (su prefijo de slug y su dominio de
+email), pero eso no basta mientras escriban en paralelo.
+
+Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tests__/`):
 
 | Archivo | Tipo | Qué verifica |
 |---|---|---|
@@ -116,6 +125,9 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
+| `altaConjunto.integration.test.js` | integración | alta de conjunto + operador (`npm run alta-conjunto` sin el CLI), idempotencia por slug, atomicidad con email en uso. |
+| `backfillConjunto.integration.test.js` | integración | backfill sobre legado (filas NULL): asignación, idempotencia, pre-chequeos, rollback transaccional, `--solo-conjunto`, espera al lock ante escrituras concurrentes. |
+| `contractConjunto.integration.test.js` | integración | migración *contract* manual (`prisma/manual/`) por `prisma db execute`: NOT NULL + FK `RESTRICT`, guard que aborta con NULLs, y su rollback. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
 `npm install`, que lo dispara) aunque no toquen la base de datos.

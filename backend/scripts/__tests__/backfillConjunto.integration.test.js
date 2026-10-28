@@ -90,12 +90,19 @@ async function contarNulosCrudo() {
   };
 }
 
-// Limpia TODO (el dataset de legado no tiene conjunto; se borra por SQL crudo).
+// Limpia SOLO lo de esta prueba: usuarios `@legado.local` (todos los helpers y
+// el INSERT concurrente de C3 usan ese dominio), sus hijos por residenteId, y
+// los conjuntos `itestbf-%`. Se borra por SQL crudo (el legado no tiene conjunto).
+//
+// Ojo: backfillConjunto() mira el estado GLOBAL de la base (todas las filas
+// NULL, filas de otro conjunto, operadores sin conjunto). Estas pruebas asumen
+// que ninguna otra prueba escribe a la vez; por eso las integraciones corren en
+// serie (`--test-concurrency=1` en `npm test`).
 async function limpiarTodo() {
-  await prisma.$executeRaw`DELETE FROM "Comentario"`;
-  await prisma.$executeRaw`DELETE FROM "Bono"`;
-  await prisma.$executeRaw`DELETE FROM "Package"`;
-  await prisma.$executeRaw`DELETE FROM "User"`;
+  await prisma.$executeRaw`DELETE FROM "Comentario" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@legado.local')`;
+  await prisma.$executeRaw`DELETE FROM "Bono" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@legado.local')`;
+  await prisma.$executeRaw`DELETE FROM "Package" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@legado.local')`;
+  await prisma.$executeRaw`DELETE FROM "User" WHERE "email" LIKE '%@legado.local'`;
   await prisma.$executeRaw`DELETE FROM "Conjunto" WHERE "slug" LIKE 'itestbf-%'`;
 }
 
@@ -379,7 +386,7 @@ test('C3: un INSERT concurrente espera al lock y termina después, sin romper el
       setTimeout(() => {
         prisma.$executeRaw`
           INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt","conjuntoId")
-          VALUES (${uid}, ${uid + '@x.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
+          VALUES (${uid}, ${uid + '@legado.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
         `.then(() => { orden.push('insert'); resolve(); }, reject);
       }, 500);
     });
