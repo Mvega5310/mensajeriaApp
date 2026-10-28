@@ -152,7 +152,8 @@ Notas:
   usuarios/paquetes huérfanos (sin conjunto) — justo lo que el aislamiento no debe
   permitir. `RESTRICT` impide borrar un conjunto que aún tiene datos.
 - **El *contract* no está en `prisma/migrations/`** hasta después de C5. Vive como
-  script en `backend/prisma/manual/` (ver §"Migración contract"). Tras aplicarlo en
+  script en `backend/prisma/manual/` (ver `docs/runbook-corte-ipanema.md`, paso C5,
+  y `backend/prisma/manual/`). Tras aplicarlo en
   C5, se registra en `migrations/` en un commit posterior y se marca como aplicado
   con `npx prisma migrate resolve --applied <nombre>`, para que los `migrate deploy`
   futuros no intenten re-aplicarlo.

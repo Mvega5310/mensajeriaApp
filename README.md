@@ -41,9 +41,13 @@ temporal en Docker** (abajo). El `provider` comiteado en
 **Postgres local desechable (Docker)**
 ```
 docker run --rm -d --name puertaya-pg -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=puertaya -p 5433:5432 postgres:16
+  -e POSTGRES_DB=puertaya -p 5433:5432 postgres:18
 # en backend/.env:  DATABASE_URL="postgresql://postgres:postgres@localhost:5433/puertaya"
 ```
+Producción (Railway) corre **PostgreSQL 18.6**; usa la misma versión mayor en
+local. La suite (`npm test`) está verificada en verde sobre 18.6 y
+también sobre 16. Sin Docker, sirven los binarios portables 18 con
+`initdb`/`pg_ctl` en el 5433 (ver `docs/runbook-corte-ipanema.md` §0.1).
 
 **Backend**
 ```
