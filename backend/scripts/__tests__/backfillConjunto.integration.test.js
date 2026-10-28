@@ -411,8 +411,7 @@ test('C3: un INSERT concurrente espera al lock y termina después, sin romper el
 
     // Tras 500ms (el backfill ya tiene el lock y está dormido), un INSERT
     // concurrente de User NULL (código viejo). Debe ESPERAR el lock y resolver
-    // DESPUÉS del backfill. Se usa otra conexión ($executeRawUnsafe del cliente
-    // global; si el pool serializa, ver nota al pie).
+    // DESPUÉS del backfill. Va por otra conexión del pool del cliente global.
     const pInsert = new Promise((resolve, reject) => {
       setTimeout(() => {
         prisma.$executeRaw`

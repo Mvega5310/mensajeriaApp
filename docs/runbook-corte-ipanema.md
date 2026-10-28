@@ -92,8 +92,12 @@ Con `DATABASE_URL` apuntando al 5433 y el backend/front nuevos levantados
   `SIN_CAMBIOS` (`0 filas por asignar`).
 - **C5 (contract):** aplica el SQL manual:
   ```
-  psql "$DATABASE_URL" -f backend/prisma/manual/contract_conjunto_not_null.sql
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f backend/prisma/manual/contract_conjunto_not_null.sql
   ```
+  `-v ON_ERROR_STOP=1` hace que `psql` se detenga en el primer error: si el guard
+  aborta, sale limpio con el mensaje `CONTRACT abortado` (y código ≠ 0), sin las
+  ~12 líneas de "current transaction is aborted" de las sentencias siguientes.
+  El script es una sola transacción, así que no aplica nada a medias en ningún caso.
 - **Navegar con cuentas reales:** login del operador (Francisco) y de un residente
   de Ipanema; recorrer el checklist de §2.4. Confirmar que todo funciona con los
   datos reales restaurados.
@@ -206,14 +210,15 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
 
 ### C5 — Migración *contract*
 - **Comando (por el túnel):**
-  `psql "<DATABASE_URL del túnel>" -f backend/prisma/manual/contract_conjunto_not_null.sql`
+  `psql "<DATABASE_URL del túnel>" -v ON_ERROR_STOP=1 -f backend/prisma/manual/contract_conjunto_not_null.sql`
+  (`ON_ERROR_STOP`: ver §0.2, el guard aborta limpio y con código de salida ≠ 0).
 - **Esperado:** se aplica sin error (el guard `DO $$` confirma 0 NULLs). Columnas
   `NOT NULL` y FKs `RESTRICT`.
 - **Después — orden EXACTO del registro (no invertir):**
   1. **Aplicar el SQL manual** (el paso anterior) contra producción por el túnel.
   2. **Crear la carpeta de migración LOCALMENTE** `prisma/migrations/<timestamp>_contract_conjunto/`
-     con un `migration.sql` **idéntico** al SQL aplicado a mano en el paso 1 (y su
-     entrada en `migration_lock.toml` si falta). `prisma migrate resolve --applied`
+     con un `migration.sql` **idéntico** al SQL aplicado a mano en el paso 1.
+     `prisma migrate resolve --applied`
      **necesita que esa carpeta exista en el disco** desde donde se corre el
      comando — aunque todavía NO esté commiteada/subida: Prisma lee el nombre de
      migración del árbol local, no del repo remoto.
@@ -229,7 +234,7 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   > **idéntico** al SQL aplicado a mano en el paso 1, para que `resolve` sea
   > coherente con lo que realmente está en la base.
 - **Continuar si:** el contract aplicó y el smoke test sigue en verde.
-- **Abortar/rollback:** `psql ... -f backend/prisma/manual/rollback_contract_conjunto.sql`
+- **Abortar/rollback:** `psql ... -v ON_ERROR_STOP=1 -f backend/prisma/manual/rollback_contract_conjunto.sql`
   (vuelve a nullable + FK SET NULL, sin pérdida de datos). Reportar.
 
 ### 2.4 Checklist de verificación en vivo (tras C2 y tras C4)
