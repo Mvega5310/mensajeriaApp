@@ -22,7 +22,7 @@ const razonSkip = !dbUrl
 const omitir = razonSkip !== null;
 if (omitir) console.warn(`[backfillConjunto.integration] OMITIDA: ${razonSkip}`);
 
-let prisma, runWithTenant, backfillConjunto, RESULTADO;
+let prisma, runWithTenant, backfillConjunto, RESULTADO, BackfillError;
 
 const SLUG = 'itestbf-ipanema';
 
@@ -122,9 +122,40 @@ async function sembrarLegado() {
 test('setup', { skip: omitir && razonSkip }, async () => {
   ({ prisma } = await import('../../src/config/db.js'));
   ({ runWithTenant } = await import('../../src/config/tenantContext.js'));
-  ({ backfillConjunto, RESULTADO } = await import('../lib/backfillConjunto.js'));
+  ({ backfillConjunto, RESULTADO, BackfillError } = await import('../lib/backfillConjunto.js'));
   await limpiarTodo();
 });
+
+// Abre una transacción que inserta un User con conjuntoId NULL y la SOSTIENE
+// `ms` antes del COMMIT (un escritor del código viejo a mitad de camino: su fila
+// aún no es visible para nadie). `insertado` resuelve cuando el INSERT ya corrió
+// (sin confirmar); `fin` resuelve tras el COMMIT.
+function sostenerInsertSinCommit(ms) {
+  const uid = cuid('u');
+  let marcarInsertado;
+  const insertado = new Promise((r) => { marcarInsertado = r; });
+  const fin = prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt","conjuntoId")
+      VALUES (${uid}, ${uid + '@legado.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
+    `;
+    marcarInsertado();
+    await new Promise((r) => setTimeout(r, ms));
+  }, { timeout: ms + 10_000 });
+  return { uid, insertado, fin };
+}
+
+// Fija BACKFILL_LOCK_TIMEOUT durante `fn` y lo restaura siempre.
+async function conLockTimeout(valor, fn) {
+  const previo = process.env.BACKFILL_LOCK_TIMEOUT;
+  process.env.BACKFILL_LOCK_TIMEOUT = valor;
+  try {
+    return await fn();
+  } finally {
+    if (previo === undefined) delete process.env.BACKFILL_LOCK_TIMEOUT;
+    else process.env.BACKFILL_LOCK_TIMEOUT = previo;
+  }
+}
 
 test('1+2: backfill feliz; luego la app ve los datos y están aislados', { skip: omitir && razonSkip }, async () => {
   await limpiarTodo();
@@ -404,6 +435,67 @@ test('C3: un INSERT concurrente espera al lock y termina después, sin romper el
     await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS itestbf_sleep_trg ON "User"`);
     await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS itestbf_sleep()`);
   }
+});
+
+test('D3: con 0 NULLs visibles, el backfill igual toma el lock: espera un INSERT en curso y lo asigna', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado();
+  const rep1 = await backfillConjunto({ config: configBase(), apply: true });
+  assert.equal(rep1.resultado, RESULTADO.APLICADO);
+  assert.deepEqual(await contarNulosCrudo(), { User: 0, Package: 0, Bono: 0, Comentario: 0 });
+
+  // Conjunto existente y 0 NULLs visibles, pero hay un INSERT NULL sin confirmar.
+  // Antes, el pre-chequeo (fuera de la txn) no lo veía y el backfill respondía
+  // SIN_CAMBIOS sin tomar el lock; la fila quedaba NULL al confirmar.
+  await conLockTimeout('5s', async () => {
+    const escritor = sostenerInsertSinCommit(1500);
+    await escritor.insertado;
+    const t0 = Date.now();
+    const rep = await backfillConjunto({ config: configBase(), apply: true });
+    const espera = Date.now() - t0;
+    await escritor.fin;
+
+    assert.equal(rep.resultado, RESULTADO.APLICADO, 'debe asignar la fila, no responder SIN_CAMBIOS');
+    assert.equal(rep.afectadas.User, 1);
+    assert.ok(espera >= 1000, `el backfill debió esperar el COMMIT del escritor (esperó ${espera}ms)`);
+    const fila = await prisma.$queryRaw`SELECT "conjuntoId" FROM "User" WHERE "id" = ${escritor.uid}`;
+    assert.equal(fila[0].conjuntoId, rep.conjunto.id);
+  });
+});
+
+test('D4: lock_timeout vencido -> BackfillError legible y no escribe nada; valor inválido se rechaza', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado(); // todo NULL, conjunto sin crear
+
+  await conLockTimeout('500ms', async () => {
+    const escritor = sostenerInsertSinCommit(2000); // sostiene el lock más que el timeout
+    await escritor.insertado;
+    try {
+      await assert.rejects(
+        backfillConjunto({ config: configBase(), apply: true }),
+        (err) => {
+          assert.ok(err instanceof BackfillError, `se esperaba BackfillError, llegó ${err?.constructor?.name}`);
+          assert.match(err.message, /No se obtuvo el lock en 500ms: hay una transacción larga o colgada\. No se escribió nada\./);
+          return true;
+        }
+      );
+    } finally {
+      await escritor.fin;
+    }
+  });
+
+  // Nada escrito: sin conjunto y todas las filas siguen NULL (incluida la del escritor).
+  assert.equal(await prisma.conjunto.findUnique({ where: { slug: SLUG } }), null);
+  const nulos = await contarNulosCrudo();
+  const totalUser = (await prisma.$queryRaw`SELECT COUNT(*)::int AS n FROM "User" WHERE "email" LIKE '%@legado.local'`)[0].n;
+  assert.equal(nulos.User, totalUser);
+  assert.ok(nulos.Package > 0 && nulos.Bono > 0 && nulos.Comentario > 0);
+
+  // Formato inválido: error claro antes de abrir nada.
+  await conLockTimeout('10', async () => {
+    await assert.rejects(backfillConjunto({ config: configBase(), apply: true }), /BACKFILL_LOCK_TIMEOUT inválido/);
+  });
+  assert.equal(await prisma.conjunto.findUnique({ where: { slug: SLUG } }), null);
 });
 
 test('teardown', { skip: omitir && razonSkip }, async () => {

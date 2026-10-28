@@ -126,7 +126,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
 | `altaConjunto.integration.test.js` | integración | alta de conjunto + operador (`npm run alta-conjunto` sin el CLI), idempotencia por slug, atomicidad con email en uso. |
-| `backfillConjunto.integration.test.js` | integración | backfill sobre legado (filas NULL): asignación, idempotencia, pre-chequeos, rollback transaccional, `--solo-conjunto`, espera al lock ante escrituras concurrentes. |
+| `backfillConjunto.integration.test.js` | integración | backfill sobre legado (filas NULL): asignación, idempotencia, pre-chequeos, rollback transaccional, `--solo-conjunto`, espera al lock ante escrituras concurrentes (también con 0 NULL visibles), `lock_timeout` con error legible. |
 | `contractConjunto.integration.test.js` | integración | migración *contract* manual (`prisma/manual/`) por `prisma db execute`: NOT NULL + FK `RESTRICT`, guard que aborta con NULLs, y su rollback. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o

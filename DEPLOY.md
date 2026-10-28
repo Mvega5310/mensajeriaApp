@@ -185,8 +185,8 @@ C3 durante la ventana del deploy). Si el conteo de "NULLs a asignar" se tomara
 fuera de la transacción, un `INSERT` del código viejo entre el conteo y el
 `UPDATE` (o entre el `UPDATE` y la verificación) haría que el backfill abortara
 por una verificación que ya no cuadra — un **aborto espurio** en plena noche del
-corte. Para evitarlo, el backfill, **dentro de su transacción y antes del
-`UPDATE`**, toma `LOCK TABLE "User","Package","Bono","Comentario" IN SHARE ROW
+corte. Para evitarlo, el backfill, **dentro de su transacción y como primer
+paso**, toma `LOCK TABLE "User","Package","Bono","Comentario" IN SHARE ROW
 EXCLUSIVE MODE` y recuenta los NULL ahí mismo. Ese modo de lock **permite
 lecturas** (la app sigue mostrando datos) pero **bloquea escrituras concurrentes**
 unos segundos: los escritores viejos esperan al `COMMIT` y luego insertan con
@@ -194,12 +194,27 @@ unos segundos: los escritores viejos esperan al `COMMIT` y luego insertan con
 terminar la transacción (en segundos, salvo que el `UPDATE` de `Package` con
 muchas fotos tarde; de ahí el `timeout` holgado del `$transaction`).
 
-Además, antes del `LOCK TABLE` el backfill fija `SET LOCAL lock_timeout = '10s'`:
+**Con `--apply` el lock se toma SIEMPRE, también cuando no hay nada que
+asignar.** El conteo de los pre-chequeos se hace fuera de la transacción y no ve
+un `INSERT` del código viejo que todavía no confirmó. Si con ese conteo (0 NULL)
+el script respondiera "nada que hacer" sin bloquear, esa fila quedaría en NULL
+segundos después. Por eso `SIN_CAMBIOS` ("0 filas por asignar") ahora significa
+**"0 NULL tras esperar a los escritores en curso"**: se decide después del lock y
+del recuento. El dry-run no toma lock (solo lee). Los guards finales siguen
+siendo C4 (`COUNT(*) WHERE conjuntoId IS NULL` = 0) y el `DO $$` del contract.
+
+Además, antes del `LOCK TABLE` el backfill fija un `lock_timeout` solo para su
+transacción (`set_config('lock_timeout', …, true)`, equivalente a `SET LOCAL`):
 si una **transacción vieja** tuviera sostenido un lock incompatible, el backfill
-**aborta a los 10s** (y revierte, sin dejar nada escrito) en vez de quedarse
+**aborta al vencer** (y revierte, sin dejar nada escrito) en vez de quedarse
 esperando indefinidamente y **encolar detrás las escrituras de la app** en
-producción. Un abort así es recuperable: se investiga qué transacción quedó
-colgada y se reintenta el backfill (es idempotente).
+producción. El valor sale de la variable de entorno `BACKFILL_LOCK_TIMEOUT`
+(por defecto `10s`; formato entero con `ms` o `s`, p. ej. `500ms`; otro formato
+se rechaza antes de abrir nada). Al vencer, el CLI muestra, sin stack:
+*"No se obtuvo el lock en 10s: hay una transacción larga o colgada. No se
+escribió nada. Revisa pg_stat_activity y reintenta; el backfill es
+idempotente."* Un abort así es recuperable: se investiga qué transacción quedó
+colgada (consulta en el runbook) y se reintenta.
 
 ### Procedimientos operativos por conjunto
 

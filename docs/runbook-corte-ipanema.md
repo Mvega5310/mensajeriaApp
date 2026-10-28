@@ -158,6 +158,14 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
 - **Abortar/rollback:** si el script aborta (pre-chequeo) o algo no cuadra → **no
   mergear**. Rollback: ejecutar el SQL de rollback impreso (`UPDATE ... SET
   conjuntoId = NULL WHERE conjuntoId = '<Ipanema>'`). Reportar.
+- **Si aborta con "No se obtuvo el lock en …"** (`lock_timeout`, por defecto 10s;
+  configurable con `BACKFILL_LOCK_TIMEOUT`): no se escribió nada. Buscar la
+  transacción larga o colgada por el túnel:
+  ```sql
+  SELECT pid, state, xact_start, query FROM pg_stat_activity WHERE state <> 'idle' ORDER BY xact_start;
+  ```
+  Esperar a que termine (o decidir explícitamente si se cancela) y reintentar: el
+  backfill es idempotente.
 
   > **⚠️ Alcance del SQL de rollback.** Deja en NULL **TODAS** las filas del
   > conjunto. Entre C1 y C2 (antes del deploy) eso es exactamente lo asignado por
@@ -182,8 +190,12 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
 ### C3 — Backfill #2 (recoge lo escrito entre C1 y el fin del deploy)
 - **Comando:** mismo que C1 (`--apply`). Es idempotente.
 - **Esperado:** `APLICADO` con unas pocas filas (lo que el código viejo escribió
-  en la ventana) **o** `SIN_CAMBIOS` si no hubo. Anotar el SQL de rollback.
+  en la ventana) **o** `SIN_CAMBIOS` si no hubo. `SIN_CAMBIOS` se decide tras
+  tomar el lock, es decir, tras esperar a los escritores en curso. Anotar el SQL
+  de rollback.
 - **Continuar si:** `0` NULL en las 4 tablas tras esta corrida.
+- **Si aborta por `lock_timeout`:** igual que en C1 (consulta a
+  `pg_stat_activity` y reintento).
 
 ### C4 — Verificación + smoke test en vivo
 - **Comando:** `COUNT(*) WHERE conjuntoId IS NULL` = 0 en las 4 tablas (por el
@@ -253,6 +265,7 @@ Con una cuenta real de Ipanema (operador y residente):
 | P0 | `migrate status` con pendientes/errores | detener, reportar |
 | P1 | el script no crea el conjunto | revisar config/host, reportar |
 | C1 | reporte no `APLICADO` o NULL != 0 | **no mergear**; rollback SQL impreso |
+| C1/C3 | "No se obtuvo el lock en …" | nada escrito; revisar `pg_stat_activity` (consulta en C1) y reintentar |
 | C2 | deploy no sube / smoke falla | redeploy commit anterior |
 | C3 | quedan NULL tras la corrida | investigar escritor viejo; no seguir a C5 |
 | C4 | cualquier NULL o checklist en rojo | **no aplicar contract**; reportar |
