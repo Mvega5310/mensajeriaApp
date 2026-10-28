@@ -65,8 +65,23 @@ railway link                       # selecciona el proyecto/ambiente (no hace fa
 railway connect Postgres --tunnel-only -P 55432
 ```
 Esto deja un túnel local escuchando en `127.0.0.1:55432` y muestra la
-contraseña de la base. En otra terminal, con el schema en
-`provider = "postgresql"`:
+contraseña de la base.
+
+> **Antes de abrir el túnel, `railway status`:** debe mostrar el proyecto
+> **`astonishing-truth`** (ambiente `production`) con los servicios
+> `mensajeriaApp` y `Postgres`. La misma cuenta tiene otros proyectos, y estar
+> enlazado al equivocado da este síntoma: el túnel abre el puerto, pero `psql`
+> dice "el servidor ha cerrado la conexión inesperadamente" y el túnel imprime
+> `channel 1: open failed: connect failed`. El enlace es por carpeta: corre
+> `status`/`connect` desde donde hiciste el `link`. Si persiste, actualiza la CLI
+> (`railway upgrade`, o `npm install -g @railway/cli` si dice "Failed to execute
+> npm"; verificada v5.71.0). Que `mensajeriaApp` figure como *Sleeping* es normal.
+> **La contraseña nunca se pega en chats, tickets ni archivos:** va a
+> `$env:PGPASSWORD` y se limpia con `Remove-Item Env:PGPASSWORD`. Detalle en
+> [`docs/runbook-corte-ipanema.md`](docs/runbook-corte-ipanema.md) §0.1, y las
+> trampas de PowerShell 5.1 (BOM, comillas en `psql -c`) en su §5.
+
+En otra terminal, con el schema en `provider = "postgresql"`:
 ```
 cd backend
 $env:DATABASE_URL = "postgresql://postgres:<password>@127.0.0.1:55432/railway"   # PowerShell
@@ -145,7 +160,7 @@ el *contract* se aplica **manualmente al final (C5)** y **no vive en
 | **C2** | **Merge a `main`** → Railway y Vercel despliegan el código con aislamiento. **Columnas siguen NULLABLE.** | Día del corte | Redeploy del commit anterior (la columna extra es inocua para el código viejo) |
 | **C3** | **Backfill #2** (idempotente): recoge lo que el código viejo escribió entre C1 y el fin del deploy de C2. | Tras C2 | Igual que C1 |
 | **C4** | Verificación: `0` NULL en las 4 tablas + smoke test en vivo (checklist del runbook). | Tras C3 | n/a |
-| **C5** | **Migración *contract*** (manual, por túnel SSH): `NOT NULL` en las 4 columnas + FKs `SET NULL → RESTRICT`. Solo ahora, porque ya ningún escritor produce NULL. | Tras C4 | SQL de rollback del contract (ver abajo) |
+| **C5** | **Migración *contract*** (manual, por túnel SSH): `NOT NULL` en las 4 columnas + FKs `SET NULL → RESTRICT`. Solo ahora, porque ya ningún escritor produce NULL. | Tras C4 | SQL de rollback del contract; si ya se registró con `resolve --applied`, además quitar la carpeta y la fila de `_prisma_migrations` (ver abajo) |
 
 Notas:
 - **`SET NULL → RESTRICT`** (C5): con `SET NULL`, borrar un `Conjunto` dejaría
@@ -157,6 +172,22 @@ Notas:
   C5, se registra en `migrations/` en un commit posterior y se marca como aplicado
   con `npx prisma migrate resolve --applied <nombre>`, para que los `migrate deploy`
   futuros no intenten re-aplicarlo.
+- **Revertir el contract después del `resolve --applied`** no es solo correr el SQL
+  de rollback. `_prisma_migrations` seguiría marcándolo como aplicado con el
+  esquema ya nullable. Y `prisma migrate resolve --rolled-back` **no sirve**: solo
+  acepta migraciones fallidas (`P3012`, verificado con Prisma 5.22). Orden
+  verificado:
+  1. SQL de rollback.
+  2. Commit que quite la carpeta de `migrations/` y vuelva `schema.prisma` a
+     `conjuntoId String?`, ya desplegado.
+  3. `DELETE` de esa fila en `_prisma_migrations`.
+  4. `migrate status` + `is_nullable`.
+
+  Detalle y porqué del orden: runbook, paso C5 → "Abortar/rollback".
+- **Ensayo del 28-oct-2026** (copia real, PostgreSQL 18.6): todo el corte en
+  verde, con C1 ≈ 62 ms (lock ≈ 49 ms) y contract ≈ 0,35 s. Con el volumen de
+  ese día (4 usuarios, 0 paquetes) no hace falta ventana nocturna. La
+  recomendación es hacerlo antes de que haya operación real (runbook §0.3).
 - La activación del aislamiento es **orden de despliegue, no un flag**: no hay
   interruptor de runtime que lo prenda/apague.
 
@@ -168,7 +199,7 @@ después** (el frontend nuevo depende de endpoints del backend nuevo; al revés 
 
 | Combinación | Registro `?c=` | Registro sin `?c=` | `/api/auth/me`, config | Veredicto |
 |---|---|---|---|---|
-| **Frontend viejo + backend nuevo** (ventana normal, backend desplegó primero) | El form viejo no manda `codigoInvitacion` → `register` responde `400 INVITACION_INVALIDA`. Los **QR viejos de KAN-3 apuntan a la raíz sin `?c=`**, así que un residente nuevo no podría registrarse hasta que el frontend nuevo esté arriba. **Mitigación:** ventana corta y nocturna; avisar que el registro se habilita al terminar. | Igual: `400`. | `me` funciona (no cambió su forma). El frontend viejo no llama a `/conjunto/config`; las tarifas/WhatsApp que muestra son las que ya tenía hardcodeadas — cosméticamente viejas, sin romper. | Degradado pero **seguro**: operación de paquetes intacta; solo el registro nuevo queda en pausa breve. |
+| **Frontend viejo + backend nuevo** (ventana normal, backend desplegó primero) | El form viejo no manda `codigoInvitacion` → `register` responde `400 INVITACION_INVALIDA`. Los **QR viejos de KAN-3 apuntan a la raíz sin `?c=`**, así que un residente nuevo no podría registrarse hasta que el frontend nuevo esté arriba. **Mitigación:** ventana corta (con el volumen actual, en horario normal; ver runbook §0.3); avisar que el registro se habilita al terminar. | Igual: `400`. | `me` funciona (no cambió su forma). El frontend viejo no llama a `/conjunto/config`; las tarifas/WhatsApp que muestra son las que ya tenía hardcodeadas — cosméticamente viejas, sin romper. | Degradado pero **seguro**: operación de paquetes intacta; solo el registro nuevo queda en pausa breve. |
 | **Frontend nuevo + backend viejo** (NO debe ocurrir si se despliega backend primero) | El backend viejo ignora `codigoInvitacion` y crea el `User` sin tenant (columna nullable). `/conjunto/config` **no existe** → el frontend nuevo falla al cargar tarifas/bonos. | — | `/conjunto/config` da 404. | **Evitar**: por eso backend primero. |
 | **Ambos nuevos** (fin de C2) | Flujo completo con código. | Muestra el campo de código. | Todo desde config. | Correcto. |
 

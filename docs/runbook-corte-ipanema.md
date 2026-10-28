@@ -1,8 +1,9 @@
 # Runbook — Corte a producción del multi-conjunto (Ipanema) · KAN-8 Fase F
 
-> **Estado:** NO ejecutado. Este runbook se **ensaya** contra una copia antes de
-> cualquier ejecución real, y la ejecución real requiere aprobación explícita del
-> usuario, paso por paso. El orden y su justificación están en
+> **Estado:** NO ejecutado en producción. **Ensayado el 28-oct-2026** contra una
+> copia real de producción, sin incidencias (resultados en §0.3). La ejecución
+> real requiere aprobación explícita del usuario, paso por paso. El orden y su
+> justificación están en
 > [`DEPLOY.md` → "Corte a producción del multi-conjunto"](../DEPLOY.md).
 
 Regla que atraviesa todo el runbook: **no improvisar.** Ante cualquier resultado
@@ -51,12 +52,48 @@ $PG18 = "C:\pg18\pgsql\bin"
 New-Item -ItemType Directory -Force C:\puertaya-privado | Out-Null
 ```
 
-1. **Túnel SSH a Railway** (ver DEPLOY.md → "Migraciones de Postgres"):
-   `railway connect Postgres --tunnel-only -P 55432`.
-2. **Verificar versiones** antes del dump:
+#### Antes de abrir el túnel (vale para el ensayo y para P0, C0, C1, C3 y C5)
+
+En el primer intento del ensayo se perdió tiempo por tener la CLI enlazada a
+**otro proyecto** de la misma cuenta. Siempre, antes de abrir el túnel:
+
+1. **Confirmar el proyecto:** `railway status` debe mostrar el proyecto
+   **`astonishing-truth`**, ambiente **`production`**, con los servicios
+   **`mensajeriaApp`** (backend, `https://mensajeriaapp-production.up.railway.app`)
+   y **`Postgres`** (volumen `postgres-volume`). Si muestra otra cosa:
+   `railway link` y elegir ese proyecto. El enlace se guarda **por carpeta**:
+   corre `railway status`/`connect` desde la misma carpeta donde hiciste el `link`.
+2. **`mensajeriaApp` en *Sleeping* es normal:** el servicio se duerme sin tráfico
+   y la primera petición lo despierta (arranque lento, unos segundos). No es un
+   fallo ni afecta al túnel de `Postgres`.
+3. **Síntoma de proyecto equivocado o servicio caído:** el túnel abre el puerto
+   local, pero `psql` responde "el servidor ha cerrado la conexión
+   inesperadamente" y la terminal del túnel imprime
+   `channel 1: open failed: connect failed`. Primero revisa `railway status`;
+   luego actualiza la CLI: `railway upgrade` (si falla con
+   "Failed to execute npm", usa `npm install -g @railway/cli`). Versión verificada
+   en el ensayo: **v5.71.0**.
+4. **Abrir el túnel:** `railway connect Postgres --tunnel-only -P 55432` (ver
+   DEPLOY.md → "Migraciones de Postgres"). Deja esa terminal abierta.
+5. **La contraseña de la base nunca se pega en chats, tickets ni archivos**
+   (tampoco en una `DATABASE_URL` escrita en un archivo). El túnel la muestra:
+   cópiala directo a la variable de la sesión y límpiala al terminar:
+   ```powershell
+   $env:PGPASSWORD = "<la que muestra el túnel>"   # solo en esta terminal
+   # ... comandos psql / pg_dump con -h 127.0.0.1 -p 55432 -U postgres -d railway ...
+   Remove-Item Env:PGPASSWORD                    # al terminar
+   ```
+   Para los CLI de Node (`backfill-conjunto`, `prisma`), arma la URL en memoria:
+   `$env:DATABASE_URL = "postgresql://postgres:$($env:PGPASSWORD)@127.0.0.1:55432/railway"`,
+   y bórrala igual (`Remove-Item Env:DATABASE_URL`).
+
+Notas de PowerShell 5.1 que afectan a estos comandos: §5.
+
+1. **Túnel SSH a Railway:** según "Antes de abrir el túnel", arriba.
+2. **Verificar versiones** antes del dump (con `$env:PGPASSWORD` ya cargada):
    ```powershell
    # Versión del servidor de Railway (por el túnel) — hoy 18.6:
-   & "$PG18\psql.exe" "postgresql://postgres:<pwd>@127.0.0.1:55432/railway" -c "SELECT version();"
+   & "$PG18\psql.exe" -h 127.0.0.1 -p 55432 -U postgres -d railway -c "SELECT version();"
    # Versión del pg_dump portable — debe ser >= la del servidor:
    & "$PG18\pg_dump.exe" --version
    ```
@@ -64,11 +101,13 @@ New-Item -ItemType Directory -Force C:\puertaya-privado | Out-Null
    el `pg_dump` del PostgreSQL 16 instalado (ni un `pg_dump` a secas del `PATH`).
 3. **`pg_dump` de producción** por el túnel (formato custom):
    ```powershell
-   & "$PG18\pg_dump.exe" "postgresql://postgres:<pwd>@127.0.0.1:55432/railway" -Fc -f C:\puertaya-privado\prod.dump
+   & "$PG18\pg_dump.exe" -h 127.0.0.1 -p 55432 -U postgres -d railway -Fc -f C:\puertaya-privado\prod.dump
+   & "$PG18\pg_restore.exe" --list C:\puertaya-privado\prod.dump | Out-Null; $LASTEXITCODE   # 0 = no truncado
    ```
-   - **El dump es grande:** las fotos de evidencia viven como base64 en
-     `Package.fotoUrl`, así que el `.dump` puede pesar cientos de MB y tardar
-     varios minutos. Ten espacio en disco y paciencia.
+   - **El tamaño depende de las fotos:** las fotos de evidencia viven como base64
+     en `Package.fotoUrl`. El dump del 28-oct-2026 pesó ~12 KB porque aún no había
+     paquetes (§0.3), pero con operación real puede pesar cientos de MB y tardar
+     varios minutos.
 4. **Instancia temporal local 18** (puerto 5433) con `initdb`/`pg_ctl`:
    ```powershell
    $DATA = "$env:TEMP\ipa-ensayo-pgdata"
@@ -106,7 +145,7 @@ Con `DATABASE_URL` apuntando al 5433 y el backend/front nuevos levantados
   `npm run backfill-conjunto -- --config C:\puertaya-privado\ipanema.local.json --solo-conjunto` en
   **dry-run** primero, luego con `--apply --solo-conjunto`. El flag `--solo-conjunto`
   crea el `Conjunto` y su `codigoInvitacion` **sin tocar ninguna fila** (sobre la
-  copia, que ya tiene miles de filas NULL de la restauración, es el comportamiento
+  copia, cuyas filas llegan todas en NULL de la restauración, es el comportamiento
   correcto: ninguna se asigna todavía).
 - **C1 (backfill #1):** `npm run backfill-conjunto -- --config C:\puertaya-privado\ipanema.local.json --apply`.
   Revisa el reporte: `0` NULL en las 4 tablas, conteos antes/después, y **anota el
@@ -121,9 +160,18 @@ Con `DATABASE_URL` apuntando al 5433 y el backend/front nuevos levantados
   aborta, sale limpio con el mensaje `CONTRACT abortado` (y código ≠ 0), sin las
   ~12 líneas de "current transaction is aborted" de las sentencias siguientes.
   El script es una sola transacción, así que no aplica nada a medias en ningún caso.
+- **Ensayar el registro de la migración** (C5, pasos 2–3) y su reversa (C5,
+  "Abortar/rollback"): carpeta local `prisma/migrations/<timestamp>_contract_conjunto/`,
+  `migrate resolve --applied` contra la copia, `migrate deploy` → "No pending
+  migrations". **Borrar la carpeta al terminar** (en el ensayo no se commitea).
 - **Navegar con cuentas reales:** login del operador (Francisco) y de un residente
   de Ipanema; recorrer el checklist de §2.4. Confirmar que todo funciona con los
-  datos reales restaurados.
+  datos reales restaurados. Como las contraseñas reales no se conocen, **en la
+  copia** (nunca en producción) se pone un hash bcrypt de una contraseña de
+  ensayo al operador y a uno o dos residentes. El `backend/.env` del ensayo **no
+  lleva `RESEND_API_KEY`**: la copia tiene correos reales de residentes y sin esa
+  clave el backend solo registra "Correo no enviado" (ese log contiene correos:
+  bórralo al terminar).
 - **Limpieza:** parar y borrar la instancia temporal y el dump (ver §0.1 paso 6:
   `& "$PG18\pg_ctl.exe" -D $DATA stop`, borrar `$DATA` y
   `C:\puertaya-privado\prod.dump` — contienen datos personales y fotos, no
@@ -132,12 +180,41 @@ Con `DATABASE_URL` apuntando al 5433 y el backend/front nuevos levantados
 Criterio para pasar del ensayo a la ejecución real: **todos** los pasos anteriores
 completan sin sorpresas y el checklist de smoke pasa contra la copia.
 
+### 0.3 Resultado del ensayo del 28-oct-2026 (dato puntual, no regla)
+
+Ensayo completo sobre una copia del dump de producción de ese día, restaurada en
+PostgreSQL 18.6 local. Todo pasó sin incidencias: P0 → P1 → C1 → C3 → smoke test
+→ aislamiento con un segundo conjunto de prueba → C5 → registro de la migración
+→ rollback del contract.
+
+- **Volumen de producción ese día:** 4 usuarios (1 `OPERATOR`, 3 `RESIDENT`),
+  0 paquetes, 0 bonos, 0 comentarios. 5 migraciones aplicadas (faltaba
+  `add_conjunto_multitenant`, es decir, P0 aún no se había hecho). Sin huérfanos
+  ni duplicados.
+- **Tiempos medidos** (en el servidor, PostgreSQL 18.6):
+
+  | Paso | Tiempo |
+  |---|---|
+  | C1, transacción completa | ≈ 62 ms (lock ≈ 49 ms) |
+  | C3 (no-op, igual toma el lock) | ≈ 18 ms |
+  | C5 contract | ≈ 0,35 s |
+  | Rollback del contract | ≈ 0,27 s |
+
+**Consecuencia para el plan.** Con ese volumen el corte entero es cuestión de
+minutos y **no hace falta ventana nocturna**. El `LOCK TABLE` y el backfill #2 (C3)
+se mantienen igual por seguridad: siguen siendo correctos si el volumen crece.
+Pero **cuanto más tarde se haga el corte, más datos habrá y más riesgo**.
+**Recomendación:** hacer el corte **antes de que Ipanema empiece a operar con
+paquetes reales**.
+
 ---
 
 ## 1. Preparación (días antes del corte)
 
 ### P0 — Migración *expand* en producción
-- **Comando:** se aplica por el túnel SSH (ver DEPLOY.md). Es aditiva.
+- **Túnel:** antes, `railway status` → proyecto `astonishing-truth` (§0.1, "Antes
+  de abrir el túnel").
+- **Comando:** `npx prisma migrate deploy` por el túnel SSH (ver DEPLOY.md). Es aditiva.
 - **Esperado:** la migración `add_conjunto_multitenant` queda aplicada; el código
   viejo sigue funcionando (ignora las columnas nuevas).
 - **Continuar si:** `prisma migrate status` dice que no hay migraciones pendientes.
@@ -145,7 +222,7 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   (las columnas nullable no molestan al código viejo). Detenerse y reportar.
 
 ### P1 — Crear el Conjunto Ipanema (sin backfill)
-- **Comando (por el túnel, dry-run primero):**
+- **Comando (por el túnel — `railway status` primero, §0.1 — y dry-run primero):**
   `npm run backfill-conjunto -- --config C:\puertaya-privado\ipanema.local.json --solo-conjunto`,
   luego `--apply --solo-conjunto`. Revisar host y resumen.
 - **Esperado:** se crea el `Conjunto` Ipanema con su `codigoInvitacion`, **sin
@@ -169,11 +246,30 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
 
 ## 2. Día del corte
 
-> **Ventana:** nocturna, entre semana, **evitar fin de mes** (pico de paquetes).
-> Avisar a Francisco con antelación (ver §3).
+> **Ventana:** con el volumen medido en el ensayo (§0.3) el corte dura minutos y
+> puede hacerse **en horario normal, entre semana**, avisando a Francisco con
+> antelación (ver §3). Lo que importa es hacerlo **pronto**, antes de que Ipanema
+> opere con paquetes reales. Si cuando llegue el día ya hay operación real, vuelve
+> a la ventana de bajo tráfico y evita el fin de mes (pico de paquetes).
+
+### Checklist previo (antes de C0)
+- [ ] **Rotar la contraseña de la base de producción** (pendiente: se mostró en una
+      conversación; el procedimiento se acuerda aparte) y confirmar que el backend
+      `mensajeriaApp` se reconecta con la nueva.
+- [ ] **Avisar a Francisco** (fecha, hora y qué cambia; ver §3).
+- [ ] **Tras P1:** reimprimir el QR/flyer con `/registro?c=<código>` y dejar el
+      código visible en recepción. Los QR viejos apuntan a la raíz sin `?c=` y,
+      tras el corte, dejarán de permitir el registro sin código.
+- [ ] **Antes del lanzamiento:** revisión legal del texto de Términos (en especial
+      la versión genérica).
+- [ ] Carpeta local para el dump de C0 que **NO esté sincronizada con OneDrive**
+      (p. ej. `C:\puertaya-privado`).
+- [ ] `railway status` → `astonishing-truth` antes de abrir el túnel (§0.1).
 
 ### C0 — Backup + conteos
-- **Comando:** `& "$PG18\pg_dump.exe" ... -Fc -f C:\puertaya-privado\prod.dump`
+- **Túnel:** `railway status` → `astonishing-truth` antes de abrirlo (§0.1).
+  Contraseña solo en `$env:PGPASSWORD`.
+- **Comando:** `& "$PG18\pg_dump.exe" -h 127.0.0.1 -p 55432 -U postgres -d railway -Fc -f C:\puertaya-privado\prod.dump`
   por el túnel (como en el ensayo, §0.1: **el `pg_dump` 18**, no el del PostgreSQL 16 instalado) + anotar
   `COUNT(*)` y `COUNT(*) WHERE conjuntoId IS NULL` de `User`/`Package`/`Bono`/`Comentario`.
 - **Continuar si:** el dump se generó y se verificó que restaura (ya probado en el
@@ -181,7 +277,8 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
 
 ### C1 — Backfill #1
 - **Comando:** `npm run backfill-conjunto -- --config C:\puertaya-privado\ipanema.local.json --apply`
-  (por el túnel; al ser host remoto, el script pedirá reescribir el slug `ipanema`).
+  (por el túnel ya verificado en C0 con `railway status`; al ser host remoto, el
+  script pedirá reescribir el slug `ipanema`).
 - **Esperado:** reporte `APLICADO`, `0` NULL en las 4 tablas, conteos coherentes.
   **Anotar el SQL de rollback** del reporte.
 - **Continuar si:** reporte `APLICADO` y verificación de `0` NULL ok.
@@ -218,7 +315,8 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   nullable sobrante es inocua para el código viejo. Reportar.
 
 ### C3 — Backfill #2 (recoge lo escrito entre C1 y el fin del deploy)
-- **Comando:** mismo que C1 (`--apply`). Es idempotente.
+- **Comando:** mismo que C1 (`--apply`). Es idempotente. Si el túnel se cerró
+  durante C2, al reabrirlo vuelve a confirmar `railway status` (§0.1).
 - **Esperado:** `APLICADO` con unas pocas filas (lo que el código viejo escribió
   en la ventana) **o** `SIN_CAMBIOS` si no hubo. `SIN_CAMBIOS` se decide tras
   tomar el lock, es decir, tras esperar a los escritores en curso. Anotar el SQL
@@ -235,8 +333,9 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   dónde salió (¿un escritor viejo aún activo?), reportar.
 
 ### C5 — Migración *contract*
-- **Comando (por el túnel):**
-  `& "$PG18\psql.exe" "<DATABASE_URL del túnel>" -v ON_ERROR_STOP=1 -f backend/prisma/manual/contract_conjunto_not_null.sql`
+- **Comando (por el túnel — `railway status` → `astonishing-truth`, §0.1 — con
+  `$env:PGPASSWORD` cargada):**
+  `& "$PG18\psql.exe" -h 127.0.0.1 -p 55432 -U postgres -d railway -v ON_ERROR_STOP=1 -f backend/prisma/manual/contract_conjunto_not_null.sql`
   (`ON_ERROR_STOP`: ver §0.2, el guard aborta limpio y con código de salida ≠ 0).
 - **Esperado:** se aplica sin error (el guard `DO $$` confirma 0 NULLs). Columnas
   `NOT NULL` y FKs `RESTRICT`.
@@ -260,8 +359,55 @@ completan sin sorpresas y el checklist de smoke pasa contra la copia.
   > **idéntico** al SQL aplicado a mano en el paso 1, para que `resolve` sea
   > coherente con lo que realmente está en la base.
 - **Continuar si:** el contract aplicó y el smoke test sigue en verde.
-- **Abortar/rollback:** `& "$PG18\psql.exe" ... -v ON_ERROR_STOP=1 -f backend/prisma/manual/rollback_contract_conjunto.sql`
-  (vuelve a nullable + FK SET NULL, sin pérdida de datos). Reportar.
+- **Abortar/rollback.** Depende de si el registro (`resolve --applied`, paso 3 de
+  arriba) ya se hizo:
+  - **Si el `resolve` todavía NO se hizo:** basta con el SQL de rollback (vuelve a
+    nullable + FK `SET NULL`, sin pérdida de datos). Si ya habías creado la carpeta
+    local del paso 2, bórrala.
+    ```powershell
+    & "$PG18\psql.exe" -h 127.0.0.1 -p 55432 -U postgres -d railway -v ON_ERROR_STOP=1 -f backend/prisma/manual/rollback_contract_conjunto.sql
+    ```
+  - **Si el `resolve --applied` YA se hizo:** el SQL solo no basta. `_prisma_migrations`
+    seguiría marcando la migración como aplicada mientras el esquema vuelve a ser
+    nullable: un `migrate deploy` (corre en el `start` de Railway) **asumiría el
+    contract aplicado**. Y si se quita esa marca con la carpeta todavía en `main`,
+    el siguiente arranque **lo volvería a aplicar**. Procedimiento completo, en
+    este orden:
+    1. **SQL de rollback** (el comando de arriba): esquema a nullable / `SET NULL`.
+    2. **Si la carpeta `prisma/migrations/<nombre>/` ya llegó a `main`:** un commit
+       que **quite** esa carpeta y devuelva `schema.prisma` a `conjuntoId String?`,
+       push y esperar el deploy, **antes** del paso 3. Mientras la marca siga como
+       aplicada, ese deploy no hace nada (verificado: "No pending migrations").
+       Hacerlo al revés abre una ventana en la que **cualquier arranque del
+       backend** (deploy, reinicio y, previsiblemente, el despertar de
+       *Sleeping*) vuelve a aplicar el contract. Si la carpeta solo existe en
+       local, bórrala y listo.
+    3. **Quitar la marca de `_prisma_migrations`.** ⚠️ **`npx prisma migrate resolve
+       --rolled-back <nombre>` NO sirve aquí:** solo acepta migraciones en estado
+       *fallido* y con una aplicada responde
+       `Error: P3012 … cannot be rolled back because it is not in a failed state`
+       (verificado en PostgreSQL 18.6 con Prisma 5.22). Lo que sí funciona es
+       borrar esa fila del historial, por el túnel y con un archivo `.sql` (§5):
+       ```sql
+       DELETE FROM _prisma_migrations WHERE migration_name = '<timestamp>_contract_conjunto';
+       ```
+    4. **Verificar:** `npx prisma migrate status` → "Database schema is up to date!"
+       (sin la migración pendiente ni aplicada), y
+       `SELECT table_name, is_nullable FROM information_schema.columns WHERE column_name = 'conjuntoId';`
+       → `YES` en las 4 tablas.
+
+    Con la fila borrada y la carpeta fuera, el estado equivale a "contract nunca
+    aplicado". Un reintento posterior repite C5 desde el principio.
+  - En cualquiera de los dos casos: **reportar**.
+
+### Checklist de cierre (después de C4 y de C5)
+- [ ] Smoke test §2.4 en verde tras C5.
+- [ ] **Borrar los dumps y archivos de ensayo con datos personales** (el `prod.dump`
+      de C0 y los del ensayo, logs del backend del ensayo, SQL de rollback
+      guardados) una vez confirmado C5. El dump de C0 es la red de seguridad hasta
+      entonces: no lo borres antes.
+- [ ] `ipanema.local.json` **fuera del repo** (y fuera de carpetas sincronizadas).
+- [ ] Túnel cerrado, `Remove-Item Env:PGPASSWORD` y `Remove-Item Env:DATABASE_URL`.
 
 ### 2.4 Checklist de verificación en vivo (tras C2 y tras C4)
 Con una cuenta real de Ipanema (operador y residente):
@@ -284,7 +430,9 @@ Con una cuenta real de Ipanema (operador y residente):
   el **registro de nuevos residentes** puede quedar en pausa (matriz de
   compatibilidad), y que su sesión seguirá activa. Darle el **nuevo enlace/QR**
   (`/registro?c=<código>`) para reimprimir.
-- **Ventana:** nocturna, entre semana, evitar fin de mes.
+- **Ventana:** horario normal entre semana, avisando a Francisco, mientras el
+  volumen siga siendo el del ensayo (§0.3). Con operación real ya en marcha:
+  ventana de bajo tráfico y evitar fin de mes.
 - **Durante el corte:** un solo operador del corte ejecuta; cualquier desvío se
   reporta antes de continuar (regla de no improvisar).
 
@@ -301,5 +449,36 @@ Con una cuenta real de Ipanema (operador y residente):
 | C3 | quedan NULL tras la corrida | investigar escritor viejo; no seguir a C5 |
 | C4 | cualquier NULL o checklist en rojo | **no aplicar contract**; reportar |
 | C5 | el contract falla (guard o FK) | rollback SQL; reportar |
+| C5 | hay que revertir **tras** `resolve --applied` | rollback SQL → quitar la carpeta de `main` (commit + deploy) → `DELETE` de la fila en `_prisma_migrations` (**no** `resolve --rolled-back`: P3012) → `migrate status` + `is_nullable` (C5, "Abortar/rollback") |
+| Túnel | `channel 1: open failed` / "el servidor ha cerrado la conexión" | `railway status` (¿`astonishing-truth`?), `railway link`, actualizar CLI (§0.1) |
 
 En todos los casos: **detenerse y reportar**, no improvisar.
+
+---
+
+## 5. Notas de PowerShell 5.1 (Windows)
+
+Problemas reales del ensayo; ninguno es un fallo de la app.
+
+- **No pases SQL por tubería a `prisma db execute --stdin`.** PowerShell 5.1
+  antepone un BOM invisible y Postgres responde `syntax error at or near "SELECT"`
+  (el BOM va pegado delante de `SELECT`). Usa un archivo `.sql` sin BOM con
+  `--file`. Para crearlo desde PowerShell: `Set-Content -Encoding ascii` (si el
+  SQL solo tiene caracteres ASCII; `-Encoding UTF8` en 5.1 **sí** escribe BOM).
+  Con tildes o eñes: `[IO.File]::WriteAllText($ruta, $texto)`, que escribe UTF-8
+  sin BOM.
+- **`psql -c "..."` con comillas dobles internas** (`"User"`, `"Conjunto"`) falla
+  en 5.1, porque PowerShell las quita al pasar el argumento. Usa siempre
+  `-f archivo.sql`.
+- **`ipanema.local.json` en UTF-8 sin BOM** (el valor por defecto de VS Code; el
+  Bloc de notas a veces añade BOM). El CLI lo lee con `JSON.parse`, que falla con
+  BOM. Ojo: `Get-Content <ruta> | ConvertFrom-Json` valida la sintaxis del JSON
+  pero **tolera el BOM**, así que no lo detecta. Para comprobar el BOM:
+  ```powershell
+  $b = [IO.File]::ReadAllBytes("C:\puertaya-privado\ipanema.local.json")[0..2]; ($b -join ',') -eq '239,187,191'   # True = tiene BOM
+  ```
+- **`npm run alta-conjunto` es interactivo:** funciona en la terminal del usuario,
+  pero **no acepta respuestas por tubería** ni con `< archivo`, porque `readline`
+  pierde líneas y el script se corta en la segunda pregunta.
+- **`pg_ctl start`** puede bloquear herramientas que capturan la salida: lánzalo
+  con `Start-Process` sin `-Wait` (§0.1, paso 4).
