@@ -2,8 +2,8 @@
 
 > **Estado: EJECUTADO en producción el 28-oct-2026** (P0 → C5 pasos 1–3), tras
 > ensayarlo ese mismo día contra una copia real (§0.3). Resultados y desviaciones
-> del corte real en **§6**. **Queda pendiente el paso 4 de C5** (carpeta de
-> migración al repo). Cualquier ejecución futura de este runbook sigue requiriendo
+> del corte real en **§6**. **Paso 4 de C5** (carpeta de migración al repo): hecho en la
+> rama `refactor/mobile-first` (S0.2, SHA-256 verificado), aún no en `main`. Cualquier ejecución futura de este runbook sigue requiriendo
 > aprobación explícita del usuario, paso por paso. El orden y su justificación
 > están en [`DEPLOY.md` → "Corte a producción del multi-conjunto"](../DEPLOY.md).
 
@@ -508,7 +508,7 @@ cada compuerta. Sin incidencias en los datos.
 | C3 | "0 filas por asignar". |
 | C4 | Registro sin código / con código inválido → 400; smoke manual del usuario aprobado. |
 | C5 (1–3) | Contract: **2,86 s**; NOT NULL ×4 y FK `RESTRICT`; `resolve --applied 20261028165010_contract_conjunto`, `migrate status` "up to date". |
-| C5 (4) | **Pendiente** (ver DEPLOY.md → "Pendiente"). |
+| C5 (4) | **Hecho en la rama `refactor/mobile-first`** (carpeta idéntica, SHA-256 verificado); pendiente en `main` hasta que el refactor llegue a producción. |
 
 **Desviaciones respecto a este runbook:**
 - **El CLI no pidió reescribir el slug** en C1/C3: por el túnel el host es
@@ -520,7 +520,7 @@ cada compuerta. Sin incidencias en los datos.
 - **La carpeta para `resolve` se creó fuera del repo**, en una copia del árbol de
   Prisma (`schema.prisma` + `migrations/`), con `--schema` apuntando a ella, en vez
   de `backend/prisma/migrations/` (C5 paso 2). Por eso el repo no cambió y el
-  paso 4 sigue pendiente; la carpeta debe volver byte a byte idéntica (SHA-256 en
+  paso 4 quedó pendiente en `main` (hecho después en `refactor/mobile-first`); la carpeta debe volver byte a byte idéntica (SHA-256 en
   DEPLOY.md).
 - **La transacción de C1 no se midió en el servidor** (habría requerido activar
   `log_statement` en producción). La CLI completa tardó ≈ 11 s; en el ensayo, la

@@ -3,9 +3,11 @@
 // backfilleado y verifica el endurecimiento; luego el rollback lo revierte.
 // Misma guarda de localhost.
 //
-// NOTA: esta prueba MUTA el esquema (NOT NULL / FKs) de la base de prueba. Al
-// final SIEMPRE corre el rollback para dejar la base como la encontró (columnas
-// nullable), de modo que no interfiera con otras integraciones en la misma base.
+// NOTA: esta prueba MUTA el esquema (NOT NULL / FKs) de la base de prueba. La
+// base nace con el contract aplicado (migración 20261028165010 en
+// prisma/migrations/); la prueba la baja a nullable para ejercitar el script y su
+// rollback, y al final SIEMPRE vuelve a aplicar el contract para dejarla como la
+// encontró y no interferir con otras integraciones.
 //
 // Depende del estado GLOBAL de la base: el guard del contract exige 0 filas con
 // conjuntoId NULL en TODA la base, y el ALTER afecta a todas las pruebas. Por
@@ -15,9 +17,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { SQL_CONTRACT, SQL_ROLLBACK, ejecutarScript } from './helpers/esquemaContract.js';
 
 function hostDeDatabaseUrl(url) {
   if (!url) return null;
@@ -34,14 +34,6 @@ const razonSkip = !dbUrl
     : null;
 const omitir = razonSkip !== null;
 if (omitir) console.warn(`[contractConjunto.integration] OMITIDA: ${razonSkip}`);
-
-const aqui = dirname(fileURLToPath(import.meta.url));
-const BACKEND = join(aqui, '..', '..');
-const MANUAL = join(BACKEND, 'prisma', 'manual');
-const SQL_CONTRACT = join(MANUAL, 'contract_conjunto_not_null.sql');
-const SQL_ROLLBACK = join(MANUAL, 'rollback_contract_conjunto.sql');
-const PRISMA_CLI = join(BACKEND, 'node_modules', 'prisma', 'build', 'index.js');
-const SCHEMA = join(BACKEND, 'prisma', 'schema.prisma');
 
 let prisma, runWithTenant;
 const SLUG = 'itestct-ipanema';
@@ -69,29 +61,12 @@ async function sembrarBackfilleado() {
   return { conj, uid };
 }
 
-// Ejecuta un archivo SQL completo (BEGIN/COMMIT y DO $$) con `prisma db execute`.
-// No sirve `$executeRawUnsafe`: Prisma usa el protocolo extendido (sentencia
-// preparada) y Postgres rechaza varios comandos en una (42601). `db execute`
-// manda el script entero y, si el guard aborta, devuelve el mensaje del RAISE
-// ("CONTRACT abortado...") en stderr, que se relanza en la excepción. Se invoca
-// el CLI con node (sin npx) para que funcione igual en Windows.
-async function ejecutarScript(rutaSql) {
-  try {
-    execFileSync(process.execPath, [PRISMA_CLI, 'db', 'execute', '--file', rutaSql, '--schema', SCHEMA], {
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-  } catch (e) {
-    throw new Error(`${e.stderr?.toString() || ''}${e.stdout?.toString() || ''}${e.message}`);
-  }
-}
-
 test('setup', { skip: omitir && razonSkip }, async () => {
   ({ prisma } = await import('../../src/config/db.js'));
   ({ runWithTenant } = await import('../../src/config/tenantContext.js'));
   await limpiarTodo();
-  // Asegura estado base nullable por si una corrida previa dejó el contract
-  // puesto. El rollback es idempotente: si ya estaba nullable no falla.
+  // La base nace con el contract aplicado; se baja a nullable para poder
+  // reaplicarlo. El rollback es idempotente: si ya estaba nullable no falla.
   await ejecutarScript(SQL_ROLLBACK);
 });
 
@@ -161,8 +136,12 @@ test('rollback: revierte el contract (vuelve a permitir NULL y borrar)', { skip:
   await prisma.$executeRaw`DELETE FROM "Conjunto" WHERE "id" = ${conj.id}`;
 });
 
-test('teardown: dejar la base en estado nullable', { skip: omitir && razonSkip }, async () => {
-  await ejecutarScript(SQL_ROLLBACK); // idempotente; si falla, que falle la prueba
+test('teardown: dejar la base como la deja migrate deploy (contract aplicado)', { skip: omitir && razonSkip }, async () => {
+  // La migración 20261028165010_contract_conjunto ya está en prisma/migrations/:
+  // las demás integraciones esperan NOT NULL + RESTRICT. Se limpia primero (el
+  // guard exige 0 NULL en toda la base) y se vuelve a aplicar el contract.
+  await ejecutarScript(SQL_ROLLBACK);
   await limpiarTodo();
+  await ejecutarScript(SQL_CONTRACT);
   await prisma.$disconnect();
 });

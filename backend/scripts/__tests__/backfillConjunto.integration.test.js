@@ -1,10 +1,12 @@
 // Integración del backfill (KAN-8, Fase F). Prueba backfillConjunto() contra un
 // Postgres real, con un dataset de "legado" (filas con conjuntoId NULL insertadas
 // por SQL crudo, simulando producción pre-KAN-8). Misma guarda de localhost.
+// Baja el esquema a nullable al empezar y restaura el contract al terminar.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { volverNullable, restaurarContract } from './helpers/esquemaContract.js';
 
 function hostDeDatabaseUrl(url) {
   if (!url) return null;
@@ -124,6 +126,10 @@ test('setup', { skip: omitir && razonSkip }, async () => {
   ({ runWithTenant } = await import('../../src/config/tenantContext.js'));
   ({ backfillConjunto, RESULTADO, BackfillError } = await import('../lib/backfillConjunto.js'));
   await limpiarTodo();
+  // La migración 20261028165010_contract_conjunto (ya en prisma/migrations/) deja
+  // conjuntoId NOT NULL. El backfill se ejercita sobre el esquema legado
+  // (nullable); el teardown restaura el contract.
+  await volverNullable();
 });
 
 // Abre una transacción que inserta un User con conjuntoId NULL y la SOSTIENE
@@ -499,5 +505,6 @@ test('D4: lock_timeout vencido -> BackfillError legible y no escribe nada; valor
 
 test('teardown', { skip: omitir && razonSkip }, async () => {
   await limpiarTodo();
+  await restaurarContract(); // el guard exige 0 NULL: limpiarTodo() ya borró el legado
   await prisma.$disconnect();
 });

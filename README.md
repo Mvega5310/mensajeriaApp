@@ -162,8 +162,9 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 | `backendSinFijos.test.js` | estática | T2.4: "Ipanema" no aparece en `backend/src` fuera de pruebas. |
 | `migracionRecepcion.integration.test.js` | integración | T2.1: la migración aplica sobre datos existentes en una base desechable; el rollback aborta con mensaje si hay paquetes sin residente y, sin ellos, revierte. |
 | `altaConjunto.integration.test.js` | integración | alta de conjunto + operador (`npm run alta-conjunto` sin el CLI), idempotencia por slug, atomicidad con email en uso. |
-| `backfillConjunto.integration.test.js` | integración | backfill sobre legado (filas NULL): asignación, idempotencia, pre-chequeos, rollback transaccional, `--solo-conjunto`, espera al lock ante escrituras concurrentes (también con 0 NULL visibles), `lock_timeout` con error legible. |
+| `backfillConjunto.integration.test.js` | integración | backfill sobre legado (filas NULL; la prueba baja el esquema a nullable y restaura el contract al terminar): asignación, idempotencia, pre-chequeos, rollback transaccional, `--solo-conjunto`, espera al lock ante escrituras concurrentes (también con 0 NULL visibles), `lock_timeout` con error legible. |
 | `contractConjunto.integration.test.js` | integración | migración *contract* manual (`prisma/manual/`) por `prisma db execute`: NOT NULL + FK `RESTRICT`, guard que aborta con NULLs, y su rollback. |
+| `contractMigracion.test.js` | estática | la carpeta `20261028165010_contract_conjunto` tiene el SHA-256 aplicado en producción (CRLF incluido) y es el mismo SQL que `prisma/manual/`. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
 `npm install`, que lo dispara) aunque no toquen la base de datos.

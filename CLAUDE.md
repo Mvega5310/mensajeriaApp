@@ -9,8 +9,10 @@ sus residentes, su operador y sus paquetes, aislados entre sí (KAN-8).
 > 28-oct-2026** (corte Fase F ejecutado; detalle en DEPLOY.md y en
 > `docs/runbook-corte-ipanema.md` §6). Producción tiene **un solo conjunto,
 > `ipanema`**, con `bonosHabilitados=false`. El *contract* (`conjuntoId` NOT NULL)
-> está aplicado y registrado en la base, pero **su carpeta de migración todavía
-> no está en el repo** (paso 4 pendiente; ver DEPLOY.md → "Pendiente"). Mientras
+> está aplicado y registrado en la base de producción; **en la rama
+> `refactor/mobile-first` su carpeta (`20261028165010_contract_conjunto`) ya está
+> en el repo** (paso 4 hecho allí, S0.2) y en `main` sigue pendiente hasta que el
+> refactor llegue a producción (ver DEPLOY.md → "Pendiente"). Mientras
 > exista un único conjunto, el registro funciona sin código de invitación
 > (hotfix `20a46b4`).
 

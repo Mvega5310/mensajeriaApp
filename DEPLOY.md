@@ -362,8 +362,9 @@ Agrega el índice `Package(conjuntoId, residenteId, estado)`: lo usan `GET /pack
 > **Estado: corte EJECUTADO el 28-oct-2026.** El multi-conjunto está desplegado
 > en producción (`main`), con un solo conjunto, `ipanema` (`bonosHabilitados=false`).
 > Resultados reales: 4 usuarios y 0 paquetes al cortar; P0 16,8 s; contract
-> 2,86 s. El *contract* está aplicado y registrado, pero falta el paso 4 (su
-> carpeta de migración aún no está en el repo; ver notas abajo y "Pendiente").
+> 2,86 s. El *contract* está aplicado y registrado. Paso 4 (su carpeta de
+> migración al repo): **hecho en la rama `refactor/mobile-first`** (S0.2); en
+> `main` sigue pendiente (ver notas abajo y "Pendiente").
 > Desviaciones del runbook: `docs/runbook-corte-ipanema.md` §6.
 >
 > Lo que sigue documenta el ORDEN del corte y su porqué (sirve de referencia para
@@ -421,16 +422,22 @@ Notas:
   carpeta sigue fuera del repo** (el `resolve` se hizo con `--schema` apuntando a
   una copia del árbol de Prisma fuera del repo). Mientras no esté en el repo,
   `prisma migrate deploy` en producción no hace nada ("No pending migrations").
-  Al volver al repo (paso 4, ver "Pendiente"):
+  **Paso 4 hecho en la rama `refactor/mobile-first` (S0.2, aún no en producción):**
+  la carpeta está en `backend/prisma/migrations/20261028165010_contract_conjunto/`
+  con SHA-256 verificado (el `migration.sql` conserva los finales de línea CRLF con
+  que se creó en el corte, por eso `.gitattributes` marca `migration.sql` como
+  `-text`; la prueba `contractMigracion.test.js` vigila el hash). Se cumplió:
   - la carpeta `backend/prisma/migrations/20261028165010_contract_conjunto/`
     debe ser **byte a byte idéntica**: SHA-256 de su `migration.sql` =
     `0241507B1C1B8E674AD5848893F81BEE03A98B0593490EF4ADBC37DF8DCED0FA` (es el
     `checksum` que Prisma guardó);
   - `schema.prisma` pasa a `conjuntoId String` (y relación `Conjunto` obligatoria)
     en `User`, `Package`, `Bono` y `Comentario`;
-  - las pruebas de integración del backfill (y la del contract), que insertan
-    filas con `conjuntoId` NULL, **deberán adaptarse o retirarse**: con la carpeta
-    en el repo, toda base de pruebas nueva nace con NOT NULL.
+  - las pruebas de integración del backfill y del contract (que insertan filas
+    con `conjuntoId` NULL) se **adaptaron**: bajan el esquema a nullable con
+    `prisma/manual/rollback_contract_conjunto.sql` al empezar y reaplican el
+    contract al terminar (`scripts/__tests__/helpers/esquemaContract.js`), porque
+    con la carpeta en el repo toda base de pruebas nueva nace con NOT NULL.
 - **Revertir el contract (versión final, con la carpeta fuera del repo, que es el
   estado actual):**
   1. `rollback_contract_conjunto.sql` por el túnel con `psql -v ON_ERROR_STOP=1`
@@ -690,11 +697,10 @@ Si algo no conecta, lo primero a revisar es `CORS_ORIGIN` en Railway y
 - Mover fotos de custodia a almacenamiento de objetos en vez de base64 en Postgres.
 
 Tras el corte multi-conjunto (28-oct-2026):
-- **Paso 4 del contract:** devolver la carpeta `20261028165010_contract_conjunto`
-  al repo (idéntica, SHA-256 en "Estado real del contract"), `schema.prisma` a
-  `conjuntoId String`, adaptar o retirar las pruebas del backfill que insertan
-  NULL, `npm test` en verde; recién entonces commit (vía `develop`) y merge a
-  `main` con el OK explícito del usuario.
+- **Paso 4 del contract:** hecho en la rama `refactor/mobile-first` (carpeta
+  idéntica con SHA-256 verificado, `schema.prisma` a `conjuntoId String`, pruebas
+  adaptadas, `test:all` en verde). **Aún no está en `main`/producción**: llegará
+  con el refactor, por PR a `main` y con el OK explícito del usuario.
 - **Arreglo del PWA:** la app se recarga en la primera visita.
 - **Pantalla de residentes para el operador:** hoy no existe (no hay endpoint
   que liste usuarios); el operador solo ve residentes a través de sus paquetes.
