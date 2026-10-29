@@ -156,10 +156,13 @@ button, input, select { font: inherit; }
 }
 .topbar-brand{ display:flex; align-items:center; gap:8px; min-width:0; }
 /* Encabezado compacto, compartido por operador y residente: conjunto
-   arriba y usuario (rol) debajo, una línea cada uno; si el nombre es
-   largo se corta con "…" (el texto completo queda en title). */
+   arriba (hasta 2 líneas, "…" solo si no cabe en dos) y usuario (rol)
+   debajo en una línea. El texto completo queda en title. */
 .topbar-text{ display:flex; flex-direction:column; min-width:0; line-height:1.2; }
-.topbar-title{ font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.topbar-title{
+  font-size:14px; overflow:hidden; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2;
+}
 .topbar-user{ display:block; color: var(--ink-soft); font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .topbar-actions{ display:flex; align-items:center; gap:12px; flex-shrink:0; }
 .btn-link{
@@ -269,12 +272,17 @@ button, input, select { font: inherit; }
    nativo. flex + min-width:0 (no grid: WebKit lo respeta mejor con estos
    controles). Validar siempre en un iPhone real: Chromium/WebKit de
    escritorio no reproducen el problema. */
-.field-dates{ display:flex; gap:10px; }
-.field-dates > .field{ flex:1 1 0; min-width:0; }
+/* La separación con la sección siguiente la pone la FILA, no cada campo:
+   así hay un solo --space-section entre las fechas y "Estado" (en iOS se
+   veía doble). */
+.field-dates{ display:flex; gap:10px; align-items:flex-start; margin-bottom: var(--space-section); }
+.field-dates > .field{ flex:1 1 0; min-width:0; margin-bottom:0; }
 .field-dates input[type="date"]{
   -webkit-appearance:none; appearance:none;
   display:block; width:100%; min-width:0; max-width:100%;
-  min-height:46px; /* = alto de los demás inputs; sin apariencia nativa, iOS lo colapsa si está vacío */
+  /* Alto fijo = el de los demás inputs: sin apariencia nativa, iOS lo
+     colapsa si está vacío o lo dibuja más alto que su contenido. */
+  height:46px;
 }
 .field-dates input[type="date"]::-webkit-date-and-time-value{ text-align:left; }
 .field-hint{ font-size:11px; color:var(--ink-soft); margin:4px 0 0; }
