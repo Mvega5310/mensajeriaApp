@@ -251,7 +251,10 @@ registrar.
   Store/Google Play para tenerla como app en el celular. Se actualiza
   sola: cuando hay una versión nueva desplegada, la próxima vez que se
   abre la app se recarga automáticamente para tomarla (sin pedir
-  reinstalar ni tener que cerrarla dos veces).
+  reinstalar ni tener que cerrarla dos veces). La primera visita NO
+  recarga: solo se recarga si ya había una versión anterior controlando
+  la página (antes, la primera visita se recargaba sola a los ~2 s y
+  borraba lo que el usuario estaba escribiendo, p. ej. el registro).
 - Identidad de marca azul/turquesa ("Puertayá"), con el kit de marca en
   `frontend/src/puertaya-brand/` (componente `Logo`, `tokens.css` con
   las variables `--puertaya-*`, y los logos en `logos/icono/` — versión
