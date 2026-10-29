@@ -82,3 +82,16 @@ Los agentes actualizan su fila al terminar. Estados posibles: `pendiente`, `en c
 - 2026-10-27: correcciones de T8.1 integradas: `test:all` 451/451, build verde. Pendiente: E2E estable contra Railway (agente en curso).
 - 2026-10-27: E2E estable contra Railway (fbad130): **bug real corregido** — el service worker recargaba la página en la primera visita y borraba lo que el usuario estaba escribiendo (solo en build de producción). Local 30/30; remoto 24 pasan, 0 fallan, 6 omitidas con razón.
 - 2026-10-27: **E2E contra Railway con todo desplegado: 26 pasan, 0 fallan, 4 omitidas** (enlace mágico y PIN ambiguo necesitan la BD). Incluye la prueba del service worker. **Plan F0–F8 completo.** Siguiente decisión del usuario: integrar a `develop` y el camino a producción (ver CIERRE.md).
+
+## Plan del conjunto por solicitud (`PLAN-conjunto.md`)
+
+| Fase | Estado | Commit | Nota |
+|---|---|---|---|
+| S0 | hecho | 212a742…091247c | main integrado; contract en el repo (SHA-256 idéntico); 9 migraciones del refactor después del contract; base de Railway recreada |
+| S1.1–S1.2 | hecho | 8484453, 4bdb01b | Domicilio + UsuarioConjunto; User fuera del tenant vía usuario.service; migración con datos ensayada |
+| S1.3 | hecho | bf3b92c | /conjuntos, /domicilios, registro por slug, pre-alerta por dirección, contexto por solicitud (invariante 12) |
+| S2.1–S2.4 | hecho | 35f797d, b0ca589, f4750c8 | SelectorConjunto, DireccionEntrega, pantallas; Avisar 2 toques antes y después |
+| S3.1 | hecho | b0ca589 | E2E 1 y 2 conjuntos |
+| S3.2 | hecho | bfc45bc…6fa21b3 | Revisión: sin fugas entre conjuntos; corregidos C5 (discriminador, duplicados, desactivar), lote mixto, spam, auditoría AST, bajas |
+| S4.1 | hecho | 6fa21b3 | Railway: E2E 28 pasan, 0 fallan (20 omitidas con razón: 2 conjuntos y BD). Local: 562/562 backend, 48/48 E2E |
+| S4.2 | pendiente | | Espera decisión del usuario: PR a develop y luego a main |
