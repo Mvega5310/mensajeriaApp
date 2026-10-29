@@ -9,8 +9,22 @@ export function getConjuntoConfig() {
 
 // Configuración presentacional por código de invitación (sin sesión).
 // GET /api/conjuntos/config-publica?c=<codigo>
-// Sin código, el backend responde solo si existe UN ÚNICO conjunto (si hay
-// varios, 400 INVITACION_INVALIDA y hay que pedir el código).
-export function getConfigPublica(codigo) {
-  return api(codigo ? `/conjuntos/config-publica?c=${encodeURIComponent(codigo)}` : '/conjuntos/config-publica');
+// También acepta `?conjunto=<slug>`. Sin ninguno responde solo si hay UN ÚNICO conjunto activo
+// (con varios, 400 CONJUNTO_REQUERIDO).
+export function getConfigPublica(codigo, slug) {
+  const q = [];
+  if (codigo) q.push(`c=${encodeURIComponent(codigo)}`);
+  if (slug) q.push(`conjunto=${encodeURIComponent(slug)}`);
+  return api(`/conjuntos/config-publica${q.length ? `?${q.join('&')}` : ''}`);
+}
+
+// Conjuntos activos para el selector (sin sesión): [{ slug, nombre }] por nombre.
+export function getConjuntos() {
+  return api('/conjuntos');
+}
+
+// Direcciones guardadas de la persona en todos sus conjuntos (con sesión normal):
+// [{ id, conjunto:{slug,nombre}, torre, apto, etiqueta, nombreRecibe, telefono, ultimoUsoEn }].
+export function getDomicilios() {
+  return api('/domicilios');
 }

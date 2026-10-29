@@ -145,7 +145,8 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 | `listadosSinFotos.integration.test.js` | integración | regresión T8.1: con una foto de 500 KB sembrada, ningún listado/lectura devuelve `fotoUrl` ni `data:image` y ninguna consulta de `Package` selecciona la columna; CSV sin inyección de fórmulas; filtros de fecha del CSV. |
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
-| `registroConjuntoUnico.integration.test.js` | integración | registro y `config-publica` **sin código**: con 1 conjunto entra en él; inactivo o con 2 conjuntos → 400; con código sigue decidiendo el código. Exige empezar con 0 conjuntos en la base. |
+| `conjuntoPorSolicitud.integration.test.js` | integración | S1.3: `GET /conjuntos`, `GET/POST /domicilios`, registro por slug, pre-alerta por dirección/slug/nada, escenario "ayudar a un amigo", contexto por paquete / `?conjunto=` / sesión de enlace, comentarios y asignar por `domicilioId`. |
+| `registroConjuntoUnico.integration.test.js` | integración | registro y `config-publica` **sin código ni slug**: con 1 conjunto activo entra en él; ninguno activo → 400 `INVITACION_INVALIDA`; con 2 → 400 `CONJUNTO_REQUERIDO`; con código o slug decide ese. Exige empezar con 0 conjuntos en la base. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
 | `contratosResidente.integration.test.js` | integración | T2.8: `transportadora` en la pre-alerta, `schedule` con `modalidad` RECOGER/DOMICILIO, `motivoCobro` en `/packages/mine` y `/p/paquetes`, `GET /bonos/mine`. |
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
@@ -186,6 +187,14 @@ Toda respuesta de error de la API tiene la forma `{ "code", "message", "details"
 - `details`: opcional, datos de apoyo.
 
 Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `PIN_BLOQUEADO`, `DEMASIADOS_INTENTOS`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `TRANSICION_INVALIDA`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
+
+**El conjunto se elige por solicitud (PLAN-conjunto S1.3).** El código de invitación ya no es
+requisito: `POST /api/auth/register` acepta `conjunto` (slug) + `torre` + `apto` + `nombre` +
+`telefono`; `codigoInvitacion` (o los `?c=` antiguos) sigue sirviendo y, si vienen ambos, deben
+ser del mismo conjunto. Sin slug ni código vale el **único** conjunto activo (QR viejos); con
+varios activos, `400 CONJUNTO_REQUERIDO`; slug inexistente o inactivo, `400 CONJUNTO_INVALIDO`.
+`GET /api/conjuntos/config-publica` acepta `?conjunto=<slug>` además de `?c=` con el mismo criterio.
+(El texto siguiente describe el hotfix original; hoy lo cubre ese criterio.)
 
 **Registro sin código mientras exista un solo conjunto** (hotfix `20a46b4`,
 28-oct-2026). Si en toda la base hay
@@ -475,6 +484,34 @@ paquetes de la persona en **todos** sus conjuntos (una consulta por conjunto, ca
 contexto de tenant) y cada paquete trae `conjunto: { slug, nombre }`. Invariantes 10 y 11 de
 CLAUDE.md.
 
+### Contratos por solicitud (PLAN-conjunto S1.3)
+
+- **`GET /api/conjuntos`** (pública, en `RUTAS_SIN_SESION`; caché `public, max-age=60`; 60
+  peticiones/min por IP, 429 con `Retry-After`): `[{ slug, nombre }]` de los conjuntos con la
+  invitación activa, por nombre. Nada más.
+- **`GET /api/domicilios`** (RESIDENT, sesión normal): sus direcciones guardadas en todos sus
+  conjuntos activos, la última usada primero:
+  `[{ id, conjunto:{slug,nombre}, torre, apto, etiqueta, nombreRecibe, telefono, ultimoUsoEn }]`.
+  **`POST /api/domicilios`** `{ conjunto, torre?, apto, nombreRecibe?, telefono? }` (201): crea o
+  reutiliza (misma persona + conjunto + torre + apto) y la deja como la última usada; nombre y
+  teléfono que falten se precargan de la cuenta al crear. Sin `DELETE` por ahora.
+- **`POST /api/packages`** (pre-alerta): `{ domicilioId }` (propia, en cualquiera de sus conjuntos),
+  o `{ conjunto, torre, apto, nombreRecibe?, telefono? }` (crea/reutiliza la dirección), o nada
+  (la dirección más reciente: 0 campos). Corre en el conjunto de esa dirección y el correo va al
+  operador de ESE conjunto. Domicilio ajeno 404; slug inválido 400; apto vacío 400. Cada uso marca
+  la dirección y `User.conjuntoId` (último conjunto).
+- **Contexto de las demás rutas del residente:** `PATCH /packages/:id/schedule` y
+  `GET /packages/:id/foto` buscan el paquete DEL residente en sus conjuntos y operan en el del
+  paquete (ajeno o en un conjunto sin domicilio suyo: 404). `GET /p/paquetes`, `GET /conjunto/config`
+  y `/comments` aceptan `?conjunto=<slug>` (en `POST /comments`, `conjunto` en el cuerpo): conjunto
+  activo donde tiene domicilio (si no, 404; inactivo/inexistente, 400). La sesión del enlace se queda
+  en el conjunto de su token, válido si la persona tiene domicilio ahí (ya no se compara con
+  `User.conjuntoId`). El operador no elige conjunto.
+- **Operador:** `domicilioId` es el contrato de `POST /packages/recepcion` y `PATCH /packages/:id/asignar`
+  (`residenteId` sigue aceptado); el frontend lo manda desde el resultado de `/residentes/buscar`.
+- Pruebas: `conjuntoPorSolicitud.integration.test.js` (incluye "ayudar a un amigo" completo y la
+  sesión de enlace), `auditoriaInvariantes.test.js` E7.7.
+
 ### Recepción sin pre-alerta, asignar e idempotencia (T2.3)
 
 Solo `OPERATOR`. El cobro (cortesía por apartamento, bono atómico, tarifa) lo
@@ -709,7 +746,7 @@ Métodos: `avisarLlegada({ residente, paquete, conjunto, aviso })`,
 | Ruta | Pantalla | Qué hace |
 |---|---|---|
 | `/op/recibir` | Recibir | Teclado + "Torre", búsqueda con debounce (`/residentes/buscar`), "No sé de quién es" (sin dueño), contador "Hoy: N · M por entregar" (`GET /packages/resumen`). |
-| `/op/recibir/:residenteId` | Peso | 4 tiles con la tarifa del conjunto, foto opcional (`maxFotos`, `utils/image.js`), "+ Guía", **Guardar** (`POST /packages/recepcion` con `Idempotency-Key`). `residenteId = sin-dueno` para el flujo sin dueño. |
+| `/op/recibir/:domicilioId` | Peso | 4 tiles con la tarifa del conjunto, foto opcional (`maxFotos`, `utils/image.js`), "+ Guía", **Guardar** (`POST /packages/recepcion` con `Idempotency-Key`). `domicilioId = sin-dueno` para el flujo sin dueño; manda `domicilioId`. |
 | `/op/guardado/:id` | Guardado | Resumen, `motivoCobro` (sello de cortesía), vista previa del aviso y **Avisar por WhatsApp** (`aviso.waUrl`). |
 | `/op/entregar` | Entregar | PIN de 4 dígitos; verifica solo (`/entregas/verificar-pin`); `PIN_AMBIGUO` muestra chips de apartamento. |
 | `/op/entregar/lote` | Cobrar | Lote, total, Efectivo/Transferencia (de `metodosPago`) y **Entregar todo** (`/entregas/confirmar`). El `tokenEntrega` vive solo en memoria del módulo. |

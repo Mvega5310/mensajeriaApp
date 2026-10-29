@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AppError, CODIGOS, asyncHandler } from '../domain/errores.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { requireTenant } from '../middleware/tenant.middleware.js';
+import { requireTenant, conjuntoDeSolicitud } from '../middleware/tenant.middleware.js';
 import { abrirEnlace, vistaMisPaquetes } from '../services/enlace.service.js';
 
 // Se monta en /api/p. Contiene PIN: nunca debe quedar en cachés ni en Referer.
@@ -13,7 +13,9 @@ router.use((req, res, next) => {
 });
 
 // Refresco con la sesión limitada del enlace (o una sesión normal de residente).
-router.get('/paquetes', requireAuth, requireTenant, requireRole('RESIDENT'),
+// `?conjunto=<slug>` (S1.3, sesión normal): los paquetes activos de ESE conjunto. La sesión del
+// enlace se queda en el conjunto de su token.
+router.get('/paquetes', requireAuth, requireTenant, requireRole('RESIDENT'), conjuntoDeSolicitud,
   asyncHandler(async (req, res) => res.json(await vistaMisPaquetes(req.user.sub))));
 
 // PÚBLICA (sin sesión): el token firmado es la credencial. Va en el CUERPO (el

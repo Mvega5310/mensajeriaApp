@@ -17,13 +17,13 @@ export default function Recibir() {
   const porEntregar = resumen?.porEntregar ?? 0;
   const { texto, tecla, resultados, buscando, error, hayConsulta, directo } = useRecibir();
   // Guardado directo (Estándar preseleccionado) cuando hay una sola sugerencia y el apto está completo.
-  const g = useGuardarPaquete({ residenteId: directo?.id ?? null, residente: directo ?? undefined }, 0);
+  const g = useGuardarPaquete({ domicilioId: directo?.domicilioId ?? null, residente: directo ?? undefined }, 0);
   const [sinDueno, setSinDueno] = useState(false);
   const [etiqueta, setEtiqueta] = useState('');
   const [masAbierto, setMasAbierto] = useState(false);
 
   function elegir(r) {
-    navigate(`/op/recibir/${r.id}`, { state: { residente: r } });
+    navigate(`/op/recibir/${r.domicilioId}`, { state: { residente: r } });
   }
 
   function continuarSinDueno(e) {
@@ -71,7 +71,7 @@ export default function Recibir() {
           </div>
           <div className="op-lista" aria-live="polite">
             {resultados.map((r) => (
-              <button type="button" key={r.id} className="op-sug" onClick={() => elegir(r)}>
+              <button type="button" key={r.domicilioId} className="op-sug" onClick={() => elegir(r)}>
                 <span className="op-sug__apto">{r.etiqueta}</span>
                 <span className="op-sug__nombre">{r.nombre}</span>
                 {r.pendientes > 0 && <span className="op-chip" aria-label={`${r.pendientes} pendientes`}>{r.pendientes}</span>}

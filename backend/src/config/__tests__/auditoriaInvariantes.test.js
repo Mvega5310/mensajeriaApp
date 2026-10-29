@@ -174,3 +174,33 @@ test('E7.6: todo modelo con conjuntoId está en MODELOS_CON_TENANT, salvo User y
   for (const e of EXCEPCIONES) assert.ok(!MODELOS_CON_TENANT.includes(e), `${e} no debe estar en MODELOS_CON_TENANT`);
   assert.ok(MODELOS_CON_TENANT.includes('domicilio'));
 });
+
+// --- Regla 7 (S1.3): el conjunto de una solicitud sale de un slug validado, nunca de un id del cliente ---
+test('E7.7: runWithTenant solo en los sitios que resuelven el conjunto por solicitud, y ningun conjuntoId se lee del request', () => {
+  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(SCRIPTS, { incluirTests: false })];
+  // Sitios autorizados a abrir un contexto de tenant (cada uno valida el conjunto: slug activo
+  // + indice UsuarioConjunto, paquete propio, token firmado o el conjunto recien validado del registro).
+  const PERMITIDOS = [
+    join('src', 'config', 'tenantContext.js'),
+    join('src', 'config', 'tenantExtension.js'),
+    join('src', 'middleware', 'tenant.middleware.js'),
+    join('src', 'services', 'domicilio.service.js'),
+    join('src', 'services', 'enlace.service.js'),
+    join('src', 'controllers', 'domicilios.controller.js'),
+    join('src', 'controllers', 'packages.controller.js'),
+    join('src', 'controllers', 'auth.controller.js'),
+  ];
+  const ofensores = [];
+  for (const f of archivos) {
+    readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(linea)) return;
+      if (/runWithTenant\(/.test(linea) && !PERMITIDOS.some((p) => f.endsWith(p)) && !f.startsWith(SCRIPTS)) {
+        ofensores.push(`runWithTenant fuera de lista: ${rel(f)}:${i + 1}`);
+      }
+      if (/req\.(body|query|params|headers)\??\.conjuntoId|req\.(body|query|params|headers)\[.conjuntoId|conjuntoId[^;]*\}\s*=\s*req\.(body|query|params|headers)/.test(linea)) {
+        ofensores.push(`conjuntoId leido del request: ${rel(f)}:${i + 1}`);
+      }
+    });
+  }
+  assert.deepEqual(ofensores, [], ofensores.join('; '));
+});

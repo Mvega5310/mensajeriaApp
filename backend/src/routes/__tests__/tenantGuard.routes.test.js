@@ -32,6 +32,11 @@ const RUTAS_SIN_SESION = new Set([
   // por correo+IP; /enlace/canjear es atómico y devuelve la sesión normal.
   'POST /api/auth/enlace',
   'POST /api/auth/enlace/canjear',
+  // S1.3: lista pública de conjuntos activos para el selector del registro. Devuelve SOLO
+  // { slug, nombre } (nada de código, operador ni tarifas), con caché corto y límite por IP
+  // (limitadorConjuntos, 60/min). Sin sesión por naturaleza: el registro la necesita.
+  'GET /api/conjuntos/',
+  // Config presentacional por slug (`?conjunto=`) o código antiguo (`?c=`), sin sesión.
   'GET /api/conjuntos/config-publica',
   // T3.1 (excepción consciente a la invariante 5): el enlace del aviso de WhatsApp
   // abre "Mis paquetes" sin contraseña (decisión D1). La credencial es el token

@@ -8,14 +8,14 @@ import { NOMBRES_CORTOS as TILES, TIERS } from '../../utils/tiers.js';
 import Pantalla from './Pantalla.jsx';
 
 export default function RecibirPeso() {
-  const { residenteId } = useParams();
+  const { domicilioId } = useParams();
   const { state } = useLocation();
   const config = useConfig();
-  const sinDueno = residenteId === 'sin-dueno';
+  const sinDueno = domicilioId === 'sin-dueno';
   const residente = state?.residente;
   const destino = sinDueno
-    ? { residenteId: null, etiquetaNombre: state?.etiquetaNombre }
-    : { residenteId, residente };
+    ? { domicilioId: null, etiquetaNombre: state?.etiquetaNombre }
+    : { domicilioId, residente };
   const g = useGuardarPaquete(destino, config?.maxFotos || 0);
   const [guiaAbierta, setGuiaAbierta] = useState(false);
   const inputFoto = useRef(null);

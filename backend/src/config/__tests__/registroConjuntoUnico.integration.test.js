@@ -138,27 +138,35 @@ test('1 conjunto con la invitación inactiva: sin código -> 400 en registro y c
   }
 });
 
-test('2 conjuntos: registro SIN código -> 400 INVITACION_INVALIDA y no crea nada', { skip: omitir && razonSkip }, async () => {
+test('2 conjuntos: registro SIN código ni conjunto -> 400 CONJUNTO_REQUERIDO y no crea nada', { skip: omitir && razonSkip }, async () => {
   ctx.V = (await crearConjunto(SLUG_V, COD_V)).id;
   const antesU = await usuariosEn(ctx.U);
   const antesV = await usuariosEn(ctx.V);
   const res = await api('/api/auth/register', { method: 'POST', body: cuerpoRegistro('dos-conjuntos@itestu.local') });
   assert.equal(res.status, 400);
-  assert.equal((await res.json()).code, 'INVITACION_INVALIDA');
+  const cuerpo = await res.json();
+  assert.equal(cuerpo.code, 'CONJUNTO_REQUERIDO');
+  assert.match(cuerpo.message, /conjunto/i);
   assert.equal(await usuariosEn(ctx.U), antesU);
   assert.equal(await usuariosEn(ctx.V), antesV);
 });
 
-test('2 conjuntos: config-publica sin código -> 400; con código sigue funcionando', { skip: omitir && razonSkip }, async () => {
+test('2 conjuntos: config-publica sin código ni conjunto -> 400; con código o con slug funciona', { skip: omitir && razonSkip }, async () => {
   const sin = await api('/api/conjuntos/config-publica');
   assert.equal(sin.status, 400);
   const cuerpoSin = await sin.json();
-  assert.equal(cuerpoSin.code, 'INVITACION_INVALIDA');
+  assert.equal(cuerpoSin.code, 'CONJUNTO_REQUERIDO');
   assert.equal(typeof cuerpoSin.message, 'string'); // formato de error del refactor: { code, message }
   assert.equal(cuerpoSin.error, undefined);
   const con = await api(`/api/conjuntos/config-publica?c=${COD_V}`);
   assert.equal(con.status, 200);
   assert.equal((await con.json()).nombre, `Unico ${SLUG_V}`);
+  const porSlug = await api(`/api/conjuntos/config-publica?conjunto=${SLUG_V}`);
+  assert.equal(porSlug.status, 200);
+  assert.equal((await porSlug.json()).nombre, `Unico ${SLUG_V}`);
+  const malo = await api('/api/conjuntos/config-publica?conjunto=no-existe');
+  assert.equal(malo.status, 400);
+  assert.equal((await malo.json()).code, 'CONJUNTO_INVALIDO');
 });
 
 test('2 conjuntos: el código decide el conjunto (V), no el "único"', { skip: omitir && razonSkip }, async () => {
