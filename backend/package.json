@@ -29,6 +29,7 @@
     "resend": "^6.24.0"
   },
   "devDependencies": {
+    "acorn": "^8.14.0",
     "nodemon": "^3.1.4",
     "prisma": "^5.20.0"
   }

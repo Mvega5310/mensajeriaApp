@@ -8,8 +8,11 @@
 //  2. aparece una consulta cruda ($queryRaw/$executeRaw/$queryRawUnsafe/
 //     $executeRawUnsafe) fuera de la LISTA BLANCA (ver ARCHIVOS_RAW_PERMITIDOS);
 //  3. hay más de un `new PrismaClient(` en el código de producción;
-//  4. (S1.1) se accede a `User` (`prisma.user`/`tx.user`/`cliente.user`) fuera de
-//     services/usuario.service.js (y de buscarUsuarioPorEmailSinTenant en auth.controller.js);
+//  4. (S1.1, S3.2) se accede a `User` (`x.user`, `x['user']`, `const { user } = x`, sobre CUALQUIER
+//     cliente o transacción, con o sin alias) fuera de services/usuario.service.js (y de
+//     buscarUsuarioPorEmailSinTenant en auth.controller.js); el cliente de config/db.js se importa
+//     solo en archivos autorizados y sin alias; y ningún select/include trae `email`/`passwordHash`
+//     de una relación a User fuera de usuario.service.js. Analizado con acorn, no con regex;
 //  5. (S1.2) se accede a `UsuarioConjunto` fuera de services/domicilio.service.js;
 //  6. (S1.1) un modelo de schema.prisma con `conjuntoId` no está en MODELOS_CON_TENANT
 //     salvo las dos excepciones documentadas (User y UsuarioConjunto), o al revés.
@@ -35,6 +38,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { analizarArchivo, relacionesHaciaUser } from './lib/auditoriaAst.js';
 
 const aqui = dirname(fileURLToPath(import.meta.url));
 const BACKEND = join(aqui, '..', '..', '..'); // .../backend
@@ -124,26 +128,78 @@ test('E7.3: existe exactamente un new PrismaClient( (en config/db.js)', () => {
   assert.ok(hallazgos[0].includes(join('config', 'db.js')), `el único new PrismaClient debe estar en config/db.js, está en ${hallazgos[0]}`);
 });
 
-// --- Regla 4 (S1.1): `User` ya no está bajo la extensión de tenant; todo acceso pasa por
-// services/usuario.service.js. Excepciones: buscarUsuarioPorEmailSinTenant (login/forgot,
-// auth.controller.js: UNA sola aparición) y los tests. ---
-test('E7.4: `prisma.user` solo en usuario.service.js (y una vez en buscarUsuarioPorEmailSinTenant)', () => {
+// --- Regla 4 (S1.1, endurecida en S3.2): `User` ya no está bajo la extensión de tenant; todo
+// acceso pasa por services/usuario.service.js. Excepciones: buscarUsuarioPorEmailSinTenant
+// (login/forgot, auth.controller.js: UNA sola aparición) y los tests.
+// Antes era un regex sobre líneas (`prisma|tx|cliente|client.user`), evadible con un alias de
+// import, `db['user']`, `const { user } = prisma`, etc. Ahora se analiza el ÁRBOL con acorn
+// (ver __tests__/lib/auditoriaAst.js; sus fixtures demuestran cada evasión en auditoriaAst.test.js). ---
+const SERVICIO_USUARIO = join('src', 'services', 'usuario.service.js');
+const AUTH = join('src', 'controllers', 'auth.controller.js');
+// Archivos autorizados a importar el cliente de config/db.js (y SOLO como `{ prisma }`, sin alias).
+// Un archivo nuevo que necesite la base entra aquí a propósito, en revisión; no por descuido.
+const IMPORTAN_DB = [
+  join('src', 'config', 'tenantBootstrap.js'),
+  join('src', 'controllers', 'auth.controller.js'),
+  join('src', 'controllers', 'bonos.controller.js'),
+  join('src', 'controllers', 'comments.controller.js'),
+  join('src', 'controllers', 'packages.controller.js'),
+  join('src', 'services', 'cobro.service.js'),
+  join('src', 'services', 'conjunto.service.js'),
+  join('src', 'services', 'domicilio.service.js'),
+  join('src', 'services', 'enlace.service.js'),
+  join('src', 'services', 'entrega.service.js'),
+  join('src', 'services', 'fotos.service.js'),
+  join('src', 'services', 'paquete.service.js'),
+  join('src', 'services', 'recepcion.service.js'),
+  join('src', 'services', 'residente.service.js'),
+  SERVICIO_USUARIO,
+  join('scripts', 'altaConjunto.js'),
+  join('scripts', 'backfillConjunto.js'),
+  join('scripts', 'lib', 'altaConjunto.js'),
+  join('scripts', 'lib', 'backfillConjunto.js'),
+  join('prisma', 'seed.js'),
+];
+
+function analizarTodo() {
   const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false }), ...archivosJs(SCRIPTS, { incluirTests: false })];
-  const ACCESO_USER = /\b(prisma|tx|cliente|client)\.user\b/;
-  const servicio = join('src', 'services', 'usuario.service.js');
-  const auth = join('src', 'controllers', 'auth.controller.js');
+  const relacionesUser = relacionesHaciaUser(readFileSync(join(PRISMA, 'schema.prisma'), 'utf8'));
+  return archivos.map((f) => ({ f, ...analizarArchivo({ codigo: readFileSync(f, 'utf8'), archivo: f, raizBackend: BACKEND, relacionesUser }) }));
+}
+
+test('E7.4: `User` solo se toca desde usuario.service.js (y una vez en buscarUsuarioPorEmailSinTenant): cualquier cliente, alias, [\'user\'] o desestructuración', () => {
   const ofensores = [];
   let enAuth = 0;
-  for (const f of archivos) {
-    readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
-      if (/^\s*(\/\/|\*|\/\*)/.test(linea) || !ACCESO_USER.test(linea)) return;
-      if (f.endsWith(servicio)) return;
-      if (f.endsWith(auth)) { enAuth += 1; return; }
-      ofensores.push(`${rel(f)}:${i + 1}`);
-    });
+  for (const r of analizarTodo()) {
+    if (r.f.endsWith(SERVICIO_USUARIO)) continue;
+    if (r.f.endsWith(AUTH)) { enAuth += r.accesosUser.length; continue; }
+    for (const h of r.accesosUser) ofensores.push(`${rel(r.f)}:${h.linea} ${h.detalle}`);
   }
-  assert.deepEqual(ofensores, [], `acceso a User fuera de usuario.service.js: ${ofensores.join(', ')}`);
+  assert.deepEqual(ofensores, [], `acceso a User fuera de usuario.service.js: ${ofensores.join('; ')}`);
   assert.equal(enAuth, 1, 'auth.controller.js solo puede tocar User en buscarUsuarioPorEmailSinTenant (1 aparición)');
+});
+
+test('E7.4: el cliente de config/db.js solo lo importan los archivos autorizados, como `{ prisma }` y sin alias, namespace, re-export ni import dinámico', () => {
+  const ofensores = [];
+  for (const r of analizarTodo()) {
+    for (const h of r.importsMalos) ofensores.push(`${rel(r.f)}:${h.linea} ${h.detalle}`);
+    if (r.importaDb && !IMPORTAN_DB.some((p) => r.f.endsWith(p))) {
+      ofensores.push(`${rel(r.f)}: importa el cliente de db.js y no está en la lista autorizada (IMPORTAN_DB)`);
+    }
+  }
+  assert.deepEqual(ofensores, [], ofensores.join('; '));
+  // La lista no puede quedar con archivos que ya no existen ni sin usar (se mantiene honesta).
+  const reales = new Set(analizarTodo().filter((r) => r.importaDb).map((r) => rel(r.f)));
+  for (const p of IMPORTAN_DB) assert.ok(reales.has(p), `${p} está en IMPORTAN_DB pero ya no importa db.js: quítalo de la lista`);
+});
+
+test('E7.4: ningún select/include trae el correo ni el hash de una cuenta fuera de usuario.service.js (residente/usuario/user/actor/operador)', () => {
+  const ofensores = [];
+  for (const r of analizarTodo()) {
+    if (r.f.endsWith(SERVICIO_USUARIO)) continue;
+    for (const h of r.seleccionesConCorreo) ofensores.push(`${rel(r.f)}:${h.linea} ${h.detalle}`);
+  }
+  assert.deepEqual(ofensores, [], ofensores.join('; '));
 });
 
 // --- Regla 5 (S1.2): el índice persona -> conjunto solo lo lee/escribe domicilio.service.js ---
