@@ -6,7 +6,8 @@ import { getConjuntoConfig, getConfigPublica } from '../services/conjunto.js';
 // Términos según el contexto (KAN-8, Fase D — design.md §4.3.1):
 // - con ?c=<codigo> (sin sesión): datos del operador desde config-publica;
 // - con sesión: desde /conjunto/config;
-// - sin ninguno: versión genérica, sin datos de operador, con una nota.
+// - sin ninguno: config-publica sin código (responde solo si existe UN ÚNICO
+//   conjunto); si no, versión genérica, sin datos de operador, con una nota.
 // No se inventa texto legal nuevo más allá de esa nota.
 export default function Terms() {
   const [searchParams] = useSearchParams();
@@ -18,7 +19,7 @@ export default function Terms() {
   useEffect(() => {
     if (isAuthenticated()) {
       getConjuntoConfig().then(setOp).catch(() => setOp(null));
-    } else if (codigo) {
+    } else {
       getConfigPublica(codigo).then(setOp).catch(() => setOp(null));
     }
   }, [codigo]);

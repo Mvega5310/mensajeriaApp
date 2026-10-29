@@ -128,6 +128,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 | `registroLogin.integration.test.js` | integración | registro por código, login en dos conjuntos, 409 email cross-conjunto. |
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
+| `registroConjuntoUnico.integration.test.js` | integración | registro y `config-publica` **sin código**: con 1 conjunto entra en él; inactivo o con 2 conjuntos → 400; con código sigue decidiendo el código. Exige empezar con 0 conjuntos en la base. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
 | `altaConjunto.integration.test.js` | integración | alta de conjunto + operador (`npm run alta-conjunto` sin el CLI), idempotencia por slug, atomicidad con email en uso. |
 | `backfillConjunto.integration.test.js` | integración | backfill sobre legado (filas NULL): asignación, idempotencia, pre-chequeos, rollback transaccional, `--solo-conjunto`, espera al lock ante escrituras concurrentes (también con 0 NULL visibles), `lock_timeout` con error legible. |
@@ -141,6 +142,15 @@ Los residentes se crean ellos mismos en `/registro?c=<código>` con el código d
 invitación de su conjunto (ese formulario nunca puede crear una cuenta de
 operador — el rol lo fuerza el backend). Cada residente queda asociado al
 conjunto de su código; los conjuntos están aislados entre sí.
+
+**Registro sin código mientras exista un solo conjunto.** Si en toda la base hay
+**exactamente un** `Conjunto` con la invitación activa, `/registro` (sin `?c=`)
+funciona igual que antes del multi-conjunto: el residente queda en ese conjunto y
+la pantalla muestra su nombre. Así los folletos/QR antiguos, que apuntan sin
+código, siguen sirviendo. Se apaga solo: en cuanto existe un segundo conjunto (o
+el único tiene la invitación desactivada), el registro sin código responde
+`400 INVITACION_INVALIDA` y la pantalla pide el código. Lo mismo hace
+`GET /api/conjuntos/config-publica` sin `c` (solo los 5 campos públicos).
 
 ## Funcionalidades
 

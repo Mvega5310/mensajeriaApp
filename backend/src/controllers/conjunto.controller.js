@@ -1,14 +1,18 @@
 // Endpoints de configuración por conjunto (KAN-8, Fase D — design.md §4.3).
 import { prisma } from '../config/db.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
-import { soloPresentacionales, tarifasDe, conjuntoDelContexto } from '../services/conjunto.service.js';
+import { soloPresentacionales, tarifasDe, conjuntoDelContexto, conjuntoUnicoActivo } from '../services/conjunto.service.js';
 
 // GET /api/conjuntos/config-publica?c=<codigo>  (PÚBLICO, pre-sesión)
 // Devuelve solo campos presentacionales. Conjunto es modelo exento, así que la
 // lectura no requiere contexto. No expone tarifas ni flags. No parsea slug.
+// Sin `c`: responde con el conjunto solo si es el ÚNICO (mismo criterio que
+// register() sin código); si no, 400 como siempre.
 export async function configPublica(req, res) {
   const c = req.query.c;
   if (!c) {
+    const unico = await conjuntoUnicoActivo();
+    if (unico) return res.json(soloPresentacionales(unico));
     return res.status(400).json({ error: 'Se requiere un enlace de invitación válido', code: 'INVITACION_INVALIDA' });
   }
   const codigo = normalizarCodigoInvitacion(c);

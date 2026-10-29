@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { register } from '../services/auth.js';
+import { getConfigPublica } from '../services/conjunto.js';
 import PasswordField from '../components/PasswordField.jsx';
 
 const initial = { email: '', password: '', nombre: '', telefono: '', torre: 'Torre 1', apto: '', acceptedTerms: false };
@@ -8,18 +9,38 @@ const initial = { email: '', password: '', nombre: '', telefono: '', torre: 'Tor
 export default function Register() {
   const [searchParams] = useSearchParams();
   // Código de invitación del enlace/QR (KAN-8). Los flyers antiguos (KAN-3)
-  // apuntan a la raíz sin ?c=, así que si no viene en la URL se pide a mano.
-  // NO hay código ni conjunto por defecto: si falta, el residente debe
-  // escribir el que le entregó el operador de su conjunto.
+  // apuntan a la raíz sin ?c=. Sin código, el backend acepta el registro solo
+  // mientras exista UN ÚNICO conjunto (config-publica sin ?c= responde 200); si
+  // hay varios, responde 400 y se pide el código a mano.
   const codigoDeUrl = (searchParams.get('c') || '').trim();
 
   const [fields, setFields] = useState(initial);
   // Código escrito a mano. Cuando NO hay ?c= arranca vacío; si un ?c= resulta
   // inválido, se precarga aquí con el valor de la URL para poder corregirlo.
   const [codigoManual, setCodigoManual] = useState('');
-  // El campo de código se muestra si no vino en la URL, o si un ?c= falló y hay
-  // que dejar corregirlo.
-  const [mostrarCampoCodigo, setMostrarCampoCodigo] = useState(!codigoDeUrl);
+  // Sin ?c=, el campo de código queda oculto hasta saber si hace falta (varios
+  // conjuntos). Con ?c=, solo aparece si ese código falla y hay que corregirlo.
+  const [mostrarCampoCodigo, setMostrarCampoCodigo] = useState(false);
+  // Datos públicos del conjunto (nombre, punto de recepción) para mostrarlos.
+  const [conjunto, setConjunto] = useState(null);
+  const [cargandoConjunto, setCargandoConjunto] = useState(true);
+
+  useEffect(() => {
+    let vigente = true;
+    setCargandoConjunto(true);
+    getConfigPublica(codigoDeUrl)
+      .then((cfg) => { if (vigente) setConjunto(cfg); })
+      .catch((err) => {
+        if (!vigente) return;
+        setConjunto(null);
+        // Sin ?c= y el backend no resuelve un conjunto único (hay varios): el
+        // residente debe escribir su código. Ante otro error (red) no se exige:
+        // si hiciera falta, el propio registro lo pide (ver handleSubmit).
+        if (!codigoDeUrl && err.code === 'INVITACION_INVALIDA') setMostrarCampoCodigo(true);
+      })
+      .finally(() => { if (vigente) setCargandoConjunto(false); });
+    return () => { vigente = false; };
+  }, [codigoDeUrl]);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,10 +84,17 @@ export default function Register() {
       <div className="auth-card">
         <h1>Crear cuenta de residente</h1>
         <p className="sub">
-          Regístrate con el enlace o el código de invitación que te entregó el operador de tu conjunto.
+          {conjunto
+            ? `Te estás registrando en ${conjunto.nombre}.`
+            : 'Regístrate con el enlace o el código de invitación que te entregó el operador de tu conjunto.'}
         </p>
+        {conjunto?.puntoRecepcion && (
+          <p className="hint">Punto de recepción: {conjunto.puntoRecepcion}</p>
+        )}
 
-        {done ? (
+        {cargandoConjunto ? (
+          <p>Cargando…</p>
+        ) : done ? (
           <p>Cuenta creada. Redirigiendo a iniciar sesión…</p>
         ) : (
           <form onSubmit={handleSubmit}>

@@ -289,6 +289,14 @@ Flujo recomendado:
 `bonosHabilitados` no se pregunta: queda `false` siempre (los bonos se activan
 por una acción deliberada aparte, nunca en el alta).
 
+**Registro sin código con un solo conjunto.** Mientras la base tenga
+**exactamente un** `Conjunto` con la invitación activa, `/registro` sin `?c=`
+crea al residente en ese conjunto (los folletos/QR antiguos sin código siguen
+sirviendo; ver README). **Dar de alta un segundo conjunto apaga esto en el acto:**
+desde ese momento los enlaces sin `?c=` responden `400 INVITACION_INVALIDA` y
+piden código. Antes de crear el segundo conjunto, reimprime los QR de los
+existentes con su `/registro?c=<código>`.
+
 **Desactivar un código de invitación.** Para cerrar temporalmente el registro de
 un conjunto, poner `invitacionActiva = false` en su fila de `Conjunto` (por el
 túnel SSH, `UPDATE "Conjunto" SET "invitacionActiva" = false WHERE "slug" =
