@@ -18,7 +18,7 @@ export default function AsignarSheet({ paquete, onClose }) {
     setEnviando(true);
     setError('');
     try {
-      const resultado = await api(`/packages/${paquete.id}/asignar`, { method: 'PATCH', body: { residenteId: r.id } });
+      const resultado = await api(`/packages/${paquete.id}/asignar`, { method: 'PATCH', body: { domicilioId: r.domicilioId } });
       invalidarPaquetes();
       navigate(`/op/guardado/${paquete.id}`, { state: { resultado } });
     } catch (e) {
@@ -34,7 +34,7 @@ export default function AsignarSheet({ paquete, onClose }) {
       {error && <Toast tipo="error">{error}</Toast>}
       <div className="op-hoja">
         {resultados.map((r) => (
-          <button type="button" key={r.id} className="op-sug" disabled={enviando} onClick={() => asignar(r)}>
+          <button type="button" key={r.domicilioId} className="op-sug" disabled={enviando} onClick={() => asignar(r)}>
             <span className="op-sug__apto">{r.etiqueta}</span>
             <span className="op-sug__nombre">{r.nombre}</span>
           </button>

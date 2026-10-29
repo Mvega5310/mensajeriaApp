@@ -19,6 +19,8 @@ import { getContext, runWithTenant } from '../config/tenantContext.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { tokenTorre } from '../domain/apartamento.js';
 import { normalizarApto } from './apartamento.service.js';
+import { etiquetaApartamento } from '../domain/apartamento.js';
+import { obtenerCuentaPropia, marcarUltimoConjunto } from './usuario.service.js';
 
 /**
  * Forma canónica de una dirección guardada en Domicilio (sin NULL, para que el único
@@ -50,9 +52,10 @@ const SELECT_DOMICILIO = {
  * dirección se pide UNA vez: si ya existe la misma (conjunto, persona, torre, apto) se
  * reutiliza, se marca como la última usada y se actualiza quién recibe/teléfono si llegan.
  * Debe correr dentro de runWithTenant (el conjunto sale del contexto, nunca del llamador).
- * @param {{usuarioId:string, torre?:string|null, apto?:string|null, nombreRecibe:string, telefono:string}} p
+ * `porDefecto` ({nombreRecibe, telefono}) completa lo que falte solo si hay que crearla.
+ * @param {{usuarioId:string, torre?:string|null, apto?:string|null, nombreRecibe?:string, telefono?:string, porDefecto?:{nombreRecibe:string, telefono:string}}} p
  */
-export async function crearOReutilizarDomicilio({ usuarioId, torre, apto, nombreRecibe, telefono }) {
+export async function crearOReutilizarDomicilio({ usuarioId, torre, apto, nombreRecibe, telefono, porDefecto }) {
   const conjuntoId = conjuntoDelContextoId();
   const dir = canonicalizarDireccion({ torre, apto });
   // Índice persona -> conjunto primero: si falla lo siguiente, sobra un índice inofensivo.
@@ -75,7 +78,13 @@ export async function crearOReutilizarDomicilio({ usuarioId, torre, apto, nombre
   }
   try {
     return await prisma.domicilio.create({
-      data: { usuarioId, ...dir, nombreRecibe, telefono, ultimoUsoEn: ahora },
+      data: {
+        usuarioId, ...dir, ultimoUsoEn: ahora,
+        // Solo al CREAR se completa con los datos de la cuenta; al reutilizar no se pisa
+        // lo que ya tenía (p. ej. el nombre de un amigo).
+        nombreRecibe: nombreRecibe || porDefecto?.nombreRecibe,
+        telefono: telefono || porDefecto?.telefono,
+      },
       select: SELECT_DOMICILIO,
     });
   } catch (e) {
@@ -205,7 +214,7 @@ export async function porCadaConjuntoDePersona(usuarioId, fn) {
   if (!ids.length) return [];
   const conjuntos = await prisma.conjunto.findMany({
     where: { id: { in: ids } },
-    select: { id: true, nombre: true, slug: true },
+    select: { id: true, nombre: true, slug: true, invitacionActiva: true },
   });
   const grupos = await Promise.all(conjuntos.map((c) =>
     runWithTenant({ conjuntoId: c.id, role: 'RESIDENT' }, () => fn(c))));
@@ -227,4 +236,125 @@ export async function paquetesDePersona(usuarioId, { select, estados } = {}) {
     return paquetes.map((p) => ({ ...p, conjunto: { slug: c.slug, nombre: c.nombre } }));
   });
   return filas.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+// --- Contexto por solicitud (PLAN-conjunto S1.3) --------------------------------------
+// El residente no "pertenece" a un conjunto: cada solicitud trae su conjunto. Sin
+// GLOBAL_LOOKUP ni SQL crudo: el índice UsuarioConjunto dice DÓNDE puede mirar la persona y
+// cada lectura corre dentro de runWithTenant de ese conjunto (la extensión sigue filtrando).
+
+/** Forma pública de una dirección guardada (la que consume el cliente). */
+export function vistaDomicilio(d, conjunto) {
+  return {
+    id: d.id,
+    conjunto: { slug: conjunto.slug, nombre: conjunto.nombre },
+    torre: nulaSiVacia(d.torre),
+    apto: nulaSiVacia(d.apto),
+    etiqueta: etiquetaApartamento(d.torre, d.apto),
+    nombreRecibe: d.nombreRecibe,
+    telefono: d.telefono,
+    ultimoUsoEn: d.ultimoUsoEn,
+  };
+}
+
+/**
+ * Direcciones guardadas de la persona en TODOS sus conjuntos activos (una consulta por
+ * conjunto, dentro de su runWithTenant), la última usada primero. Cada una trae
+ * `conjunto` ({ id, slug, nombre }) además de los campos del Domicilio.
+ */
+export async function listarDomiciliosDePersona(usuarioId) {
+  const filas = await porCadaConjuntoDePersona(usuarioId, async (c) => {
+    if (!c.invitacionActiva) return [];
+    const ds = await prisma.domicilio.findMany({
+      where: { usuarioId, activo: true },
+      select: SELECT_DOMICILIO,
+    });
+    return ds.map((d) => ({ ...d, conjunto: { id: c.id, slug: c.slug, nombre: c.nombre } }));
+  });
+  return filas.sort((a, b) => new Date(b.ultimoUsoEn) - new Date(a.ultimoUsoEn));
+}
+
+/** Una dirección propia por id, en cualquiera de sus conjuntos activos (o null). */
+export async function domicilioPropioPorId(usuarioId, domicilioId) {
+  if (typeof domicilioId !== 'string' || !domicilioId) return null;
+  const todas = await listarDomiciliosDePersona(usuarioId);
+  return todas.find((d) => d.id === domicilioId) ?? null;
+}
+
+/**
+ * Crea o reutiliza la dirección de la persona en el conjunto del contexto y la marca como
+ * la última usada (también el "último conjunto" de la cuenta). Nombre y teléfono que falten
+ * se precargan de la cuenta SOLO al crear. Debe correr en runWithTenant del conjunto elegido.
+ */
+export async function guardarDireccionDePersona(usuarioId, { torre, apto, nombreRecibe, telefono }) {
+  const cuenta = await obtenerCuentaPropia(usuarioId);
+  if (!cuenta) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos tu usuario. Inicia sesión de nuevo.', 404);
+  const d = await crearOReutilizarDomicilio({
+    usuarioId, torre, apto, nombreRecibe, telefono,
+    porDefecto: { nombreRecibe: cuenta.nombre, telefono: cuenta.telefono },
+  });
+  await marcarUltimoConjunto(usuarioId, conjuntoDelContextoId());
+  return d;
+}
+
+/**
+ * ¿En qué conjunto está el paquete `paqueteId` de la persona? Prueba primero `actualId`
+ * (el del contexto, lo normal) y luego los demás conjuntos del índice, siempre dentro del
+ * runWithTenant de cada uno y filtrando por dueño (`residenteId`). Un paquete ajeno, o en un
+ * conjunto donde la persona no tiene domicilio, no se encuentra (null).
+ * @returns {Promise<string|null>} id del conjunto
+ */
+export async function conjuntoDePaquetePropio(usuarioId, paqueteId, actualId) {
+  if (typeof paqueteId !== 'string' || !paqueteId) return null;
+  const ids = await conjuntosDePersona(usuarioId);
+  const orden = [...(actualId && ids.includes(actualId) ? [actualId] : []), ...ids.filter((i) => i !== actualId)];
+  const hallazgos = await Promise.all(orden.map((conjuntoId) =>
+    runWithTenant({ conjuntoId, role: 'RESIDENT' }, async () => {
+      const p = await prisma.package.findFirst({ where: { id: paqueteId, residenteId: usuarioId }, select: { id: true } });
+      return p ? conjuntoId : null;
+    })));
+  return hallazgos.find(Boolean) ?? null;
+}
+
+/** ¿La persona tiene (o tuvo) domicilio en este conjunto? Lee solo el índice. */
+export async function tieneDomicilioEn(usuarioId, conjuntoId) {
+  return (await conjuntosDePersona(usuarioId)).includes(conjuntoId);
+}
+
+/**
+ * Valida y normaliza la dirección que llega en el cuerpo de una solicitud
+ * (`POST /domicilios`, pre-alerta con dirección nueva): `{ conjunto, torre, apto,
+ * nombreRecibe?, telefono? }`. El conjunto va por slug (se valida aparte). El apartamento es
+ * obligatorio (sin él la dirección no sirve para ubicar el paquete); la torre es opcional.
+ */
+export function direccionDeCuerpo(body) {
+  const mala = (msg, campo) => new AppError(CODIGOS.DATOS_INVALIDOS, msg, 400, { campo });
+  const texto = (v, campo, max) => {
+    if (v === undefined || v === null || v === '') return undefined;
+    if (typeof v !== 'string' && typeof v !== 'number') throw mala('Revisa los datos de la dirección.', campo);
+    const t = String(v).trim();
+    if (t.length > max) throw mala(`El campo ${campo} es demasiado largo.`, campo);
+    return t || undefined;
+  };
+  const torre = texto(body?.torre, 'torre', 20);
+  const apto = texto(body?.apto, 'apto', 10);
+  const nombreRecibe = texto(body?.nombreRecibe, 'nombreRecibe', 80);
+  const telefono = texto(body?.telefono, 'telefono', 20);
+  if (!canonicalizarDireccion({ torre, apto }).apto) throw mala('Escribe el número de tu apartamento.', 'apto');
+  return { torre, apto, nombreRecibe, telefono };
+}
+
+/**
+ * Marca una dirección propia (del conjunto del contexto) como la última usada y el conjunto
+ * como el "último conjunto" de la cuenta. Devuelve el Domicilio. Nunca toca el de otra persona
+ * (`usuarioId` es el de la sesión).
+ */
+export async function usarDomicilio(usuarioId, domicilioId) {
+  const d = await prisma.domicilio.update({
+    where: { id: domicilioId, usuarioId },
+    data: { ultimoUsoEn: new Date() },
+    select: SELECT_DOMICILIO,
+  });
+  await marcarUltimoConjunto(usuarioId, conjuntoDelContextoId());
+  return d;
 }

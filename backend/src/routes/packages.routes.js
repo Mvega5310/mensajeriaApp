@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import { LIMITE_JSON_FOTOS_BYTES } from '../domain/recepcion.js';
 import { asyncHandler } from '../domain/errores.js';
 import { requireAuth, requireRole } from '../middleware/auth.middleware.js';
-import { requireTenant } from '../middleware/tenant.middleware.js';
+import { requireTenant, conjuntoDelPaquete } from '../middleware/tenant.middleware.js';
 import {
   createPrealert,
   listMine,
@@ -33,10 +33,11 @@ router.use(requireTenant);
 
 router.post('/', requireRole('RESIDENT'), asyncHandler(createPrealert));
 router.get('/mine', requireRole('RESIDENT'), asyncHandler(listMine));
-router.patch('/:id/schedule', requireRole('RESIDENT'), asyncHandler(schedule));
+// Rutas del residente sobre UN paquete: el contexto es el conjunto DEL paquete (S1.3).
+router.patch('/:id/schedule', requireRole('RESIDENT'), conjuntoDelPaquete, asyncHandler(schedule));
 // Ambos roles pueden pedirla; getFoto() valida por dentro que un
 // residente solo vea la foto de su propio paquete.
-router.get('/:id/foto', asyncHandler(getFoto));
+router.get('/:id/foto', conjuntoDelPaquete, asyncHandler(getFoto));
 
 router.get('/', requireRole('OPERATOR'), asyncHandler(listAll));
 router.get('/export', requireRole('OPERATOR'), asyncHandler(exportCsv));

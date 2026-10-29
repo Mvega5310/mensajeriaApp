@@ -14,6 +14,8 @@ export default function Register() {
   // mientras exista UN ÚNICO conjunto (config-publica sin ?c= responde 200); si
   // hay varios, responde 400 y se pide el código a mano.
   const codigoDeUrl = (searchParams.get('c') || '').trim();
+  // QR nuevo (S1.3): `?conjunto=<slug>` llega con el conjunto ya elegido. El selector visual llega en S2.3.
+  const slugDeUrl = (searchParams.get('conjunto') || '').trim();
 
   const [fields, setFields] = useState(initial);
   // Código escrito a mano. Cuando NO hay ?c= arranca vacío; si un ?c= resulta
@@ -29,7 +31,7 @@ export default function Register() {
   useEffect(() => {
     let vigente = true;
     setCargandoConjunto(true);
-    getConfigPublica(codigoDeUrl)
+    getConfigPublica(codigoDeUrl, slugDeUrl)
       .then((cfg) => { if (vigente) setConjunto(cfg); })
       .catch((err) => {
         if (!vigente) return;
@@ -37,11 +39,11 @@ export default function Register() {
         // Sin ?c= y el backend no resuelve un conjunto único (hay varios): el
         // residente debe escribir su código. Ante otro error (red) no se exige:
         // si hiciera falta, el propio registro lo pide (ver handleSubmit).
-        if (!codigoDeUrl && err.code === 'INVITACION_INVALIDA') setMostrarCampoCodigo(true);
+        if (!codigoDeUrl && !slugDeUrl && (err.code === 'INVITACION_INVALIDA' || err.code === 'CONJUNTO_REQUERIDO')) setMostrarCampoCodigo(true);
       })
       .finally(() => { if (vigente) setCargandoConjunto(false); });
     return () => { vigente = false; };
-  }, [codigoDeUrl]);
+  }, [codigoDeUrl, slugDeUrl]);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,7 +65,7 @@ export default function Register() {
     try {
       // El resto del formulario se conserva en `fields`; ante un error de
       // código no se pierde nada y el residente puede corregir el código.
-      await register({ ...fields, codigoInvitacion });
+      await register({ ...fields, codigoInvitacion, ...(slugDeUrl ? { conjunto: slugDeUrl } : {}) });
       setDone(true);
       setTimeout(() => irA('/login', { replace: true }), 1200);
     } catch (err) {
@@ -71,7 +73,7 @@ export default function Register() {
       // Detección por código estable (no por texto): si falló por el código y
       // venía de la URL, mostramos el campo precargado con ese valor para que el
       // residente lo corrija sin perder lo demás.
-      if (err.code === 'INVITACION_INVALIDA' && !mostrarCampoCodigo) {
+      if ((err.code === 'INVITACION_INVALIDA' || err.code === 'CONJUNTO_REQUERIDO') && !mostrarCampoCodigo) {
         setCodigoManual(codigoDeUrl);
         setMostrarCampoCodigo(true);
       }

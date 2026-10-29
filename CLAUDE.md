@@ -104,7 +104,7 @@ docs/        # Prototipo original, flyer de campaña, logo — referencia histó
 - **Fotos fuera de los listados**: `GET /packages` y `GET /packages/mine` NUNCA deben incluir `fotoUrl` (pueden pesar cientos de KB en base64 cada una) — se piden aparte vía `GET /packages/:id/foto`, solo al abrir el detalle de un paquete puntual. Esto fue la causa real de una caída seria en producción (ver historial de commits) — no revertir este patrón.
 - **Sin pasarela de pagos real**: todo el cobro es manual/efectivo/transferencia, coordinado por fuera de la app.
 - **La app ya no es exclusiva de Ipanema**: no incrustar el nombre "Ipanema", el operador, su domicilio, WhatsApp ni tarifas en el código. Todo eso es configuración por conjunto (ver reglas del multi-conjunto abajo).
-- **Registro sin código con un solo conjunto** (hotfix `20a46b4`): si en la base hay exactamente 1 `Conjunto` con la invitación activa, `register` y `config-publica` sin código usan ese conjunto; con 0, 2 o más, el código vuelve a ser obligatorio solo. Existe porque los QR/folletos repartidos apuntan sin `?c=`. **Antes de crear un segundo conjunto, reimprimir los QR/folletos con `?c=<código>`.**
+- **Registro sin código ni slug con un solo conjunto activo** (hotfix `20a46b4`, generalizado en S1.3): sin `conjunto` (slug) ni código, `register` y `config-publica` usan el único conjunto activo; con varios, 400 `CONJUNTO_REQUERIDO`. El código de invitación es opcional. Existe porque los QR/folletos repartidos apuntan sin `?c=`; el QR nuevo usa `?conjunto=<slug>`.
 
 ## Reglas del multi-conjunto (no negociables)
 
@@ -162,7 +162,7 @@ sostienen. Cada una tiene una prueba automatizada; si tu cambio rompe una,
     fuera de ese servicio y de `buscarUsuarioPorEmailSinTenant` (login/forgot); no agregues
     funciones genéricas con `where` libre. `User.conjuntoId` sigue NOT NULL: para un OPERATOR
     es SU conjunto; para un RESIDENT es solo el "último conjunto usado" (abre el contexto de
-    sus requests hasta que S1.3 lo resuelva por solicitud) y **no aísla nada**. —
+    sus requests por defecto; S1.3 lo resuelve por solicitud, ver 12) y **no aísla nada**. —
     *Prueba:* `auditoriaInvariantes.test.js` (E7.4: falla si aparece `prisma.user`/`tx.user`
     fuera de esos sitios).
 11. **Dirección de entrega (`Domicilio`) y "Mis paquetes" multi-conjunto.** (S1.1/S1.2)
@@ -194,6 +194,25 @@ sostienen. Cada una tiene una prueba automatizada; si tu cambio rompe una,
    "Ipanema", ni tarifas, ni domicilio/WhatsApp del operador: todo viene de
    `GET /conjunto/config` (con sesión) o `GET /conjuntos/config-publica?c=`
    (registro/Términos sin sesión). — *Prueba:* `frontendSinFijos.test.js`.
+
+12. **El conjunto de un residente se elige POR SOLICITUD (S1.3), por slug o por recurso, nunca
+    por un id del cliente.** `requireTenant` abre el contexto base (`User.conjuntoId`; en la sesión
+    de enlace, el `conjuntoId` firmado en el token, válido si la persona tiene domicilio ahí
+    según el índice `UsuarioConjunto`, ya no se compara con `User.conjuntoId`). Después, y solo
+    para RESIDENT con sesión normal: `conjuntoDelPaquete` (schedule, foto) busca el paquete
+    DEL residente (por `residenteId`) en sus conjuntos del índice y abre el contexto del conjunto
+    del paquete; `conjuntoDeSolicitud` acepta `?conjunto=<slug>` (o `conjunto` en el cuerpo de
+    `POST /comments`): conjunto ACTIVO (`invitacionActiva`) donde la persona tiene domicilio, si
+    no 400 `CONJUNTO_INVALIDO` / 404. Las escrituras que crean (pre-alerta, `POST /domicilios`,
+    registro) resuelven el conjunto en su controlador desde el slug validado
+    (`conjuntoActivoPorSlug`) o desde la dirección elegida, y abren `runWithTenant` ahí. Cada uso
+    de una dirección llama `marcarUltimoConjunto`. Sin `GLOBAL_LOOKUP` nuevo ni SQL crudo. Las
+    rutas públicas nuevas (`GET /conjuntos`: solo `{slug,nombre}`, límite por IP) están en E6.
+    El registro y `config-publica` ya no tienen el caso especial `conjuntoUnicoActivo()`:
+    `resolverConjuntoPublico` (código opcional, slug, o el único conjunto activo; varios sin nada
+    → 400 `CONJUNTO_REQUERIDO`). — *Pruebas:* `conjuntoPorSolicitud.integration.test.js`,
+    `auditoriaInvariantes.test.js` (E7.7: `runWithTenant` solo en los sitios autorizados y
+    ningún `conjuntoId` leído de `req.body/query/params/headers`), `tenantGuard.routes.test.js`.
 
 **Regla de proceso.** Cualquier cambio que toque la extensión de tenant, el
 contexto (`AsyncLocalStorage`/helpers) o los flujos sin sesión

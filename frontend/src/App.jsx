@@ -117,7 +117,7 @@ export default function App() {
         <Route path="/paquetes/bonos" element={<SoloResidente><MisBonos /></SoloResidente>} />
         <Route path="/paquetes/buzon" element={<SoloResidente><Buzon /></SoloResidente>} />
         <Route path="/op/recibir" element={<SoloOperador><Recibir /></SoloOperador>} />
-        <Route path="/op/recibir/:residenteId" element={<SoloOperador><RecibirPeso /></SoloOperador>} />
+        <Route path="/op/recibir/:domicilioId" element={<SoloOperador><RecibirPeso /></SoloOperador>} />
         <Route path="/op/guardado/:id" element={<SoloOperador><Guardado /></SoloOperador>} />
         <Route path="/op/entregar" element={<SoloOperador><Entregar /></SoloOperador>} />
         <Route path="/op/entregar/lote" element={<SoloOperador><Cobrar /></SoloOperador>} />

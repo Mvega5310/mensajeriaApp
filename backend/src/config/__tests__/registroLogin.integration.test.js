@@ -150,11 +150,51 @@ test('register con código válido crea el usuario en el conjunto correcto', { s
   });
 });
 
-test('register sin código no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {
+test('register sin código ni conjunto (hay 2 activos) no crea nada (400 + code CONJUNTO_REQUERIDO)', { skip: omitir && razonSkip }, async () => {
   await assert.rejects(
     register(reqRegistro({ email: 'nocode@itestc.local' }), resFake()),
-    (e) => e instanceof AppError && e.status === 400 && e.code === 'INVITACION_INVALIDA' && !!e.message
+    (e) => e instanceof AppError && e.status === 400 && e.code === 'CONJUNTO_REQUERIDO' && !!e.message
   );
+  assert.equal(await prisma.user.count({ where: { email: 'nocode@itestc.local' } }), 0);
+});
+
+test('register con slug (sin código) crea la cuenta y su Domicilio en ese conjunto (S1.3)', { skip: omitir && razonSkip }, async () => {
+  const res = resFake();
+  await register(reqRegistro({ email: 'slug@itestc.local', conjunto: SLUG_B, torre: 'Torre 3', apto: '210' }), res);
+  assert.equal(res.statusCode, 201);
+  const u = await prisma.user.findUnique({ where: { id: res.body.id } });
+  assert.equal(u.conjuntoId, ctx.B);
+  await runWithTenant({ conjuntoId: ctx.B, role: 'OPERATOR' }, async () => {
+    const ds = await prisma.domicilio.findMany({ where: { usuarioId: u.id } });
+    assert.equal(ds.length, 1);
+    assert.deepEqual([ds[0].torre, ds[0].apto], ['3', '210']);
+  });
+});
+
+test('register con slug inexistente o de un conjunto inactivo -> 400 CONJUNTO_INVALIDO y no crea nada', { skip: omitir && razonSkip }, async () => {
+  const inactivo = await crearConjunto('itestc-inact2', 'itestc-cod-INACT2', { activa: false });
+  try {
+    for (const slug of ['no-existe', 'itestc-inact2', 123, {}]) {
+      await assert.rejects(
+        register(reqRegistro({ email: 'slugmalo@itestc.local', conjunto: slug }), resFake()),
+        (e) => e instanceof AppError && e.status === 400 && e.code === 'CONJUNTO_INVALIDO',
+        `slug ${JSON.stringify(slug)}`,
+      );
+    }
+    assert.equal(await prisma.user.count({ where: { email: 'slugmalo@itestc.local' } }), 0);
+  } finally {
+    await prisma.conjunto.deleteMany({ where: { id: inactivo.id } });
+  }
+});
+
+test('register con código y slug de conjuntos distintos -> 400; coincidentes -> 201', { skip: omitir && razonSkip }, async () => {
+  await assert.rejects(
+    register(reqRegistro({ email: 'mezcla@itestc.local', codigoInvitacion: COD_A, conjunto: SLUG_B }), resFake()),
+    (e) => e instanceof AppError && e.status === 400 && e.code === 'CONJUNTO_INVALIDO'
+  );
+  const res = resFake();
+  await register(reqRegistro({ email: 'mezcla-ok@itestc.local', codigoInvitacion: COD_A, conjunto: SLUG_A }), res);
+  assert.equal(res.statusCode, 201);
 });
 
 test('register con código inexistente no crea nada (400 + code INVITACION_INVALIDA)', { skip: omitir && razonSkip }, async () => {

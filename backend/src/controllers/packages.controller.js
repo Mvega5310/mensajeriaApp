@@ -17,12 +17,19 @@ import { interpretarBusqueda } from '../domain/apartamento.js';
 import { contactoParaNotificar, obtenerCuentaPropia } from '../services/usuario.service.js';
 import {
   crearOReutilizarDomicilio, domicilioDePersona, vistaResidente, nulaSiVacia,
-  SELECT_DOMICILIO_PAQUETE, porCadaConjuntoDePersona,
+  SELECT_DOMICILIO_PAQUETE, porCadaConjuntoDePersona, listarDomiciliosDePersona, domicilioPropioPorId,
+  guardarDireccionDePersona, direccionDeCuerpo, usarDomicilio,
 } from '../services/domicilio.service.js';
+import { runWithTenant } from '../config/tenantContext.js';
+import { conjuntoActivoPorSlug } from '../services/conjunto.service.js';
 
-// Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
-// ya no se piden en el formulario: salen del usuario autenticado, así que
-// no pueden falsificarse escribiendo el nombre de otro residente.
+// Residente: crea una pre-alerta. PLAN-conjunto S1.3 — el conjunto es el de la dirección
+// elegida: `{ domicilioId }` (una propia, en cualquiera de sus conjuntos), o `{ conjunto
+// (slug), torre, apto, nombreRecibe?, telefono? }` (crea o reutiliza la dirección en ese
+// conjunto), o nada (la dirección más reciente: regla de oro, 0 campos). Todo corre en el
+// contexto de ESE conjunto y el aviso va al operador de ESE conjunto. Nombre/teléfono ya no
+// se piden en el formulario: salen de la dirección/cuenta, así que no pueden falsificarse
+// escribiendo el nombre de otro residente.
 //
 // La categoría de peso que manda aquí es una ESTIMACIÓN suya (nadie más
 // conoce el tamaño del paquete todavía) y solo sirve para mostrarle una
@@ -60,12 +67,25 @@ export async function createPrealert(req, res) {
   if (!esCategoriaValida(categoriaPeso || 'ESTANDAR')) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
-  const costoServicio = await costoPara(categoriaPeso || 'ESTANDAR');
+  const destino = await destinoDePrealerta(req.user.sub, req.body);
+  const correr = (fn) => (destino.conjuntoId
+    ? runWithTenant({ conjuntoId: destino.conjuntoId, role: 'RESIDENT' }, fn)
+    : fn()); // sin ninguna dirección (cuenta anterior a S1.1): conjunto base
+  const pkg = await correr(() => crearPrealertaEn(req, destino, {
+    proveedor, transportadora, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
+    valorDeclarado, franjaHoraria, metodoPagoServicio, notas, pinProveedor,
+  }));
+  res.status(201).json(pkg);
+}
 
-  // Dirección de entrega (PLAN-conjunto S1.2): la indicada (`domicilioId`, solo una propia en
-  // ESTE conjunto) o, por compatibilidad, la más reciente de la persona aquí. Si es la primera
-  // vez en este conjunto se crea desde los datos de su cuenta (la dirección se pide UNA vez).
-  const domicilio = await domicilioParaPrealerta(req.user.sub, req.body?.domicilioId);
+// Dentro del contexto del conjunto de la dirección elegida.
+async function crearPrealertaEn(req, destino, d) {
+  const {
+    proveedor, transportadora, guia, categoriaPeso, esContraEntregaProveedor, valorProductoProveedor,
+    valorDeclarado, franjaHoraria, metodoPagoServicio, notas, pinProveedor,
+  } = d;
+  const costoServicio = await costoPara(categoriaPeso || 'ESTANDAR');
+  const domicilio = await domicilioParaPrealerta(req.user.sub, destino);
 
   const pkg = await prisma.$transaction((tx) => crearConEvento(tx, EVENTOS.PREALERTAR, {
     actorId: req.user.sub,
@@ -105,19 +125,46 @@ export async function createPrealert(req, res) {
   }
   enSegundoPlano('prealerta', () => notificador.confirmarPrealerta({ residente, paquete: pkg, conjunto }));
 
-  res.status(201).json(pkg);
+  return pkg;
 }
 
-async function domicilioParaPrealerta(usuarioId, domicilioId) {
-  if (domicilioId !== undefined && domicilioId !== null && domicilioId !== '') {
-    const propio = typeof domicilioId === 'string'
-      ? await prisma.domicilio.findFirst({ where: { id: domicilioId, usuarioId, activo: true } })
-      : null;
-    if (!propio) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Elige una de tus direcciones guardadas.', 404);
-    return propio;
+const sinValor = (v) => v === undefined || v === null || v === '';
+
+// A qué conjunto/dirección va la pre-alerta (ver comentario de createPrealert). Resuelve el
+// conjunto SIN abrir contexto: devuelve { conjuntoId, domicilio } (dirección ya existente),
+// { conjuntoId, direccion } (a crear) o { conjuntoId: null } (cuenta sin ninguna dirección).
+async function destinoDePrealerta(usuarioId, body) {
+  const { domicilioId, conjunto: slug } = body ?? {};
+  if (!sinValor(domicilioId)) {
+    const d = await domicilioPropioPorId(usuarioId, domicilioId);
+    if (!d) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Elige una de tus direcciones guardadas.', 404);
+    if (!sinValor(slug) && String(slug).trim() !== d.conjunto.slug) {
+      throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La dirección no es de ese conjunto.', 400, { campo: 'conjunto' });
+    }
+    return { conjuntoId: d.conjunto.id, domicilio: d };
   }
+  if (!sinValor(slug)) {
+    const c = await conjuntoActivoPorSlug(slug);
+    if (sinValor(body.torre) && sinValor(body.apto)) {
+      // Solo el conjunto: la dirección más reciente de la persona ahí (si no tiene, se pide).
+      const propia = (await listarDomiciliosDePersona(usuarioId)).find((x) => x.conjunto.id === c.id);
+      if (propia) return { conjuntoId: c.id, domicilio: propia };
+    }
+    return { conjuntoId: c.id, direccion: direccionDeCuerpo(body) };
+  }
+  // Regla de oro: sin nada en la solicitud, la dirección más reciente de la persona.
+  const [reciente] = await listarDomiciliosDePersona(usuarioId);
+  return reciente ? { conjuntoId: reciente.conjunto.id, domicilio: reciente } : { conjuntoId: null };
+}
+
+// Ya dentro del contexto del conjunto elegido. Deja la dirección como la última usada y el
+// conjunto como el "último conjunto" de la cuenta.
+async function domicilioParaPrealerta(usuarioId, destino) {
+  if (destino.domicilio) return usarDomicilio(usuarioId, destino.domicilio.id);
+  if (destino.direccion) return guardarDireccionDePersona(usuarioId, destino.direccion);
+  // Cuenta anterior a S1.1 sin ninguna dirección: se crea desde los datos de su cuenta.
   const existente = await domicilioDePersona(usuarioId);
-  if (existente) return existente;
+  if (existente) return usarDomicilio(usuarioId, existente.id);
   const cuenta = await obtenerCuentaPropia(usuarioId);
   if (!cuenta) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos tu usuario. Inicia sesión de nuevo.', 404);
   return crearOReutilizarDomicilio({

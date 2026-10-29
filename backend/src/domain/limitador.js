@@ -66,6 +66,11 @@ export const LOGIN_VENTANA_MS = 15 * 60 * 1000;
 export const ENLACE_MAX_SOLICITUDES = 5;
 export const ENLACE_VENTANA_MS = 15 * 60 * 1000;
 
+// Lista pública de conjuntos (S1.3, GET /api/conjuntos, sin sesión): 60 consultas por IP por
+// minuto. Es un selector (se pide una vez por pantalla), así que sobra para uso normal y frena el barrido.
+export const CONJUNTOS_MAX_CONSULTAS = 60;
+export const CONJUNTOS_VENTANA_MS = 60 * 1000;
+
 // Fallos de PIN en la entrega por lote: por OPERADOR. Un portero atiende a muchos
 // apartamentos en una hora pico y se equivoca de tecla a menudo: 10 fallos / 15 min
 // (el del login) lo dejaba sin poder entregar. 20 fallos / 10 min sigue frenando la

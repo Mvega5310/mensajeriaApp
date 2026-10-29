@@ -4,7 +4,7 @@ import { guardarRecepcion, nuevaClave } from '../../offline/colaRecepciones.js';
 import { compressImage } from '../../utils/image.js';
 import { invalidarPaquetes } from './usePaquetes.js';
 
-/** Datos y acciones de Op-Peso. `destino` = { residenteId | null, etiquetaNombre?, residente? }. */
+/** Datos y acciones de Op-Peso. `destino` = { domicilioId | null, etiquetaNombre?, residente? }. */
 export default function useGuardarPaquete(destino, maxFotos) {
   const navigate = useNavigate();
   const [categoria, setCategoria] = useState('ESTANDAR');
@@ -35,7 +35,7 @@ export default function useGuardarPaquete(destino, maxFotos) {
     setGuardando(true);
     setError('');
     const body = {
-      residenteId: destino.residenteId ?? null,
+      ...(destino.domicilioId ? { domicilioId: destino.domicilioId } : {}),
       categoriaPeso: categoria,
       ...(destino.etiquetaNombre ? { etiquetaNombre: destino.etiquetaNombre } : {}),
       ...(guia.trim() ? { guia: guia.trim() } : {}),
@@ -46,7 +46,7 @@ export default function useGuardarPaquete(destino, maxFotos) {
     if (clave.current.firma !== firma) clave.current = { valor: nuevaClave(), firma };
     const claveIdempotencia = clave.current.valor;
     const resumen = {
-      residenteId: destino.residenteId ?? null,
+      domicilioId: destino.domicilioId ?? null,
       nombre: destino.residente?.nombre ?? null,
       etiquetaApto: destino.residente?.etiqueta ?? null,
       etiquetaNombre: destino.etiquetaNombre ?? null,

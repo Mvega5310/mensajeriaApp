@@ -4,12 +4,11 @@ import jwt from 'jsonwebtoken';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { tenantStore, SCOPE, runWithTenant } from '../config/tenantContext.js';
-import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
 import { PASSWORD_POLICY, PASSWORD_POLICY_MSG } from '../services/password.service.js';
 import { enSegundoPlano } from '../services/avisos.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
-import { conjuntoUnicoActivo } from '../services/conjunto.service.js';
+import { resolverConjuntoPublico } from '../services/conjunto.service.js';
 import { crearResidente, actualizarPassword, obtenerCuentaPropia, obtenerPerfilPropio } from '../services/usuario.service.js';
 import { crearOReutilizarDomicilio } from '../services/domicilio.service.js';
 
@@ -55,29 +54,13 @@ export async function register(req, res) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Para crear tu cuenta, acepta los Términos y el Aviso de Privacidad.', 400);
   }
 
-  // Flujo pre-tenant (design.md §3.4, §3.6.2): el registro ESTABLECE el tenant a
-  // partir del código de invitación, no lo asume.
-  // 1) Validar el código. Conjunto es un modelo SIN tenant, así que esta
-  //    lectura está exenta del filtro y no requiere contexto.
-  // El campo `code` estable permite que el frontend detecte este caso sin
-  // depender del texto del mensaje (revisión C5).
-  // Sin código: solo vale mientras exista UN ÚNICO conjunto (folletos/QR sin
-  // ?c= de antes del corte). Con 0 o varios, el código es obligatorio.
-  let conjunto;
-  if (!codigoInvitacion) {
-    conjunto = await conjuntoUnicoActivo();
-    if (!conjunto) {
-      throw new AppError(CODIGOS.INVITACION_INVALIDA, 'Necesitas el enlace de invitación de tu conjunto para registrarte. Pídelo a la administración.', 400);
-    }
-  } else {
-    // Normaliza caja y espacios para que un código tecleado a mano coincida con
-    // la forma canónica persistida (revisión C5).
-    const codigoNormalizado = normalizarCodigoInvitacion(codigoInvitacion);
-    conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion: codigoNormalizado } });
-    if (!conjunto || !conjunto.invitacionActiva) {
-      throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
-    }
-  }
+  // Flujo pre-tenant (design.md §3.4, §3.6.2): el registro ESTABLECE el tenant a partir de
+  // lo que la persona elige, no lo asume. PLAN-conjunto S1.3: se elige el conjunto por
+  // `conjunto` (slug); el código de invitación es OPCIONAL (QR/enlaces `?c=` antiguos y
+  // `codigoInvitacion` siguen sirviendo) y, sin slug ni código, vale el único conjunto
+  // activo (QR viejos). Con varios activos y sin slug ni código -> 400 CONJUNTO_REQUERIDO.
+  // Conjunto es un modelo SIN tenant, así que esta lectura no requiere contexto.
+  const conjunto = await resolverConjuntoPublico({ slug: req.body.conjunto, codigo: codigoInvitacion });
 
   // 2) ¿Correo ya registrado? email es @unique GLOBAL; el lookup sin sesión
   //    pasa por el único punto autorizado a resolver por email sin contexto.
