@@ -55,10 +55,19 @@ test.describe('Residente: registro y acceso', () => {
     await ctx.close();
   });
 
-  test('un código de invitación inválido no registra', async ({ page }) => {
-    const s = sufijo();
+  test('sin código y con un único conjunto, el registro muestra el conjunto y no pide código', async ({ page }) => {
+    test.skip(remoto(), 'Depende de que la base tenga exactamente un conjunto: solo en entorno local.');
     await page.goto('/registro');
-    await page.getByLabel('Código de invitación').fill('codigo-que-no-existe');
+    await expect(page.getByText(/Te estás registrando en /)).toBeVisible();
+    await expect(page.getByLabel('Código de invitación')).toHaveCount(0);
+  });
+
+  test('un código de invitación inválido no registra y pide corregirlo', async ({ page }) => {
+    const s = sufijo();
+    // Con ?c= inválido el campo de código aparece al fallar el registro (hotfix de
+    // main: sin ?c= y con un único conjunto el código no se pide).
+    await page.goto('/registro?c=codigo-que-no-existe');
+    await page.getByLabel('Nombre completo').waitFor();
     await page.getByLabel('Nombre completo').fill(`Falso ${s}`);
     await page.getByLabel('Correo').fill(`falso-${s}@e2e.test`);
     await page.getByLabel('Contraseña', { exact: true }).fill('ClaveSegura123');
@@ -68,6 +77,7 @@ test.describe('Residente: registro y acceso', () => {
     await page.getByRole('button', { name: 'Crear cuenta' }).click();
     await expect(page.locator('.ds-toast--error')).toBeVisible();
     await expect(page).toHaveURL(/\/registro/);
+    await expect(page.getByLabel('Código de invitación')).toHaveValue('codigo-que-no-existe');
   });
 
   test('acceso por enlace mágico: entra a Mis paquetes y el enlace usado ya no sirve', async ({ page, browser }, testInfo) => {
