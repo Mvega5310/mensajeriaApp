@@ -1,4 +1,4 @@
--- ROLLBACK de la migración 20261030120000_add_paquete_foto (T5.1).
+-- ROLLBACK de la migración 20261029100400_add_paquete_foto (T5.1).
 --
 -- Quita la tabla PaqueteFoto (referencias a fotos del almacén) y la fila de
 -- `_prisma_migrations`. ATENCIÓN: las fotos nuevas viven en el bucket y esta tabla
@@ -11,6 +11,6 @@ BEGIN;
 
 DROP TABLE IF EXISTS "PaqueteFoto";
 
-DELETE FROM "_prisma_migrations" WHERE migration_name = '20261030120000_add_paquete_foto';
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20261029100400_add_paquete_foto';
 
 COMMIT;

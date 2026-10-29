@@ -1,4 +1,4 @@
-// Integración de la migración 20261028120000_add_recepcion_sin_prealerta (T2.1) y
+// Integración de la migración 20261029100200_add_recepcion_sin_prealerta (T2.1) y
 // su rollback manual, contra Postgres real y en una base DESECHABLE propia
 // (no toca la base compartida de las demás pruebas): se construye el esquema
 // previo aplicando las migraciones anteriores con psql, se siembran datos
@@ -26,7 +26,7 @@ if (omitir) console.warn(`[migracionRecepcion.integration] OMITIDA: ${razonSkip}
 
 const aqui = dirname(fileURLToPath(import.meta.url));
 const RAIZ = join(aqui, '..', '..', 'prisma');
-const NUEVA = '20261028120000_add_recepcion_sin_prealerta';
+const NUEVA = '20261029100200_add_recepcion_sin_prealerta';
 const SQL_ROLLBACK = readFileSync(join(RAIZ, 'manual', 'rollback_add_recepcion_sin_prealerta.sql'), 'utf8');
 
 const NOMBRE = `itest_t21_${process.pid}`;
@@ -51,7 +51,7 @@ test('setup: base desechable con el esquema previo (migraciones anteriores) y da
   const previas = readdirSync(join(RAIZ, 'migrations'))
     .filter((n) => /^\d{14}_/.test(n) && n < NUEVA)
     .sort();
-  assert.ok(previas.includes('20261027120000_add_paquete_evento'));
+  assert.ok(previas.includes('20261029100000_add_paquete_evento'));
   for (const n of previas) psql(urlScratch, migracion(n));
   // El rollback borra su fila de _prisma_migrations; la tabla no existe porque aquí
   // no se usó `prisma migrate`, así que se crea mínima.

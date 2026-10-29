@@ -297,7 +297,7 @@ Cada foto se valida al recibirla: JPG/PNG/WebP, máx. 1,5 MB decodificada (413 s
 se pasa). Si la transacción de recepción falla tras subir, se intenta borrar lo
 subido (mejor esfuerzo, queda en el log).
 
-- Migración **aditiva** (`20261030120000_add_paquete_foto`), `prisma migrate deploy`
+- Migración **aditiva** (`20261029100400_add_paquete_foto`), `prisma migrate deploy`
   normal; generada con `prisma migrate diff` contra Postgres. El código anterior
   ignora la tabla.
 - **Rollback:** `backend/prisma/manual/rollback_add_paquete_foto.sql` (con `psql`).
@@ -310,7 +310,7 @@ Añade el enum `PropositoToken` (`RESET` | `ACCESO`) y la columna
 `PasswordResetToken.proposito` (default `RESET`, así los tokens de reset ya
 emitidos siguen valiendo).
 
-- Migración **aditiva** (`20261031120000_add_proposito_token`), `prisma migrate
+- Migración **aditiva** (`20261029100500_add_proposito_token`), `prisma migrate
   deploy` normal; verificada con `prisma migrate diff` (sin drift). El código
   anterior ignora la columna.
 - **Rollback:** `backend/prisma/manual/rollback_add_proposito_token.sql` (con
@@ -324,7 +324,7 @@ Crea la tabla `CortesiaApartamento` (`conjuntoId`, `claveApto`, `paqueteId`; ún
 `[conjuntoId, claveApto]` y único `paqueteId`): insertar su fila es la reserva de la
 cortesía de primera entrega del apartamento, y serializa recepciones paralelas.
 
-- Migración **aditiva** (`20261101120000_add_cortesia_apartamento`), `prisma migrate
+- Migración **aditiva** (`20261029100600_add_cortesia_apartamento`), `prisma migrate
   deploy` normal; verificada con `prisma migrate diff` (sin drift). La FK a `Package`
   es `DEFERRABLE INITIALLY DEFERRED` (editada a mano en el SQL: la reserva se inserta
   antes que el paquete nuevo, dentro de la misma transacción).
@@ -341,7 +341,7 @@ cortesía de primera entrega del apartamento, y serializa recepciones paralelas.
 Agrega `Package.modalidadEntrega TEXT NULL` (`DOMICILIO` | `RECOGER`, preferencia del residente
 al pedir la entrega).
 
-- Migración **aditiva** (`20261102120000_add_modalidad_entrega`), `prisma migrate deploy` normal;
+- Migración **aditiva** (`20261029100700_add_modalidad_entrega`), `prisma migrate deploy` normal;
   verificada con `prisma migrate diff` (sin drift). Sin backfill: null = aún no eligió.
 - **Rollback:** `backend/prisma/manual/rollback_add_modalidad_entrega.sql` (con `psql`). Pierde solo
   esa preferencia; el código anterior ignora la columna.
@@ -351,11 +351,34 @@ al pedir la entrega).
 Agrega el índice `Package(conjuntoId, residenteId, estado)`: lo usan `GET /packages/mine`,
 `GET /api/p/paquetes` (sondeo cada 20 s por residente) y la entrega programada.
 
-- Migración **aditiva** (`20261103120000_add_paquete_residente_idx`): solo un `CREATE INDEX`,
+- Migración **aditiva** (`20261029100800_add_paquete_residente_idx`): solo un `CREATE INDEX`,
   `prisma migrate deploy` normal; sin cambios de datos. Con tablas muy grandes el índice bloquea
   escrituras mientras se construye (segundos con el volumen de un conjunto).
 - **Rollback:** `backend/prisma/manual/rollback_add_paquete_residente_idx.sql` (con `psql`). Solo
   quita el índice (el código sigue funcionando, más lento) y la fila de `_prisma_migrations`.
+
+### Orden de las migraciones del refactor (S0.3)
+
+Producción ya tiene aplicadas las migraciones de `main` hasta
+`20261028165010_contract_conjunto`. Para que `prisma migrate deploy` las aplique
+**después** de esa (y no "en medio" del historial), las 9 migraciones del refactor
+se renombraron con fecha posterior, conservando su orden relativo:
+
+| Antes | Ahora |
+|---|---|
+| `20261027120000_add_paquete_evento` | `20261029100000_add_paquete_evento` |
+| `20261027130000_add_pin_intentos` | `20261029100100_add_pin_intentos` |
+| `20261028120000_add_recepcion_sin_prealerta` | `20261029100200_add_recepcion_sin_prealerta` |
+| `20261029120000_add_clave_idempotencia` | `20261029100300_add_clave_idempotencia` |
+| `20261030120000_add_paquete_foto` | `20261029100400_add_paquete_foto` |
+| `20261031120000_add_proposito_token` | `20261029100500_add_proposito_token` |
+| `20261101120000_add_cortesia_apartamento` | `20261029100600_add_cortesia_apartamento` |
+| `20261102120000_add_modalidad_entrega` | `20261029100700_add_modalidad_entrega` |
+| `20261103120000_add_paquete_residente_idx` | `20261029100800_add_paquete_residente_idx` |
+
+Las bases ya migradas con los nombres viejos (p. ej. `puertaya-refactor`, solo datos
+DEMO) deben **recrearse**: Prisma las vería como migraciones distintas. Los
+rollbacks de `prisma/manual/` ya usan los nombres nuevos.
 
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 

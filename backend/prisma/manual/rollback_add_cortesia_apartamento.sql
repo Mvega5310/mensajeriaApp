@@ -1,4 +1,4 @@
--- ROLLBACK de la migración 20261101120000_add_cortesia_apartamento (revisión F2).
+-- ROLLBACK de la migración 20261029100600_add_cortesia_apartamento (revisión F2).
 --
 -- Quita la tabla de reservas de cortesía por apartamento. Es solo una reserva
 -- para serializar la decisión: la verdad del cobro está en Package.costoServicio y
@@ -10,6 +10,6 @@ BEGIN;
 
 DROP TABLE IF EXISTS "CortesiaApartamento";
 
-DELETE FROM "_prisma_migrations" WHERE migration_name = '20261101120000_add_cortesia_apartamento';
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20261029100600_add_cortesia_apartamento';
 
 COMMIT;

@@ -1,4 +1,4 @@
--- ROLLBACK de la migración 20261027130000_add_pin_intentos (T1.4).
+-- ROLLBACK de la migración 20261029100100_add_pin_intentos (T1.4).
 --
 -- Quita las columnas del límite de intentos del PIN. PIERDE el contador de
 -- fallos y los bloqueos vigentes (los paquetes y sus PIN no se tocan). También
@@ -10,6 +10,6 @@ BEGIN;
 ALTER TABLE "Package" DROP COLUMN IF EXISTS "intentosPin";
 ALTER TABLE "Package" DROP COLUMN IF EXISTS "pinBloqueadoHasta";
 
-DELETE FROM "_prisma_migrations" WHERE migration_name = '20261027130000_add_pin_intentos';
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20261029100100_add_pin_intentos';
 
 COMMIT;

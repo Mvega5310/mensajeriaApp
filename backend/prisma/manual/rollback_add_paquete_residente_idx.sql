@@ -1,4 +1,4 @@
--- ROLLBACK de la migración 20261103120000_add_paquete_residente_idx (M5, T8.1).
+-- ROLLBACK de la migración 20261029100800_add_paquete_residente_idx (M5, T8.1).
 --
 -- Quita el índice [conjuntoId, residenteId, estado] de Package. Solo es un índice:
 -- no se pierde ningún dato y el código sigue funcionando (más lento en listMine y
@@ -9,6 +9,6 @@ BEGIN;
 
 DROP INDEX IF EXISTS "Package_conjuntoId_residenteId_estado_idx";
 
-DELETE FROM "_prisma_migrations" WHERE migration_name = '20261103120000_add_paquete_residente_idx';
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20261029100800_add_paquete_residente_idx';
 
 COMMIT;

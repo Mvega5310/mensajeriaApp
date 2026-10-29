@@ -1,4 +1,4 @@
--- ROLLBACK de la migración 20261029120000_add_clave_idempotencia (T2.3).
+-- ROLLBACK de la migración 20261029100300_add_clave_idempotencia (T2.3).
 --
 -- Quita la tabla ClaveIdempotencia (claves de reintento de POST /packages/recepcion)
 -- y la fila de `_prisma_migrations`. Solo pierde las claves de idempotencia (dato
@@ -9,6 +9,6 @@ BEGIN;
 
 DROP TABLE IF EXISTS "ClaveIdempotencia";
 
-DELETE FROM "_prisma_migrations" WHERE migration_name = '20261029120000_add_clave_idempotencia';
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20261029100300_add_clave_idempotencia';
 
 COMMIT;

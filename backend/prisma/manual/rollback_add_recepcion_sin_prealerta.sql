@@ -1,4 +1,4 @@
--- ROLLBACK de la migración 20261028120000_add_recepcion_sin_prealerta (T2.1).
+-- ROLLBACK de la migración 20261029100200_add_recepcion_sin_prealerta (T2.1).
 --
 -- Deshace la fase EXPAND de la recepción sin pre-alerta:
 --   * Package.residenteId vuelve a NOT NULL.
@@ -43,6 +43,6 @@ ALTER TABLE "Conjunto"
   DROP COLUMN IF EXISTS "maxFotos",
   DROP COLUMN IF EXISTS "custodiaMaxDias";
 
-DELETE FROM "_prisma_migrations" WHERE migration_name = '20261028120000_add_recepcion_sin_prealerta';
+DELETE FROM "_prisma_migrations" WHERE migration_name = '20261029100200_add_recepcion_sin_prealerta';
 
 COMMIT;
