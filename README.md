@@ -173,10 +173,12 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 `npm install`, que lo dispara) aunque no toquen la base de datos.
 
 Flujo: el operador inicia sesión con la cuenta creada por `npm run seed`.
-Los residentes se crean ellos mismos en `/registro?c=<código>` con el código de
-invitación de su conjunto (ese formulario nunca puede crear una cuenta de
-operador — el rol lo fuerza el backend). Cada residente queda asociado al
-conjunto de su código; los conjuntos están aislados entre sí.
+Los residentes se crean ellos mismos en `/registro` eligiendo su conjunto en el
+**selector "Conjunto"** (S2.3; ya no hay campo de código). El QR del operador apunta a
+`/registro?conjunto=<slug>` (llega con el conjunto elegido); los enlaces viejos `?c=<código>` siguen
+sirviendo (el código viaja en silencio y solo cuenta si no se eligió conjunto). Con un solo conjunto
+activo el selector sale preseleccionado y deshabilitado. Ese formulario nunca puede crear una cuenta
+de operador — el rol lo fuerza el backend. Los conjuntos están aislados entre sí.
 
 ## Formato de error de la API
 
@@ -351,7 +353,7 @@ registrar.
 - Buzón: lee los comentarios de todos los residentes, con acceso directo a
   WhatsApp de cada uno. Los mensajes largos se acortan en la lista y se
   tocan para ver el texto completo en un modal.
-- Generador de QR (código apunta a `/registro`) para distribuir e invitar
+- Generador de QR (apunta a `/registro?conjunto=<slug>`; el código queda como texto secundario) para distribuir e invitar
   residentes a crear su cuenta, descargable como PNG.
 - Notificación automática por correo cuando entra una pre-alerta nueva.
 
@@ -782,10 +784,10 @@ puede ser del token de entrega, no de la sesión).
 | Ruta | Pantalla | Qué hace |
 |---|---|---|
 | `/p` | Abrir | Enlace de WhatsApp `/p#<token>`: lee el fragmento, lo borra de la barra (`history.replaceState`), `POST /api/p/abrir` y entra a Mis paquetes sin contraseña. 401 o enlace viejo `/p/<token>` → "Este enlace ya no sirve" con salida a `/acceso`. |
-| `/paquetes` | Mis paquetes | Saludo, tarjetas (estado, foto si hay, monto o "Gratis", **PIN en grande**), **Pedir entrega** (o "Cambiar franja" si ya está programado), "Ver historial" y "+ Avisar" solo con sesión normal. Lee `GET /api/p/paquetes` (sirve con ambas sesiones) y se refresca cada 20 s. |
-| `/paquetes/entrega` | Pedir entrega | Franjas y método de pago del conjunto como chips (`radiogroup`) y **Confirmar \<franja\>**: una llamada `PATCH /packages/:id/schedule` por paquete, con error parcial claro. **"Prefiero recogerlo en portería"** manda `{ modalidad: 'RECOGER' }`. |
-| `/paquetes/avisar` | Avisar | 2 campos (transportadora en chips + guía opcional); "Agregar detalles" abre tienda, tamaño, contra entrega, valor declarado, PIN del proveedor y nota (`POST /packages`). |
-| `/paquetes/historial` | Historial | Entregados con fecha, monto y fotos (`GET /packages/mine`). |
+| `/paquetes` | Mis paquetes | Saludo, tarjetas (con el **nombre del conjunto** solo si la persona tiene direcciones o paquetes en más de uno; entonces junta los de todos con una llamada `?conjunto=<slug>` por conjunto y hay un botón de entrega por conjunto), tarjetas (estado, foto si hay, monto o "Gratis", **PIN en grande**), **Pedir entrega** (o "Cambiar franja" si ya está programado), "Ver historial" y "+ Avisar" solo con sesión normal. Lee `GET /api/p/paquetes` (sirve con ambas sesiones) y se refresca cada 20 s. "Más" suma **Mis direcciones** (lista de `GET /api/domicilios`, solo lectura) cuando hay más de una. |
+| `/paquetes/entrega` | Pedir entrega | Franjas y método de pago **del conjunto del paquete** (`?conjunto=<slug>`; el encabezado nombra el conjunto solo si la persona tiene más de uno) como chips (`radiogroup`) y **Confirmar \<franja\>**: una llamada `PATCH /packages/:id/schedule` por paquete, con error parcial claro. **"Prefiero recogerlo en portería"** manda `{ modalidad: 'RECOGER' }`. |
+| `/paquetes/avisar` | Avisar | **Dirección de entrega** arriba (`DireccionEntrega`, vista corta con la última dirección de `GET /api/domicilios`; "Cambiar" es opcional y permite elegir otra o crear una con "Otra dirección", `POST /api/domicilios`; el conjunto solo se muestra si hay más de un conjunto activo o la persona tiene direcciones en varios). Se manda `{ domicilioId }`. Sin campos ni toques extra respecto al recorrido de siempre. Luego 2 campos (transportadora en chips + guía opcional); "Agregar detalles" abre tienda, tamaño, contra entrega, valor declarado, PIN del proveedor y nota (`POST /packages`). |
+| `/paquetes/historial` | Historial | Entregados con fecha, monto y fotos (`GET /packages/mine`); nombra el conjunto solo si hay entregas en más de uno. |
 | `/paquetes/bonos` | Mis bonos | Saldo de entregas prepagas por categoría (`GET /bonos/mine`). Solo con sesión normal y si `Conjunto.bonosHabilitados`; se entra desde "Más". |
 | `/paquetes/buzon` | Buzón | Comentarios al operador (`/comments`). |
 | `/acceso`, `/acceso/:token` | Acceso | Pide enlace por correo (mensaje genérico tal cual) y canjea automático con `POST /auth/enlace/canjear`; "Entrar con contraseña" sigue como secundario (`/login`). |
@@ -838,11 +840,18 @@ residenteId, estado)` (ver DEPLOY.md).
 
 ### Pruebas E2E (T6.1)
 
+**Dos conjuntos (S2.3/S2.4)** — `e2e/dos-conjuntos.spec.mjs` levanta su propia pila con un conjunto B sembrado
+(`levantarEntorno({ segundoConjunto: true })`: slug `e2e-b`, operador `operador-b@e2e.test`) para no alterar los
+escenarios de 1 conjunto: registro eligiendo B, QR `?conjunto=`, "ayudar a un amigo" (persona de A: Avisar → Cambiar →
+Otra dirección en B → Avisar, 6 toques; el operador de B ve la pre-alerta y la recibe por la guía, el de A no, y Mis
+paquetes nombra "Conjunto B"), dos personas en el mismo apto de B distinguidas por nombre en Recibir (C5) y el QR del
+operador. En modo remoto (un solo conjunto) se omiten con razón explícita.
+
 Suite Playwright del recorrido principal en `frontend/e2e/` (`npm run e2e`, desde `frontend/`). Corre cada
 escenario en dos proyectos: `movil` (390x844) y `escritorio` (1280x800). 14 escenarios x 2 = 28 pruebas, ~40 s.
 
 **Escenarios** (`e2e/recorrido.spec.mjs`, cada uno con residente y apartamento propios; día por defecto, "noche"
-en recibir con residente y en la entrega por lote): registro con código de invitación (y código inválido);
+en recibir con residente y en la entrega por lote): registro con el selector de conjunto deshabilitado y preseleccionado (y un `?c=` viejo inválido que no frena); Avisar con 1 conjunto sin campos de dirección y con 2 toques (igual que antes);
 recibir con residente (aviso con `waUrl`, sin PIN, toques <= 3 + dígitos del apto; el recorrido corto "apto + Guardar" de T8.1 son 4 toques con 3 dígitos); recibir sin dueño y asignar;
 pre-alerta del residente que se vincula por la guía (un solo paquete); cortesía en el primer paquete y tarifa en el
 segundo; residente por enlace `/p#token` (PIN visible, el hash desaparece, Pedir entrega -> franja -> "Programado")

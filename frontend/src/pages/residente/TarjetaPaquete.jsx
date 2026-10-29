@@ -13,7 +13,7 @@ function estadoDe(p) {
 }
 
 /** Tarjeta de un paquete (Res-MisPaquetes): estado, foto si hay, monto y PIN en grande. */
-export default function TarjetaPaquete({ p, modo, conAyuda = true }) {
+export default function TarjetaPaquete({ p, modo, conAyuda = true, conConjunto = false }) {
   const [verFotos, setVerFotos] = useState(false);
   // Funciona con la sesión del enlace y con la normal (el backend valida que sea tu paquete).
   const fotos = useFotoPaquete(p.id, modo, p.estado !== 'PREALERTADO');
@@ -33,6 +33,7 @@ export default function TarjetaPaquete({ p, modo, conAyuda = true }) {
           <div className="res-card__foto" aria-hidden="true">{miniatura}</div>
         )}
         <div className="res-card__txt">
+          {conConjunto && p.conjunto?.nombre && <span className="res-linea"><b>{p.conjunto.nombre}</b></span>}
           <span className={`res-estado${e.espera ? ' res-estado--espera' : ''}`}><Icon nombre={e.icono} size={16} trazo={3} />{e.texto}</span>
           {p.estado !== 'PREALERTADO' && (
             <span className="res-linea">

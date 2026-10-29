@@ -4,7 +4,7 @@
 import {
   test, expect, entorno, api, crearResidente, sesionOperador, recibirPorApi, misPaquetes, pinDe,
   enlaceDe, sql, sinPin, iniciarSesion, contextoNuevo, sinScrollHorizontal, teclear, recibirPorUI,
-  sufijo, siguienteApto, contextoVirgen,
+  sufijo, siguienteApto, contextoVirgen, contadorDeToques,
 } from './fixtures.mjs';
 import crypto from 'node:crypto';
 
@@ -24,6 +24,10 @@ test.describe('Residente: registro y acceso', () => {
     await page.getByLabel('Contraseña', { exact: true }).fill('ClaveSegura123');
     await page.getByLabel('Teléfono (WhatsApp)').fill('3001234567');
     await page.getByLabel('Apartamento').fill(apto);
+    // Con un solo conjunto activo el selector sale preseleccionado y deshabilitado (no hay código que escribir).
+    await expect(page.getByLabel('Conjunto', { exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Conjunto', { exact: true })).not.toHaveValue('');
+    await expect(page.getByLabel('Código de invitación')).toHaveCount(0);
     await page.getByRole('checkbox', { name: /Acepto/ }).check();
     await page.getByRole('button', { name: 'Crear cuenta' }).click();
     await expect(page.getByText('Cuenta creada')).toBeVisible();
@@ -62,22 +66,21 @@ test.describe('Residente: registro y acceso', () => {
     await expect(page.getByLabel('Código de invitación')).toHaveCount(0);
   });
 
-  test('un código de invitación inválido no registra y pide corregirlo', async ({ page }) => {
+  test('un ?c= viejo inválido no frena el registro: el conjunto elegido manda y no hay campo de código', async ({ page }) => {
     const s = sufijo();
-    // Con ?c= inválido el campo de código aparece al fallar el registro (hotfix de
-    // main: sin ?c= y con un único conjunto el código no se pide).
+    const { apto } = await siguienteApto();
     await page.goto('/registro?c=codigo-que-no-existe');
     await page.getByLabel('Nombre completo').waitFor();
-    await page.getByLabel('Nombre completo').fill(`Falso ${s}`);
-    await page.getByLabel('Correo').fill(`falso-${s}@e2e.test`);
+    await expect(page.getByLabel('Código de invitación')).toHaveCount(0);
+    await page.getByLabel('Nombre completo').fill(`Viejo ${s}`);
+    await page.getByLabel('Correo').fill(`viejo-${s}@e2e.test`);
     await page.getByLabel('Contraseña', { exact: true }).fill('ClaveSegura123');
     await page.getByLabel('Teléfono (WhatsApp)').fill('3001234567');
-    await page.getByLabel('Apartamento').fill('101');
+    await page.getByLabel('Apartamento').fill(apto);
     await page.getByRole('checkbox', { name: /Acepto/ }).check();
     await page.getByRole('button', { name: 'Crear cuenta' }).click();
-    await expect(page.locator('.ds-toast--error')).toBeVisible();
-    await expect(page).toHaveURL(/\/registro/);
-    await expect(page.getByLabel('Código de invitación')).toHaveValue('codigo-que-no-existe');
+    await expect(page.getByText('Cuenta creada')).toBeVisible();
+    await expect(page.getByLabel('Código de invitación')).toHaveCount(0);
   });
 
   test('acceso por enlace mágico: entra a Mis paquetes y el enlace usado ya no sirve', async ({ page, browser }, testInfo) => {
@@ -214,6 +217,29 @@ test.describe('Operador: recibir', () => {
 
     await pr.reload();
     await expect(pr.getByText(/En portería/)).toBeVisible();
+    await ctxRes.close();
+  });
+
+  test('Avisar con 1 conjunto: la dirección ya viene puesta, sin campos ni toques extra', async ({ browser }, testInfo) => {
+    const res = await crearResidente();
+    const ctxRes = await contextoNuevo(browser, testInfo, entorno().baseUrl);
+    await iniciarSesion(ctxRes, res.token);
+    const pr = await ctxRes.newPage();
+    const c = contadorDeToques();
+    await pr.goto('/paquetes/avisar');
+    await expect(pr.getByText(new RegExp(`T1 · ${res.apto}`))).toBeVisible();
+    await sinScrollHorizontal(pr, 'Avisar (dirección)');
+    // Sin campos de dirección en el formulario y sin selector de conjunto.
+    await expect(pr.getByLabel('Apartamento')).toHaveCount(0);
+    await expect(pr.getByLabel('Torre')).toHaveCount(0);
+    await expect(pr.getByLabel('Conjunto', { exact: true })).toHaveCount(0);
+    // Los mismos toques que antes de S2.3: transportadora + Avisar.
+    await c.tocar(pr.getByRole('radio', { name: 'Servientrega' }));
+    await c.tocar(pr.getByRole('button', { name: 'Avisar', exact: true }));
+    await expect(pr).toHaveURL(/\/paquetes$/);
+    await expect(pr.getByText(/Avisado/)).toBeVisible();
+    expect(c.n, 'toques de Avisar (igual que antes)').toBe(2);
+    testInfo.annotations.push({ type: 'toques-avisar-1-conjunto', description: String(c.n) });
     await ctxRes.close();
   });
 

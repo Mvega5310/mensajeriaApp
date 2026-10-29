@@ -130,7 +130,10 @@ function matar(hijo) {
 }
 
 // ── API pública ─────────────────────────────────────────────────────────────
-export async function levantarEntorno() {
+/** `opciones.segundoConjunto`: además del conjunto A ("Conjunto E2E", slug `e2e`) siembra un conjunto B
+ *  (slug `e2e-b`, "Conjunto B") con su propio operador; así hay 2 conjuntos activos (solo modo local).
+ *  Se usa en e2e/dos-conjuntos.spec.mjs, que levanta su propia pila para no alterar los escenarios de 1 conjunto. */
+export async function levantarEntorno(opciones = {}) {
   const baseRemota = (process.env.E2E_BASE_URL || '').replace(/\/$/, '');
   const apiRemota = (process.env.E2E_API_URL || '').replace(/\/$/, '');
 
@@ -200,6 +203,15 @@ export async function levantarEntorno() {
     const seed = correr('npm', ['run', 'seed'], { cwd: BACKEND, env: envBackend });
     const codigo = /Código de invitación:\s*(\S+)/.exec(seed)?.[1];
     if (!codigo) throw new Error(`El seed no imprimió el código de invitación:\n${seed}`);
+    let b = null;
+    if (opciones.segundoConjunto) {
+      const operadorB = { email: 'operador-b@e2e.test', password: 'ClaveSegura123' };
+      const seedB = correr('npm', ['run', 'seed'], {
+        cwd: BACKEND,
+        env: { ...envBackend, SEED_CONJUNTO_SLUG: 'e2e-b', SEED_CONJUNTO_NOMBRE: 'Conjunto B', OPERATOR_EMAIL: operadorB.email, OPERATOR_PASSWORD: operadorB.password, OPERATOR_NOMBRE: 'Operador B' },
+      });
+      b = { slug: 'e2e-b', nombre: 'Conjunto B', operador: operadorB, codigo: /Código de invitación:\s*(\S+)/.exec(seedB)?.[1] };
+    }
 
     lanzar('api', process.execPath, ['src/index.js'], { cwd: BACKEND, env: envBackend, hijos, salida });
     const envVite = entornoLimpio({ VITE_PROXY_TARGET: apiUrl });
@@ -212,7 +224,7 @@ export async function levantarEntorno() {
     await esperarUrl(`${baseUrl}/api/conjuntos/config-publica?c=${encodeURIComponent(codigo)}`, { nombre: 'proxy /api', intentos: 20 });
 
     info = {
-      modo: 'local', baseUrl, apiUrl, dbUrl, operador: OPERADOR, codigo,
+      modo: 'local', baseUrl, apiUrl, dbUrl, operador: OPERADOR, codigo, a: { slug: 'e2e', nombre: 'Conjunto E2E' }, b,
       secuencia: fs.mkdtempSync(path.join(os.tmpdir(), 'puertaya-e2e-seq-')),
       pids: hijos.map((h) => h.pid),
     };

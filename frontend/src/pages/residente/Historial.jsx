@@ -9,12 +9,13 @@ import Pantalla from './Pantalla.jsx';
 
 const fecha = (iso) => new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
 
-function Fila({ p }) {
+function Fila({ p, conConjunto }) {
   const [abierta, setAbierta] = useState(false);
   const fotos = useFotoPaquete(p.id, 'normal', abierta);
   return (
     <li className="res-hist">
       <div className="res-card__txt" style={{ flex: 1 }}>
+        {conConjunto && p.conjunto?.nombre && <span className="res-linea"><b>{p.conjunto.nombre}</b></span>}
         <span className="res-linea">{quienTrajo(p)} · {p.motivoCobro === 'CORTESIA' || p.motivoCobro === 'BONO' ? <b className="res-gratis">Gratis</b> : <b>{formatCOP(p.costoServicio)}</b>}</span>
         <span className="res-hist__fecha">{p.fechaEntrega ? `Entregado el ${fecha(p.fechaEntrega)}` : 'Entregado'}</span>
       </div>
@@ -32,6 +33,7 @@ function Fila({ p }) {
 
 export default function Historial() {
   const { lista, error } = useHistorial(true);
+  const conConjunto = new Set((lista ?? []).map((p) => p.conjunto?.slug)).size > 1;
   return (
     <Pantalla>
       <div style={{ display: 'flex', alignItems: 'center', padding: '12px var(--sp-1) 0' }}>
@@ -44,7 +46,7 @@ export default function Historial() {
       {error && <div className="res-aviso"><Toast tipo="error">{error} Vuelve a abrir esta pantalla para reintentar.</Toast></div>}
       {lista && lista.length === 0 && <p className="res-nota">Todavía no has recibido paquetes.</p>}
       <ul className="res-lista" style={{ listStyle: 'none', margin: 0 }}>
-        {(lista ?? []).map((p) => <Fila key={p.id} p={p} />)}
+        {(lista ?? []).map((p) => <Fila key={p.id} p={p} conConjunto={conConjunto} />)}
       </ul>
     </Pantalla>
   );

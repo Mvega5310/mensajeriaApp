@@ -78,14 +78,15 @@ export async function crearResidente({ nombre } = {}) {
   return { ...datos, id: l.datos.user.id, token: l.datos.token, etiqueta };
 }
 
-let tokenOperador = null;
-export async function sesionOperador() {
-  if (tokenOperador) return tokenOperador;
-  const { email, password } = entorno().operador;
-  const l = await api('/auth/login', { metodo: 'POST', cuerpo: { email, password } });
+const tokensOperador = new Map();
+/** Sesión de un operador (por defecto el del conjunto A / único). Se guarda por API+correo: cada pila de E2E tiene la suya. */
+export async function sesionOperador(operador = entorno().operador) {
+  const clave = `${entorno().apiUrl}|${operador.email}`;
+  if (tokensOperador.has(clave)) return tokensOperador.get(clave);
+  const l = await api('/auth/login', { metodo: 'POST', cuerpo: { email: operador.email, password: operador.password } });
   if (!l.ok) throw new Error(`No pude entrar como operador: ${l.datos.message}`);
-  tokenOperador = l.datos.token;
-  return tokenOperador;
+  tokensOperador.set(clave, l.datos.token);
+  return l.datos.token;
 }
 
 /** Recepción por API (datos de apoyo; el escenario que prueba la pantalla usa la UI). */

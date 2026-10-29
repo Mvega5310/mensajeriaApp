@@ -52,6 +52,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 const require = createRequire(import.meta.url);
 function cargarPlaywright() {
+  try { return require('@playwright/test'); } catch { /* sigue */ }
   try { return require('playwright'); } catch { /* sigue */ }
   const raiz = execSync('npm root -g').toString().trim();
   return require(path.join(raiz, 'playwright'));
@@ -329,7 +330,7 @@ const PANTALLAS = [
     await boton(p, 'Entrar').click(); await p.locator('.ds-toast--error').waitFor(); await esperar(p);
   } },
   { id: 'registro', rol: 'publico', preparar: (p) => ir(p, `/registro?c=${CODIGO}`) },
-  { id: 'registro-con-codigo-manual', rol: 'publico', preparar: (p) => ir(p, '/registro') },
+  { id: 'registro-conjunto', rol: 'publico', preparar: (p) => ir(p, '/registro') },
   { id: 'registro-error', rol: 'publico', async preparar(p) {
     await ir(p, `/registro?c=${CODIGO}`);
     await p.getByLabel('Nombre completo').fill('Ana Pérez'); await p.getByLabel('Correo').fill('ana@a11y.test');
@@ -430,11 +431,18 @@ const PANTALLAS = [
   } },
   { id: 'res-pedir-entrega', rol: 'res1', async preparar(p) { await ir(p, '/paquetes/entrega'); await p.locator('.res-chip').first().waitFor(); await esperar(p); } },
   { id: 'res-avisar', rol: 'res1', preparar: (p) => ir(p, '/paquetes/avisar') },
+  { id: 'res-avisar-cambiar', rol: 'res1', async preparar(p) { await ir(p, '/paquetes/avisar'); const c = boton(p, 'Cambiar'); await c.click(); await esperar(p, 500); return { hoja: c }; } },
+  { id: 'res-avisar-otra', rol: 'res1', async preparar(p) { await ir(p, '/paquetes/avisar'); const c = boton(p, 'Cambiar'); await c.click(); await p.getByRole('radio', { name: 'Otra dirección' }).click(); await esperar(p, 500); return { hoja: c }; } },
   { id: 'res-avisar-detalles', rol: 'res1', async preparar(p) { await ir(p, '/paquetes/avisar'); await p.getByRole('button', { name: /Agregar detalles/ }).click(); await p.getByLabel('Es contra entrega').check(); await esperar(p); } },
   { id: 'res-historial', rol: 'res3', async preparar(p) { await ir(p, '/paquetes/historial'); await p.locator('.res-hist').first().waitFor(); await esperar(p); } },
   { id: 'res-historial-vacio', rol: 'res2', async preparar(p) { await ir(p, '/paquetes/historial'); await esperar(p, 600); } },
   { id: 'res-historial-fotos', rol: 'res3', async preparar(p) {
     await ir(p, '/paquetes/historial'); const f = p.getByRole('button', { name: 'Ver fotos del paquete' }).first(); await f.waitFor(); await f.click(); await esperar(p, 600); return { hoja: f };
+  } },
+  { id: 'res-mis-direcciones', rol: 'res1', async preparar(p) {
+    await ir(p, '/paquetes');
+    await p.evaluate(async () => { await fetch('/api/domicilios', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` }, body: JSON.stringify({ conjunto: (await (await fetch('/api/conjuntos')).json())[0].slug, torre: '2', apto: '808', nombreRecibe: 'Amigo A11y', telefono: '3005550000' }) }); });
+    await ir(p, '/paquetes'); const m = boton(p, 'Más'); await m.click(); await boton(p, 'Mis direcciones').click(); await esperar(p, 500); return { hoja: m };
   } },
   { id: 'res-buzon', rol: 'res1', async preparar(p) { await ir(p, '/paquetes/buzon'); await esperar(p, 500); } },
 ];
@@ -476,7 +484,9 @@ async function sembrarAjeno(p) {
 // ── ejecución ───────────────────────────────────────────────────────────────
 async function main() {
   const datos = await sembrar();
-  const navegador = await chromium.launch();
+  // Mismo criterio que playwright.config.mjs: Chromium preinstalado si el del paquete no está.
+  const ruta = process.env.PW_CHROMIUM_PATH || (fs.existsSync(chromium.executablePath()) ? undefined : '/opt/pw-browsers/chromium');
+  const navegador = await chromium.launch({ executablePath: ruta });
   const filas = [];
   const titulos = new Map();
   const ctxCache = new Map();
@@ -506,7 +516,7 @@ async function main() {
       if (SOLO && !def.id.includes(SOLO)) continue;
       if (def.requiereEnlace && !datos.enlace) { filas.push({ id: def.id, variante: v.id, omitida: 'sin enlace de WhatsApp en la siembra' }); continue; }
       const ctx = await contexto(v, def.rol, def.sinSenal);
-      const page = await ctx.newPage();
+      let page; try { page = await ctx.newPage(); } catch (e) { console.error('newPage falló en', def.id, v.id, def.rol, ctxCache.size); throw e; }
       const fila = { id: def.id, variante: v.id, axe: [], axeInfo: [], manual: [], avisos: [] };
       try {
         const extra = await def.preparar(page, datos);

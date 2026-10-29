@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { Button, Icon, Toast } from '../../design';
 import useMisPaquetes from '../../hooks/residente/useMisPaquetes.js';
 import useProgramarEntrega from '../../hooks/residente/useProgramarEntrega.js';
@@ -24,7 +24,12 @@ function Chips({ etiqueta, valores, valor, onPick, texto = (v) => v, mono = fals
 }
 
 export default function PedirEntrega() {
-  const { modo, datos, estado, recargar } = useMisPaquetes();
+  const { modo, datos: todo, estado, recargar, variosConjuntos } = useMisPaquetes();
+  const [params] = useSearchParams();
+  // Franjas, pago y paquetes son del conjunto elegido (?conjunto=<slug>); por defecto, el primero con paquetes listos.
+  const slugPedido = params.get('conjunto');
+  const vistas = todo?.vistas ?? [];
+  const datos = todo && (vistas.find((v) => v.slug && v.slug === slugPedido) ?? vistas.find((v) => v.paquetes.some((p) => p.pin)) ?? vistas[0] ?? todo);
   const { programar, enviando } = useProgramarEntrega(modo);
   const navigate = useNavigate();
   const [franja, setFranja] = useState(null);
@@ -32,7 +37,7 @@ export default function PedirEntrega() {
   const [fallo, setFallo] = useState('');
 
   if (estado === 'vencido') return <EnlaceInvalido />;
-  if (estado === 'listo' && !datos.paquetes.some((p) => p.pin)) return <Navigate to="/paquetes" replace />;
+  if (estado === 'listo' && !datos?.paquetes.some((p) => p.pin)) return <Navigate to="/paquetes" replace />;
 
   const listos = (datos?.paquetes ?? []).filter((p) => p.pin);
   const franjas = datos?.franjasEntrega ?? [];
@@ -65,6 +70,7 @@ export default function PedirEntrega() {
       <div className="res-tit" style={{ paddingTop: 8 }}>
         <h1>¿Cuándo te lo llevamos?</h1>
         <p>
+          {variosConjuntos && datos?.nombre && <><b>{datos.nombre}</b>{' · '}</>}
           {listos.length} {listos.length === 1 ? 'paquete' : 'paquetes'}
           {datos?.residente?.etiquetaApto && <> a <b className="mono">{datos.residente.etiquetaApto}</b></>}
           {' · '}total <b className="mono">{total > 0 ? formatCOP(total) : 'Gratis'}</b>

@@ -1,82 +1,81 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Button, Field, Toast } from '../design';
+import { Button, Field, SelectorConjunto, Toast } from '../design';
 import { register } from '../services/auth.js';
-import { getConfigPublica } from '../services/conjunto.js';
+import { getConfigPublica, getConjuntos } from '../services/conjunto.js';
 import PasswordField from '../components/PasswordField.jsx';
 
 const initial = { email: '', password: '', nombre: '', telefono: '', torre: 'Torre 1', apto: '', acceptedTerms: false };
 
 export default function Register() {
   const [searchParams] = useSearchParams();
-  // Código de invitación del enlace/QR (KAN-8). Los flyers antiguos (KAN-3)
-  // apuntan a la raíz sin ?c=. Sin código, el backend acepta el registro solo
-  // mientras exista UN ÚNICO conjunto (config-publica sin ?c= responde 200); si
-  // hay varios, responde 400 y se pide el código a mano.
+  // PLAN-conjunto S2.3: el conjunto se ELIGE con el selector (sin código de invitación). `?conjunto=<slug>`
+  // (QR nuevo) llega preseleccionado. Los enlaces/QR viejos `?c=<codigo>` siguen sirviendo: el código viaja
+  // en silencio y solo se usa si la persona no eligió conjunto (con 1 conjunto el selector ya lo lleva).
   const codigoDeUrl = (searchParams.get('c') || '').trim();
-  // QR nuevo (S1.3): `?conjunto=<slug>` llega con el conjunto ya elegido. El selector visual llega en S2.3.
   const slugDeUrl = (searchParams.get('conjunto') || '').trim();
 
   const [fields, setFields] = useState(initial);
-  // Código escrito a mano. Cuando NO hay ?c= arranca vacío; si un ?c= resulta
-  // inválido, se precarga aquí con el valor de la URL para poder corregirlo.
-  const [codigoManual, setCodigoManual] = useState('');
-  // Sin ?c=, el campo de código queda oculto hasta saber si hace falta (varios
-  // conjuntos). Con ?c=, solo aparece si ese código falla y hay que corregirlo.
-  const [mostrarCampoCodigo, setMostrarCampoCodigo] = useState(false);
-  // Datos públicos del conjunto (nombre, punto de recepción) para mostrarlos.
+  const [conjuntos, setConjuntos] = useState([]);
+  const [cargandoConjuntos, setCargandoConjuntos] = useState(true);
+  const [errorConjuntos, setErrorConjuntos] = useState('');
+  const [slug, setSlug] = useState(slugDeUrl);
+  const [errorConjunto, setErrorConjunto] = useState('');
+  // Datos públicos del conjunto elegido (nombre, punto de recepción) para mostrarlos.
   const [conjunto, setConjunto] = useState(null);
-  const [cargandoConjunto, setCargandoConjunto] = useState(true);
+
+  const cargarConjuntos = useCallback(() => {
+    setCargandoConjuntos(true);
+    setErrorConjuntos('');
+    getConjuntos()
+      .then((lista) => {
+        setConjuntos(Array.isArray(lista) ? lista : []);
+        // Un ?conjunto= que ya no existe no se arrastra: se pide elegir.
+        setSlug((s) => (s && !lista.some((c) => c.slug === s) ? '' : s));
+      })
+      .catch(() => setErrorConjuntos('No pudimos cargar los conjuntos. Revisa tu conexión.'))
+      .finally(() => setCargandoConjuntos(false));
+  }, []);
+  useEffect(() => { cargarConjuntos(); }, [cargarConjuntos]);
 
   useEffect(() => {
     let vigente = true;
-    setCargandoConjunto(true);
-    getConfigPublica(codigoDeUrl, slugDeUrl)
-      .then((cfg) => { if (vigente) setConjunto(cfg); })
-      .catch((err) => {
-        if (!vigente) return;
-        setConjunto(null);
-        // Sin ?c= y el backend no resuelve un conjunto único (hay varios): el
-        // residente debe escribir su código. Ante otro error (red) no se exige:
-        // si hiciera falta, el propio registro lo pide (ver handleSubmit).
-        if (!codigoDeUrl && !slugDeUrl && (err.code === 'INVITACION_INVALIDA' || err.code === 'CONJUNTO_REQUERIDO')) setMostrarCampoCodigo(true);
-      })
-      .finally(() => { if (vigente) setCargandoConjunto(false); });
+    setConjunto(null);
+    if (slug) getConfigPublica('', slug).then((cfg) => { if (vigente) setConjunto(cfg); }).catch(() => {});
     return () => { vigente = false; };
-  }, [codigoDeUrl, slugDeUrl]);
+  }, [slug]);
+
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
   const irA = useNavigate();
 
-  // El código efectivo: si el campo manual está visible, manda ese (es el que
-  // el residente edita, incluido el caso de corregir un ?c= inválido); si no,
-  // el de la URL. El backend normaliza caja y espacios (normalizarCodigoInvitacion).
-  const codigoInvitacion = (mostrarCampoCodigo ? codigoManual : codigoDeUrl).trim();
-
   function update(key, value) {
     setFields((f) => ({ ...f, [key]: value }));
+  }
+
+  function elegirConjunto(valor) {
+    setSlug(valor);
+    setErrorConjunto('');
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setErrorConjunto('');
+    if (!slug && !codigoDeUrl) {
+      setErrorConjunto('Falta el conjunto. Elige uno de la lista.');
+      return;
+    }
     setLoading(true);
     try {
-      // El resto del formulario se conserva en `fields`; ante un error de
-      // código no se pierde nada y el residente puede corregir el código.
-      await register({ ...fields, codigoInvitacion, ...(slugDeUrl ? { conjunto: slugDeUrl } : {}) });
+      // Con conjunto elegido manda el slug; el código viejo (?c=) solo si no hay slug.
+      await register({ ...fields, ...(slug ? { conjunto: slug } : { codigoInvitacion: codigoDeUrl }) });
       setDone(true);
       setTimeout(() => irA('/login', { replace: true }), 1200);
     } catch (err) {
-      setError(err.message);
-      // Detección por código estable (no por texto): si falló por el código y
-      // venía de la URL, mostramos el campo precargado con ese valor para que el
-      // residente lo corrija sin perder lo demás.
-      if ((err.code === 'INVITACION_INVALIDA' || err.code === 'CONJUNTO_REQUERIDO') && !mostrarCampoCodigo) {
-        setCodigoManual(codigoDeUrl);
-        setMostrarCampoCodigo(true);
-      }
+      if (err.code === 'CONJUNTO_REQUERIDO' || err.code === 'CONJUNTO_INVALIDO') setErrorConjunto(err.message);
+      else setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -86,29 +85,20 @@ export default function Register() {
     <div className="auth-card">
       <h1>Crear cuenta de residente</h1>
       <p className="auth-sub">
-        {conjunto
-          ? `Te estás registrando en ${conjunto.nombre}.`
-          : 'Regístrate con el enlace o el código de invitación que te entregó el operador de tu conjunto.'}
+        {slug && conjuntos.find((c) => c.slug === slug)
+          ? `Te estás registrando en ${conjuntos.find((c) => c.slug === slug).nombre}.`
+          : 'Elige tu conjunto y cuéntanos dónde recibes tus paquetes.'}
       </p>
       {conjunto?.puntoRecepcion && (
         <p className="auth-sub">Punto de recepción: {conjunto.puntoRecepcion}</p>
       )}
 
-      {cargandoConjunto ? (
-        <p role="status">Cargando…</p>
-      ) : done ? (
+      {done ? (
         <p role="status">Cuenta creada. Te llevamos a entrar…</p>
       ) : (
         <form onSubmit={handleSubmit}>
-          {/* Se muestra si el código NO viene en la URL (flyers KAN-3 sin ?c=)
-              o si un ?c= resultó inválido y hay que corregirlo. */}
-          {mostrarCampoCodigo && (
-            <Field label="Código de invitación" id="codigoInvitacion" required autoCapitalize="off" autoCorrect="off"
-              spellCheck={false} placeholder="Ej. conjunto-K7Q2M9XR4TV" value={codigoManual}
-              ayuda="Te lo entrega el operador de tu conjunto residencial."
-              onChange={(e) => setCodigoManual(e.target.value)}
-              onBlur={(e) => setCodigoManual(e.target.value.trim())} />
-          )}
+          <SelectorConjunto conjuntos={conjuntos} value={slug} onChange={elegirConjunto} cargando={cargandoConjuntos}
+            error={errorConjuntos} onReintentar={cargarConjuntos} invalido={errorConjunto} id="conjunto" />
           <Field label="Nombre completo" id="nombre" required value={fields.nombre} onChange={(e) => update('nombre', e.target.value)} />
           <Field label="Correo" id="email" type="email" required autoComplete="email" value={fields.email} onChange={(e) => update('email', e.target.value)} />
           <PasswordField id="password" value={fields.password} autoComplete="new-password" onChange={(e) => update('password', e.target.value)}
@@ -131,7 +121,7 @@ export default function Register() {
               onChange={(e) => update('acceptedTerms', e.target.checked)} />
             <span>
               Acepto los <Link
-                to={codigoInvitacion ? `/terminos?c=${encodeURIComponent(codigoInvitacion)}` : '/terminos'}
+                to={codigoDeUrl ? `/terminos?c=${encodeURIComponent(codigoDeUrl)}` : '/terminos'}
                 target="_blank" rel="noreferrer">Términos y Condiciones y el Aviso de Tratamiento de Datos</Link>.
             </span>
           </label>

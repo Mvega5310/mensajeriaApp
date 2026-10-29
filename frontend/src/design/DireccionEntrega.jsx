@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import Button from './Button.jsx';
 import Field from './Field.jsx';
 import Icon from './Icon.jsx';
@@ -121,7 +121,8 @@ export default function DireccionEntrega({
   const [sel, setSel] = useState(null);
   const grupo = useId();
   const actual = direcciones.find((d) => d.id === valor) ?? direcciones[0];
-  const cerrar = () => setAbierta(false);
+  // Estable: Sheet reenfoca al primer control cuando cambia onClose (rompería el tecleo).
+  const cerrar = useCallback(() => setAbierta(false), []);
 
   if (direcciones.length === 0) {
     return (

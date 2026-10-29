@@ -14,14 +14,18 @@ function resumen(listos, avisados) {
 }
 
 export default function MisPaquetes() {
-  const { modo, datos, estado, error, recargar } = useMisPaquetes();
+  const { modo, datos, estado, error, recargar, variosConjuntos } = useMisPaquetes();
   const [masAbierto, setMasAbierto] = useState(false);
 
   if (estado === 'vencido') return <EnlaceInvalido />;
   const paquetes = datos?.paquetes ?? [];
   const listos = paquetes.filter((p) => p.pin);
   const porLlegar = paquetes.filter((p) => !p.pin);
-  const hayPorProgramar = listos.some((p) => p.estado === 'EN_RECEPCION');
+  // Un botón por conjunto con paquetes listos (franjas y pago son de ESE conjunto). Con uno solo, como siempre.
+  const gruposListos = (datos?.vistas ?? [])
+    .map((v) => ({ slug: v.slug, nombre: v.nombre, listos: v.paquetes.filter((p) => p.pin) }))
+    .filter((g) => g.listos.length > 0)
+    .map((g) => ({ ...g, porProgramar: g.listos.some((p) => p.estado === 'EN_RECEPCION') }));
   const nombre = datos?.residente?.nombre?.split(' ')[0];
 
   return (
@@ -41,7 +45,7 @@ export default function MisPaquetes() {
         </div>
       )}
       <div className="res-lista">
-        {[...listos, ...porLlegar].map((p, i) => <TarjetaPaquete key={p.id} p={p} modo={modo} conAyuda={i === 0} />)}
+        {[...listos, ...porLlegar].map((p, i) => <TarjetaPaquete key={p.id} p={p} modo={modo} conAyuda={i === 0} conConjunto={variosConjuntos} />)}
       </div>
       {modo === 'enlace' && (
         <p className="res-nota">
@@ -50,9 +54,11 @@ export default function MisPaquetes() {
       )}
       <div className="res__relleno" />
       <div className="res__acciones">
-        {listos.length > 0 && (
-          <Button as={Link} to="/paquetes/entrega">{hayPorProgramar ? 'Pedir entrega' : 'Cambiar franja'}</Button>
-        )}
+        {gruposListos.map((g) => (
+          <Button key={g.slug ?? 'unico'} as={Link} to={g.slug && variosConjuntos ? `/paquetes/entrega?conjunto=${encodeURIComponent(g.slug)}` : '/paquetes/entrega'}>
+            {g.porProgramar ? 'Pedir entrega' : 'Cambiar franja'}{variosConjuntos && g.nombre ? ` · ${g.nombre}` : ''}
+          </Button>
+        ))}
         {listos.length === 0 && estado === 'listo' && modo === 'normal' && (
           <Button as={Link} to="/paquetes/avisar">Avisar paquete</Button>
         )}
