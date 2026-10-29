@@ -91,7 +91,8 @@
 .op-sel { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
 .op-sel > input { flex: none; width: 28px; height: 28px; margin: 14px 0 0; accent-color: var(--action); }
 .op-sel > .ds-label { flex: 1; min-width: 0; }
-.op-sel--fuera .ds-label { opacity: 0.6; }
+/* Sin marcar: borde punteado (no opacidad, que baja el contraste del texto). */
+.op-sel--fuera .ds-label { border-style: dashed; }
 .op-aviso-lote { margin: 0; }
 .op-peligro { background: transparent; color: var(--danger); box-shadow: inset 0 0 0 2px var(--danger); }
 .op-pinok { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; color: var(--pin); }
