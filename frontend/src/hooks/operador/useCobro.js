@@ -11,6 +11,18 @@ export default function useCobro() {
   const [metodo, setMetodo] = useState(lote?.metodosPago?.[0] ?? '');
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
+  // Revisión S3.2: el lote puede mezclar personas del mismo apartamento; solo se marcan los del
+  // dueño del PIN (`seleccionado`) y el operador puede marcar/desmarcar. Sin mezcla, todo marcado.
+  const [sel, setSel] = useState(() => new Set((lote?.paquetes ?? []).filter((p) => p.seleccionado !== false).map((p) => p.id)));
+  const elegidos = (lote?.paquetes ?? []).filter((p) => sel.has(p.id));
+  const total = elegidos.reduce((s, p) => s + p.costo, 0);
+  function alternar(id) {
+    setSel((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
 
   function volver(aviso) {
     limpiarLote();
@@ -18,14 +30,14 @@ export default function useCobro() {
   }
 
   async function confirmar() {
-    if (enviando || !lote) return;
+    if (enviando || !lote || !elegidos.length) return;
     setEnviando(true);
     setError('');
     try {
       const r = await api('/entregas/confirmar', {
         method: 'POST',
         sinCierreDeSesion: true, // el 401 puede ser del token de entrega, no de la sesión
-        body: { tokenEntrega: lote.tokenEntrega, paqueteIds: lote.paquetes.map((p) => p.id), metodoPago: metodo },
+        body: { tokenEntrega: lote.tokenEntrega, paqueteIds: elegidos.map((p) => p.id), metodoPago: metodo },
       });
       invalidarPaquetes();
       volver({ tipo: 'info', texto: `Entregamos ${r.entregados} ${r.entregados === 1 ? 'paquete' : 'paquetes'}.` });
@@ -39,5 +51,5 @@ export default function useCobro() {
     }
   }
 
-  return { lote, metodo, setMetodo, enviando, error, confirmar, volver };
+  return { lote, metodo, setMetodo, enviando, error, confirmar, volver, sel, alternar, elegidos, total };
 }

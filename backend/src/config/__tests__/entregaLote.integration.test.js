@@ -119,7 +119,13 @@ test('PIN correcto: todos los paquetes entregables del apartamento (incl. otro r
   assert.equal(b.residente.id, ana.id);
   assert.equal(b.residente.etiquetaApto, 'T2 · 304');
   assert.deepEqual(b.paquetes.map((p) => p.id).sort(), [p1.id, p2.id, p3.id].sort());
-  assert.equal(b.total, 0 + 5000 + 4500);
+  // S3.2: el lote mezcla a Ana y a Luis (mismo apto físico): se preselecciona SOLO lo de Ana
+  // (dueña del PIN) y el total es el de lo preseleccionado; Luis viene sin marcar.
+  assert.equal(b.variasPersonas, true);
+  assert.deepEqual(b.paquetes.filter((p) => p.seleccionado).map((p) => p.id).sort(), [p1.id, p2.id].sort());
+  assert.equal(b.paquetes.find((p) => p.id === p3.id).seleccionado, false);
+  assert.ok(b.paquetes.every((p) => typeof p.nombreRecibe === 'string' && p.nombreRecibe));
+  assert.equal(b.total, 0 + 5000);
   assert.deepEqual(b.metodosPago, ['EFECTIVO', 'TRANSFERENCIA']);
   assert.ok(b.tokenEntrega);
   assert.equal(b.paquetes.find((p) => p.id === p1.id).motivoCobro, 'CORTESIA');

@@ -23,6 +23,10 @@ export const CODIGOS = Object.freeze({
   // PLAN-conjunto S1.3: el conjunto se elige por slug en cada solicitud.
   CONJUNTO_INVALIDO: 'CONJUNTO_INVALIDO',
   CONJUNTO_REQUERIDO: 'CONJUNTO_REQUERIDO',
+  // Revisión S3.2: tope de direcciones activas por persona y conjunto; dirección que el
+  // operador desactivó (no recibe paquetes nuevos ni se reactiva sola).
+  LIMITE_DIRECCIONES: 'LIMITE_DIRECCIONES',
+  DIRECCION_DESACTIVADA: 'DIRECCION_DESACTIVADA',
   ENLACE_INVALIDO: 'ENLACE_INVALIDO',
   ENLACE_VENCIDO: 'ENLACE_VENCIDO',
   PIN_INCORRECTO: 'PIN_INCORRECTO',

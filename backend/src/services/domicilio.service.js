@@ -17,7 +17,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { getContext, runWithTenant } from '../config/tenantContext.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
-import { tokenTorre } from '../domain/apartamento.js';
+import { tokenTorre, sinTildes } from '../domain/apartamento.js';
 import { normalizarApto } from './apartamento.service.js';
 import { etiquetaApartamento } from '../domain/apartamento.js';
 import { obtenerCuentaPropia, marcarUltimoConjunto } from './usuario.service.js';
@@ -47,53 +47,112 @@ const SELECT_DOMICILIO = {
   nombreRecibe: true, telefono: true, ultimoUsoEn: true, activo: true,
 };
 
+/** Tope de direcciones ACTIVAS por persona y conjunto (revisión S3.2, contra el spam de domicilios). */
+export const MAX_DOMICILIOS_ACTIVOS = 10;
+
+const direccionDesactivada = () => new AppError(
+  CODIGOS.DIRECCION_DESACTIVADA,
+  'Esta dirección fue desactivada por el operador. Escribe otra dirección o pregunta en portería.',
+  409,
+);
+
 /**
  * Crea (o reutiliza) el Domicilio de `usuarioId` en el conjunto del contexto. La
  * dirección se pide UNA vez: si ya existe la misma (conjunto, persona, torre, apto) se
  * reutiliza, se marca como la última usada y se actualiza quién recibe/teléfono si llegan.
  * Debe correr dentro de runWithTenant (el conjunto sale del contexto, nunca del llamador).
  * `porDefecto` ({nombreRecibe, telefono}) completa lo que falte solo si hay que crearla.
+ *
+ * Revisión S3.2: el índice UsuarioConjunto y el Domicilio se escriben en UNA transacción (no
+ * queda un índice sin dirección); una dirección que el operador desactivó NO se reactiva
+ * sola (409 DIRECCION_DESACTIVADA); y crear una nueva con ya 10 activas es 400
+ * LIMITE_DIRECCIONES. `nombreBusqueda` (sin tildes) se mantiene al crear o cambiar el nombre.
  * @param {{usuarioId:string, torre?:string|null, apto?:string|null, nombreRecibe?:string, telefono?:string, porDefecto?:{nombreRecibe:string, telefono:string}}} p
  */
 export async function crearOReutilizarDomicilio({ usuarioId, torre, apto, nombreRecibe, telefono, porDefecto }) {
   const conjuntoId = conjuntoDelContextoId();
   const dir = canonicalizarDireccion({ torre, apto });
-  // Índice persona -> conjunto primero: si falla lo siguiente, sobra un índice inofensivo.
-  await prisma.usuarioConjunto.upsert({
-    where: { usuarioId_conjuntoId: { usuarioId, conjuntoId } },
-    create: { usuarioId, conjuntoId },
-    update: {},
-  });
   const clave = { conjuntoId_usuarioId_torre_apto: { conjuntoId, usuarioId, ...dir } };
-  const ahora = new Date();
-  const actualizar = {
-    ultimoUsoEn: ahora,
-    activo: true,
-    ...(nombreRecibe ? { nombreRecibe } : {}),
-    ...(telefono ? { telefono } : {}),
-  };
-  const existente = await prisma.domicilio.findUnique({ where: clave, select: SELECT_DOMICILIO });
-  if (existente) {
-    return prisma.domicilio.update({ where: clave, data: actualizar, select: SELECT_DOMICILIO });
-  }
-  try {
-    return await prisma.domicilio.create({
+
+  const intentar = () => prisma.$transaction(async (tx) => {
+    const ahora = new Date();
+    // El upsert TOCA la fila del índice (reescribe `creadoEn`, que nadie lee): el UPDATE toma el
+    // bloqueo de fila hasta el fin de la transacción, así las altas simultáneas de la MISMA
+    // persona en el MISMO conjunto se serializan y el conteo del tope (10) no se salta con una
+    // ráfaga en paralelo. Sin SQL crudo ni bloqueos en memoria (sirve con varias réplicas).
+    await tx.usuarioConjunto.upsert({
+      where: { usuarioId_conjuntoId: { usuarioId, conjuntoId } },
+      create: { usuarioId, conjuntoId },
+      update: { creadoEn: ahora },
+    });
+    const existente = await tx.domicilio.findUnique({ where: clave, select: SELECT_DOMICILIO });
+    if (existente) {
+      if (!existente.activo) throw direccionDesactivada();
+      return tx.domicilio.update({
+        where: clave,
+        data: {
+          ultimoUsoEn: ahora,
+          ...(nombreRecibe ? { nombreRecibe, nombreBusqueda: sinTildes(nombreRecibe) } : {}),
+          ...(telefono ? { telefono } : {}),
+        },
+        select: SELECT_DOMICILIO,
+      });
+    }
+    const activas = await tx.domicilio.count({ where: { usuarioId, activo: true } });
+    if (activas >= MAX_DOMICILIOS_ACTIVOS) {
+      throw new AppError(
+        CODIGOS.LIMITE_DIRECCIONES,
+        `Ya tienes ${MAX_DOMICILIOS_ACTIVOS} direcciones en este conjunto. Usa una de las que ya tienes.`,
+        400,
+        { max: MAX_DOMICILIOS_ACTIVOS },
+      );
+    }
+    // Solo al CREAR se completa con los datos de la cuenta; al reutilizar no se pisa
+    // lo que ya tenía (p. ej. el nombre de un amigo).
+    const nombre = nombreRecibe || porDefecto?.nombreRecibe;
+    return tx.domicilio.create({
       data: {
         usuarioId, ...dir, ultimoUsoEn: ahora,
-        // Solo al CREAR se completa con los datos de la cuenta; al reutilizar no se pisa
-        // lo que ya tenía (p. ej. el nombre de un amigo).
-        nombreRecibe: nombreRecibe || porDefecto?.nombreRecibe,
+        nombreRecibe: nombre,
+        nombreBusqueda: sinTildes(nombre),
         telefono: telefono || porDefecto?.telefono,
       },
       select: SELECT_DOMICILIO,
     });
+  });
+
+  try {
+    return await intentar();
   } catch (e) {
-    // Dos solicitudes simultáneas con la misma dirección: gana una, la otra la reutiliza.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-      return prisma.domicilio.update({ where: clave, data: actualizar, select: SELECT_DOMICILIO });
-    }
+    // Dos solicitudes simultáneas con la misma dirección: gana una; la otra repite y la reutiliza.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return intentar();
     throw e;
   }
+}
+
+/**
+ * El operador desactiva una dirección de SU conjunto (el tenant del contexto la acota: la de
+ * otro conjunto no existe, 404). Queda `activo=false` y un DomicilioEvento DESACTIVAR con el
+ * operador. Una dirección inactiva no sale en la búsqueda, no recibe paquetes nuevos y no se
+ * reactiva sola. Los paquetes que ya tenía siguen su curso. Idempotente.
+ */
+export async function desactivarDomicilio(domicilioId, actorId) {
+  if (typeof domicilioId !== 'string' || !domicilioId) {
+    throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Búscala de nuevo.', 404);
+  }
+  return prisma.$transaction(async (tx) => {
+    const d = await tx.domicilio.findUnique({
+      where: { id: domicilioId }, select: { id: true, activo: true, torre: true, apto: true },
+    });
+    if (!d) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Búscala de nuevo.', 404);
+    if (d.activo) {
+      await tx.domicilio.update({ where: { id: d.id }, data: { activo: false } });
+      await tx.domicilioEvento.create({
+        data: { domicilioId: d.id, tipo: 'DESACTIVAR', actorId, datos: { torre: d.torre, apto: d.apto } },
+      });
+    }
+    return { id: d.id, activo: false };
+  });
 }
 
 /** Domicilio activo más reciente de la persona EN el conjunto del contexto (o null). */
@@ -131,6 +190,14 @@ export async function resolverDomicilio(tx, { domicilioId, residenteId }) {
   if (domicilioId) {
     if (typeof domicilioId !== 'string') throw noEncontrado();
     d = await tx.domicilio.findUnique({ where: { id: domicilioId }, select: SELECT_DOMICILIO });
+    // Revisión S3.2: una dirección desactivada por el operador no recibe paquetes nuevos.
+    if (d && !d.activo) {
+      throw new AppError(
+        CODIGOS.DIRECCION_DESACTIVADA,
+        'Esa dirección fue desactivada. Búscala de nuevo y elige otra.',
+        409,
+      );
+    }
   } else if (residenteId) {
     if (typeof residenteId !== 'string') throw noEncontrado();
     d = await tx.domicilio.findFirst({
@@ -316,10 +383,28 @@ export async function conjuntoDePaquetePropio(usuarioId, paqueteId, actualId) {
   return hallazgos.find(Boolean) ?? null;
 }
 
-/** ¿La persona tiene (o tuvo) domicilio en este conjunto? Lee solo el índice. */
+/**
+ * ¿La persona tiene un Domicilio ACTIVO real en este conjunto? El índice UsuarioConjunto
+ * dice dónde mirar (puede sobrar una fila sin dirección, p. ej. si falló un alta) y la
+ * existencia se confirma con el Domicilio, dentro del runWithTenant de ese conjunto.
+ */
 export async function tieneDomicilioEn(usuarioId, conjuntoId) {
-  return (await conjuntosDePersona(usuarioId)).includes(conjuntoId);
+  if (!(await conjuntosDePersona(usuarioId)).includes(conjuntoId)) return false;
+  const n = await runWithTenant({ conjuntoId, role: 'RESIDENT' }, () =>
+    prisma.domicilio.count({ where: { usuarioId, activo: true } }));
+  return n > 0;
 }
+
+/** ¿Es una dirección PROPIA que el operador desactivó? (para avisarle con un mensaje claro). */
+export async function esDireccionPropiaDesactivada(usuarioId, domicilioId) {
+  if (typeof domicilioId !== 'string' || !domicilioId) return false;
+  const filas = await porCadaConjuntoDePersona(usuarioId, () =>
+    prisma.domicilio.findMany({ where: { id: domicilioId, usuarioId, activo: false }, select: { id: true } }));
+  return filas.length > 0;
+}
+
+/** El error de "dirección desactivada" (la misma redacción en todos los caminos). */
+export { direccionDesactivada };
 
 /**
  * Valida y normaliza la dirección que llega en el cuerpo de una solicitud

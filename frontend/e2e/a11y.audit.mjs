@@ -103,6 +103,11 @@ async function sembrar() {
     { clave: 'res1', nombre: 'Ana Pérez', email: 'ana@a11y.test', telefono: '3001112233', torre: 'Torre 2', apto: '304' },
     { clave: 'res2', nombre: 'Luis Gómez', email: 'luis@a11y.test', telefono: '3004445566', torre: 'Torre 1', apto: '101' },
     { clave: 'res3', nombre: 'Marta Ríos', email: 'marta@a11y.test', telefono: '3007778899', torre: 'Torre 3', apto: '502' },
+    // S3.2: dos personas en el mismo apartamento (lote que mezcla, "Desactivar dirección") y una
+    // homónima de Ana en su mismo apartamento (aviso de duplicado en la búsqueda del operador).
+    { clave: 'res4', nombre: 'Carlos Mora', email: 'carlos@a11y.test', telefono: '3001239999', torre: 'Torre 4', apto: '405' },
+    { clave: 'res5', nombre: 'Sofía Mora', email: 'sofia@a11y.test', telefono: '3001238888', torre: 'Torre 4', apto: '405' },
+    { clave: 'res6', nombre: 'Ana Pérez', email: 'ana2@a11y.test', telefono: '3009994567', torre: 'Torre 2', apto: '304' },
   ];
   const datos = { op: { token: tokenOp, id: op.datos.user.id }, residentes: {} };
   for (const r of residentes) {
@@ -131,6 +136,8 @@ async function sembrar() {
     const m1 = await recibir({ residenteId: datos.residentes.res3.id, categoriaPeso: 'ESTANDAR' });
     await recibir({ residenteId: datos.residentes.res3.id, categoriaPeso: 'PESADO' });
     void m1;
+    await recibir({ residenteId: datos.residentes.res4.id, categoriaPeso: 'ESTANDAR' });
+    await recibir({ residenteId: datos.residentes.res5.id, categoriaPeso: 'MANO' });
     const vista = await api('/p/paquetes', { token: datos.residentes.res3.token });
     const pin = vista.datos.paquetes?.find((p) => p.pin)?.pin;
     if (pin) {
@@ -149,6 +156,8 @@ async function sembrar() {
   // PIN vigente de Marta para la pantalla de cobro y enlace de WhatsApp de Ana.
   const vm = await api('/p/paquetes', { token: datos.residentes.res3.token });
   datos.pinMarta = vm.datos.paquetes?.find((p) => p.pin)?.pin ?? '0000';
+  const vc = await api('/p/paquetes', { token: datos.residentes.res4.token });
+  datos.pinCarlos = vc.datos.paquetes?.find((p) => p.pin)?.pin ?? '0000';
   return datos;
 }
 
@@ -382,10 +391,18 @@ const PANTALLAS = [
   { id: 'op-entregar', rol: 'op', preparar: (p) => ir(p, '/op/entregar') },
   { id: 'op-entregar-error', rol: 'op', async preparar(p) { await ir(p, '/op/entregar'); await tocarTecla(p, '0001'); await p.locator('.ds-toast--error').waitFor(); await esperar(p); } },
   { id: 'op-cobrar', rol: 'op', async preparar(p, d) { await ir(p, '/op/entregar'); await tocarTecla(p, d.pinMarta); await p.locator('.op-total').waitFor(); await esperar(p); } },
+  // S3.2: lote de un apartamento con dos personas (aviso, casillas, "Entregar lo marcado").
+  { id: 'op-cobrar-varias', rol: 'op', async preparar(p, d) { await ir(p, '/op/entregar'); await tocarTecla(p, d.pinCarlos); await p.locator('.op-sel').first().waitFor(); await esperar(p); } },
   { id: 'op-pendientes', rol: 'op', async preparar(p) { await ir(p, '/op/pendientes'); await p.locator('.op-fila').first().waitFor(); await esperar(p); } },
   { id: 'op-pendientes-sin-resultados', rol: 'op', async preparar(p) { await ir(p, '/op/pendientes'); await p.getByLabel('Buscar').fill('zzzz'); await esperar(p, 600); } },
   { id: 'op-pendientes-detalle', rol: 'op', async preparar(p) {
     await ir(p, '/op/pendientes'); const f = p.locator('button.op-fila').first(); await f.waitFor(); await f.click(); await esperar(p, 500);
+    return p.viewportSize().width < 1024 ? { hoja: f } : undefined;
+  } },
+  // S3.2: "Desactivar dirección" con su confirmación (detalle del apartamento de dos personas).
+  { id: 'op-pendientes-desactivar', rol: 'op', async preparar(p) {
+    await ir(p, '/op/pendientes'); const f = p.locator('button.op-fila', { hasText: 'Mora' }).first(); await f.waitFor(); await f.click(); await esperar(p, 500);
+    await p.getByRole('button', { name: /Desactivar dirección/ }).first().click(); await esperar(p, 400);
     return p.viewportSize().width < 1024 ? { hoja: f } : undefined;
   } },
   { id: 'op-pendientes-fotos', rol: 'op', async preparar(p) {

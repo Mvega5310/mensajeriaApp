@@ -148,6 +148,94 @@ test.describe('Dos conjuntos', () => {
     await sinScrollHorizontal(page, 'Recibir (mismo apto)');
   });
 
+  // Registra a una persona en B (por slug), entra y devuelve { token, domicilioId, nombre, telefono }.
+  async function personaEnB({ nombre, apto, telefono }) {
+    const e = entorno();
+    const email = `s32-${sufijo()}@e2e.test`;
+    const reg = await api('/auth/register', {
+      metodo: 'POST',
+      cuerpo: { nombre, email, password: 'ClaveSegura123', telefono, torre: 'Torre 1', apto, acceptedTerms: true, conjunto: e.b.slug },
+    });
+    expect(reg.ok, reg.datos.message).toBe(true);
+    const l = await api('/auth/login', { metodo: 'POST', cuerpo: { email, password: 'ClaveSegura123' } });
+    const d = await api('/domicilios', { token: l.datos.token });
+    return { token: l.datos.token, domicilioId: d.datos[0].id, nombre, telefono };
+  }
+  const recibirEnB = async (domicilioId) => {
+    const r = await api('/packages/recepcion', {
+      metodo: 'POST', token: await sesionOperador(entorno().b.operador), cuerpo: { domicilioId, categoriaPeso: 'ESTANDAR' },
+      cabeceras: { 'Idempotency-Key': `s32-${sufijo()}${sufijo()}` },
+    });
+    expect(r.ok, r.datos.message).toBe(true);
+  };
+
+  test('C5 impostor: misma persona y apto, la fila trae teléfono y antigüedad, avisa del duplicado y el operador desactiva la dirección', async ({ page, context }) => {
+    const e = entorno();
+    const { apto } = await siguienteApto();
+    const nombre = `Ana ${sufijo()}`;
+    const real = await personaEnB({ nombre, apto, telefono: '3001111111' });
+    const impostor = await personaEnB({ nombre, apto, telefono: '3002222222' });
+    await recibirEnB(impostor.domicilioId); // el operador ya recibió un paquete a nombre del impostor
+
+    await iniciarSesion(context, await sesionOperador(e.b.operador));
+    await page.goto('/op/recibir');
+    for (const d of apto) await page.locator('.ds-key', { hasText: new RegExp(`^${d}$`) }).first().click();
+    await expect(page.locator('.op-sug')).toHaveCount(2);
+    await expect(page.locator('.op-sug', { hasText: '•••• 1111' })).toContainText('nueva');
+    await expect(page.locator('.op-sug', { hasText: '•••• 2222' })).toBeVisible();
+    await expect(page.getByText('Hay 2 personas con este nombre en este apartamento: confirma el teléfono.')).toBeVisible();
+    await sinScrollHorizontal(page, 'Recibir (duplicado)');
+
+    // Desactivar la dirección del impostor desde el detalle del apartamento en Pendientes.
+    await page.goto('/op/pendientes');
+    await page.locator('.op-fila', { hasText: nombre }).first().click();
+    await page.getByRole('button', { name: 'Desactivar dirección' }).click();
+    await expect(page.getByText(`¿Desactivar la dirección de ${nombre} (•••• 2222)?`)).toBeVisible();
+    await page.getByRole('button', { name: 'Sí, desactivar' }).click();
+    await expect(page.getByText('Dirección desactivada. No recibirá paquetes nuevos.')).toBeVisible();
+
+    // Ya no sale en la búsqueda, y el aviso de duplicado desaparece.
+    await page.goto('/op/recibir');
+    for (const d of apto) await page.locator('.ds-key', { hasText: new RegExp(`^${d}$`) }).first().click();
+    await expect(page.locator('.op-sug')).toHaveCount(1);
+    await expect(page.locator('.op-sug')).toContainText('•••• 1111');
+    await expect(page.getByText(/Hay \d personas con este nombre/)).toHaveCount(0);
+    // El impostor ve el motivo si intenta usarla.
+    const r = await api('/packages', { metodo: 'POST', token: impostor.token, cuerpo: { proveedor: 'X', domicilioId: impostor.domicilioId } });
+    expect(r.status).toBe(409);
+    expect(r.datos.message).toMatch(/desactivada por el operador/);
+    expect(real.domicilioId).not.toBe(impostor.domicilioId);
+  });
+
+  test('lote que mezcla personas del apto: aviso, nombre por paquete y solo se marcan los del dueño del PIN', async ({ page, context }) => {
+    const e = entorno();
+    const { apto } = await siguienteApto();
+    const bea = await personaEnB({ nombre: `Bea ${sufijo()}`, apto, telefono: '3003333333' });
+    const cris = await personaEnB({ nombre: `Cris ${sufijo()}`, apto, telefono: '3004444444' });
+    await recibirEnB(bea.domicilioId);
+    await recibirEnB(cris.domicilioId);
+    const mine = async (p) => (await api('/packages/mine', { token: p.token })).datos;
+    const pin = (await mine(bea))[0].pin;
+
+    await iniciarSesion(context, await sesionOperador(e.b.operador));
+    await page.goto('/op/entregar');
+    for (const d of pin) await page.locator('.ds-key', { hasText: new RegExp(`^${d}$`) }).first().click();
+    const eleccion = page.getByRole('group', { name: 'Elige el apartamento' });
+    await expect(eleccion.or(page.getByText(/más de una persona/)).first()).toBeVisible();
+    if (await eleccion.isVisible()) await eleccion.getByRole('button').first().click();
+    await expect(page).toHaveURL(/\/op\/entregar\/lote$/);
+    await expect(page.getByText(/Hay paquetes de más de una persona en este apartamento/)).toBeVisible();
+    await expect(page.getByText(`Recibe: ${bea.nombre}`)).toBeVisible();
+    await expect(page.getByText(`Recibe: ${cris.nombre}`)).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: `Entregar el paquete de ${bea.nombre}` })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: `Entregar el paquete de ${cris.nombre}` })).not.toBeChecked();
+    await sinScrollHorizontal(page, 'Cobrar (varias personas)');
+    await page.getByRole('button', { name: 'Entregar lo marcado' }).click();
+    await expect(page).toHaveURL(/\/op\/entregar$/);
+    expect((await mine(bea))[0].estado).toBe('ENTREGADO');
+    expect((await mine(cris))[0].estado, 'el de la otra persona sigue en portería').toBe('EN_RECEPCION');
+  });
+
   test('InvitarVista del operador usa /registro?conjunto=<slug>', async ({ page, context }) => {
     const e = entorno();
     await iniciarSesion(context, await sesionOperador(e.b.operador));

@@ -33,6 +33,7 @@
 export const MODELOS_CON_TENANT = Object.freeze([
   'package',
   'domicilio',
+  'domicilioevento',
   'bono',
   'comentario',
   'paqueteevento',

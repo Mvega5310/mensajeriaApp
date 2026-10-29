@@ -396,6 +396,24 @@ teléfono** pasan a una dirección de entrega (`Domicilio`), una por persona y c
 - **Código:** `User` sale de `MODELOS_CON_TENANT` (todo acceso pasa por `services/usuario.service.js`,
   vigilado por `auditoriaInvariantes.test.js`); `Domicilio` entra. Ver CLAUDE.md, invariantes 8–11.
 
+### Migración `add_domicilio_busqueda_evento` (revisión S3.2: búsqueda en la base y desactivar direcciones)
+
+- Migración **aditiva** (`20261029120000_add_domicilio_busqueda_evento`, posterior a
+  `20261029110000_add_domicilio`; `prisma migrate deploy` normal): columna `Domicilio.nombreBusqueda`
+  (`TEXT NOT NULL DEFAULT ''`, el nombre sin tildes y en minúsculas) y tabla `DomicilioEvento` (bitácora
+  de "desactivar dirección"; FKs `RESTRICT` al conjunto, `CASCADE` al domicilio, `SET NULL` al actor).
+  No toca nada existente.
+- **Backfill** dentro del mismo `migration.sql`: `nombreBusqueda = lower(translate(nombreRecibe, …))`
+  (vocales/ñ/ç con tilde a ASCII y luego `lower`, para no depender del `LC_CTYPE` de la base), igual que
+  `sinTildes` del código (prueba de paridad en `migracionBusquedaEvento.integration.test.js`). Solo
+  actualiza filas con `nombreBusqueda = ''`: idempotente.
+- **Rollback:** `backend/prisma/manual/rollback_add_domicilio_busqueda_evento.sql` (con `psql -v
+  ON_ERROR_STOP=1 -f`): borra `DomicilioEvento` y la columna y la fila de `_prisma_migrations`. No
+  reactiva las direcciones desactivadas (`Domicilio.activo` ya existía): un `UPDATE` a mano si hiciera falta.
+- **Qué mirar tras aplicarla:** `SELECT count(*) FROM "Domicilio" WHERE "nombreBusqueda" = ''` = 0.
+- Sin variables de entorno nuevas. Los límites (10 direcciones activas, 20 altas/hora por cuenta, `config-publica`
+  60/min por IP) son de memoria del proceso salvo el tope de 10, que vive en la base.
+
 ### Orden de las migraciones del refactor (S0.3)
 
 Producción ya tiene aplicadas las migraciones de `main` hasta

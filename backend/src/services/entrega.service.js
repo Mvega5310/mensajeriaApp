@@ -8,7 +8,7 @@ import { EVENTOS } from '../domain/paquete.machine.js';
 import { METODOS_PAGO, esMetodoPagoValido } from '../domain/pago.js';
 import { etiquetaApartamento, interpretarBusqueda } from '../domain/apartamento.js';
 import { normalizarApto } from './apartamento.service.js';
-import { seleccionarLote, candidatosPorDesempate, claveDeApartamento, ESTADOS_ENTREGABLES } from '../domain/entregaLote.js';
+import { seleccionarLote, candidatosPorDesempate, claveDeApartamento, seleccionPorDuenoDelPin, ESTADOS_ENTREGABLES } from '../domain/entregaLote.js';
 import { firmarTokenEntrega, verificarTokenEntrega } from '../domain/tokenEntrega.js';
 import { registrarIntentoPin } from './pin.service.js';
 import { aplicarEvento, selectSinFoto } from './paquete.service.js';
@@ -154,8 +154,13 @@ export async function verificarPinLote({ operadorId, conjuntoId, pin, residenteI
   const motivo = new Map();
   for (const e of eventos) if (!motivo.has(e.paqueteId)) motivo.set(e.paqueteId, e.datos?.motivoCobro ?? null);
 
+  // Revisión S3.2: si el lote mezcla personas del mismo apartamento, solo se preseleccionan
+  // los del Domicilio dueño del PIN y cada paquete trae su `nombreRecibe`.
+  const { seleccionados, variasPersonas } = seleccionPorDuenoDelPin({ lote: sel.lote, coincidentes: sel.coincidentes });
   const paquetes = sel.lote.map((p) => ({
     id: p.id,
+    nombreRecibe: p.residente.nombre,
+    seleccionado: seleccionados.has(p.id),
     categoriaPeso: p.categoriaPeso,
     transportadora: p.transportadora,
     proveedor: p.proveedor,
@@ -175,7 +180,9 @@ export async function verificarPinLote({ operadorId, conjuntoId, pin, residenteI
       etiquetaApto: etiquetaApartamento(sel.residente.torre, sel.residente.apto),
     },
     paquetes,
-    total: paquetes.reduce((s, p) => s + p.costo, 0),
+    variasPersonas,
+    // Total de lo preseleccionado (con una sola persona, todo el lote).
+    total: paquetes.filter((p) => p.seleccionado).reduce((s, p) => s + p.costo, 0),
     metodosPago: [...METODOS_PAGO],
     tokenEntrega: token,
     venceEn,

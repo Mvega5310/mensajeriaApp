@@ -9,6 +9,8 @@ import { formatCOP } from '../../utils/format.js';
 import { NOMBRES_CORTOS } from '../../utils/tiers.js';
 import Pantalla from './Pantalla.jsx';
 import MasSheet from './MasSheet.jsx';
+import FilaDireccion from './FilaDireccion.jsx';
+import { avisoDuplicados } from '../../utils/direccion.js';
 
 export default function Recibir() {
   const navigate = useNavigate();
@@ -21,6 +23,7 @@ export default function Recibir() {
   const [sinDueno, setSinDueno] = useState(false);
   const [etiqueta, setEtiqueta] = useState('');
   const [masAbierto, setMasAbierto] = useState(false);
+  const duplicados = avisoDuplicados(resultados);
 
   function elegir(r) {
     navigate(`/op/recibir/${r.domicilioId}`, { state: { residente: r } });
@@ -70,13 +73,12 @@ export default function Recibir() {
             </span>
           </div>
           <div className="op-lista" aria-live="polite">
+            {duplicados && <p className="op-dup" role="alert">{duplicados}</p>}
             {resultados.map((r) => (
-              <button type="button" key={r.domicilioId} className="op-sug" onClick={() => elegir(r)}>
-                <span className="op-sug__apto">{r.etiqueta}</span>
-                <span className="op-sug__nombre">{r.nombre}</span>
+              <FilaDireccion key={r.domicilioId} r={r} onClick={() => elegir(r)}>
                 {r.pendientes > 0 && <span className="op-chip" aria-label={`${r.pendientes} pendientes`}>{r.pendientes}</span>}
                 <Icon nombre="siguiente" size={22} trazo={2.5} />
-              </button>
+              </FilaDireccion>
             ))}
             {directo && (
               <div className="op-directo">

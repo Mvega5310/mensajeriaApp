@@ -110,7 +110,7 @@ test('recepción con 2 fotos: 2 filas PaqueteFoto, fotoUrl vacío y GET /foto de
   // el residente dueño la ve; otro residente no; otro conjunto tampoco
   const tDueno = await login(r.email);
   assert.equal((await api(`/api/packages/${paquete.id}/foto`, { token: tDueno })).status, 200);
-  assert.equal((await api(`/api/packages/${paquete.id}/foto`, { token: ctx.tAjeno })).status, 403);
+  assert.equal((await api(`/api/packages/${paquete.id}/foto`, { token: ctx.tAjeno })).status, 404);
   assert.equal((await api(`/api/packages/${paquete.id}/foto`, { token: ctx.tOpB })).status, 404);
 });
 

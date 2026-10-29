@@ -7,7 +7,7 @@
 // Nunca se importa desde src/ (las carpetas de pruebas quedan fuera de la auditoría E7).
 
 import { getContext } from '../src/config/tenantContext.js';
-import { tokenTorre } from '../src/domain/apartamento.js';
+import { tokenTorre, sinTildes } from '../src/domain/apartamento.js';
 
 export const direccionCanonica = (torre, apto) => ({
   torre: tokenTorre(torre) ?? '',
@@ -27,11 +27,13 @@ export async function crearDomicilioDeContexto(prisma, usuario, extra = {}) {
     create: { usuarioId: usuario.id, conjuntoId: ctx.conjuntoId },
     update: {},
   });
+  const nombreRecibe = extra.nombreRecibe ?? usuario.nombre;
   return prisma.domicilio.create({
     data: {
       usuarioId: usuario.id,
       ...dir,
-      nombreRecibe: extra.nombreRecibe ?? usuario.nombre,
+      nombreRecibe,
+      nombreBusqueda: sinTildes(nombreRecibe),
       telefono: extra.telefono ?? usuario.telefono,
       ...(extra.ultimoUsoEn ? { ultimoUsoEn: extra.ultimoUsoEn } : {}),
     },

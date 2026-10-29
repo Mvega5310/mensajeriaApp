@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Field, Sheet, Toast } from '../../design';
 import { api } from '../../services/api.js';
+import FilaDireccion from './FilaDireccion.jsx';
+import { avisoDuplicados } from '../../utils/direccion.js';
 import useBuscarResidentes from '../../hooks/operador/useBuscarResidentes.js';
 import { invalidarPaquetes } from '../../hooks/operador/usePaquetes.js';
 
@@ -11,7 +13,9 @@ export default function AsignarSheet({ paquete, onClose }) {
   const [q, setQ] = useState('');
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const { resultados } = useBuscarResidentes(q);
+  // La guía del paquete sin dueño: la dirección con una pre-alerta de esa guía sale primero.
+  const { resultados } = useBuscarResidentes(q, 200, { guia: paquete?.guia });
+  const duplicados = avisoDuplicados(resultados);
 
   async function asignar(r) {
     if (enviando) return;
@@ -33,11 +37,9 @@ export default function AsignarSheet({ paquete, onClose }) {
       <Field label="Apartamento o nombre" placeholder="Ej. 304 o Ana" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" />
       {error && <Toast tipo="error">{error}</Toast>}
       <div className="op-hoja">
+        {duplicados && <p className="op-dup" role="alert">{duplicados}</p>}
         {resultados.map((r) => (
-          <button type="button" key={r.domicilioId} className="op-sug" disabled={enviando} onClick={() => asignar(r)}>
-            <span className="op-sug__apto">{r.etiqueta}</span>
-            <span className="op-sug__nombre">{r.nombre}</span>
-          </button>
+          <FilaDireccion key={r.domicilioId} r={r} disabled={enviando} onClick={() => asignar(r)} />
         ))}
       </div>
     </Sheet>

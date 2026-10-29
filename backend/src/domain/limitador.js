@@ -79,3 +79,8 @@ export const CONJUNTOS_VENTANA_MS = 60 * 1000;
 // el bloqueo por paquete (5 fallos / 15 min, T1.4).
 export const PIN_ENTREGA_MAX_FALLOS = 20;
 export const PIN_ENTREGA_VENTANA_MS = 10 * 60 * 1000;
+
+// Altas de direcciones por cuenta (revisión S3.2, contra el spam de domicilios): 20 por hora.
+// Se suma al tope de 10 direcciones activas por persona y conjunto (domicilio.service.js).
+export const DIRECCIONES_MAX_ALTAS = 20;
+export const DIRECCIONES_VENTANA_MS = 60 * 60 * 1000;

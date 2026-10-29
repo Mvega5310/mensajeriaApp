@@ -163,8 +163,12 @@ sostienen. Cada una tiene una prueba automatizada; si tu cambio rompe una,
     funciones genéricas con `where` libre. `User.conjuntoId` sigue NOT NULL: para un OPERATOR
     es SU conjunto; para un RESIDENT es solo el "último conjunto usado" (abre el contexto de
     sus requests por defecto; S1.3 lo resuelve por solicitud, ver 12) y **no aísla nada**. —
-    *Prueba:* `auditoriaInvariantes.test.js` (E7.4: falla si aparece `prisma.user`/`tx.user`
-    fuera de esos sitios).
+    *Prueba:* `auditoriaInvariantes.test.js` (E7.4, analizada con `acorn`, no con regex: falla
+    si se accede a `User` desde cualquier cliente o transacción —con alias de import,
+    `x['user']`, `const { user } = x`— fuera de esos sitios; si `config/db.js` se importa en un
+    archivo fuera de la lista `IMPORTAN_DB` o con alias/re-export/`import()`; o si un
+    `select`/`include` trae `email`/`passwordHash` de una relación a `User` fuera de
+    `usuario.service.js`). `auditoriaAst.test.js` prueba la propia auditoría con fixtures.
 11. **Dirección de entrega (`Domicilio`) y "Mis paquetes" multi-conjunto.** (S1.1/S1.2)
     El conjunto, la torre, el apto, quién recibe y el teléfono viven en `Domicilio`, una por
     persona y conjunto (`@@unique [conjuntoId, usuarioId, torre, apto]`), con tenant: el
@@ -189,6 +193,14 @@ sostienen. Cada una tiene una prueba automatizada; si tu cambio rompe una,
     el operador de A no ve nada de B por búsqueda, listados, `/packages/:id`, entrega por PIN
     ni CSV; el `Domicilio` de B no le aparece; un RESIDENT no lee otra cuenta),
     `migracionDomicilio.integration.test.js`, `auditoriaInvariantes.test.js` (E7.5).
+    **Revisión S3.2 (domicilio impostor y spam):** la búsqueda del operador filtra EN LA BASE
+    (`Domicilio.nombreBusqueda`, sin tildes) y cada fila trae un discriminador (4 últimos dígitos del
+    teléfono, antigüedad, entregas) y `posibleDuplicado`; el operador puede desactivar una dirección
+    (`PATCH /domicilios/:id/desactivar`, `DomicilioEvento`): inactiva no se busca, no recibe paquetes
+    y no se reactiva sola. Tope de 10 domicilios activos por persona y conjunto
+    (`LIMITE_DIRECCIONES`) y 20 altas/hora por cuenta. El lote que mezcla personas del mismo
+    apartamento marca `variasPersonas` y solo preselecciona al dueño del PIN. *Prueba:*
+    `revisionS32.integration.test.js`.
 
 9. **Nada de datos, montos ni nombres de conjunto fijos en el frontend.** Ni
    "Ipanema", ni tarifas, ni domicilio/WhatsApp del operador: todo viene de

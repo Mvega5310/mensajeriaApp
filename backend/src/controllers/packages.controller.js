@@ -18,8 +18,9 @@ import { contactoParaNotificar, obtenerCuentaPropia } from '../services/usuario.
 import {
   crearOReutilizarDomicilio, domicilioDePersona, vistaResidente, nulaSiVacia,
   SELECT_DOMICILIO_PAQUETE, porCadaConjuntoDePersona, listarDomiciliosDePersona, domicilioPropioPorId,
-  guardarDireccionDePersona, direccionDeCuerpo, usarDomicilio,
+  guardarDireccionDePersona, direccionDeCuerpo, usarDomicilio, esDireccionPropiaDesactivada, direccionDesactivada,
 } from '../services/domicilio.service.js';
+import { limitarCreacionDeDirecciones } from './domicilios.controller.js';
 import { runWithTenant } from '../config/tenantContext.js';
 import { conjuntoActivoPorSlug } from '../services/conjunto.service.js';
 
@@ -68,6 +69,8 @@ export async function createPrealert(req, res) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La categoría de peso no es válida. Elige una de la lista.', 400);
   }
   const destino = await destinoDePrealerta(req.user.sub, req.body);
+  // Dirección nueva (o repetida) en la pre-alerta: cuenta contra el límite de altas por hora.
+  if (destino.direccion) limitarCreacionDeDirecciones(req);
   const correr = (fn) => (destino.conjuntoId
     ? runWithTenant({ conjuntoId: destino.conjuntoId, role: 'RESIDENT' }, fn)
     : fn()); // sin ninguna dirección (cuenta anterior a S1.1): conjunto base
@@ -137,7 +140,11 @@ async function destinoDePrealerta(usuarioId, body) {
   const { domicilioId, conjunto: slug } = body ?? {};
   if (!sinValor(domicilioId)) {
     const d = await domicilioPropioPorId(usuarioId, domicilioId);
-    if (!d) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Elige una de tus direcciones guardadas.', 404);
+    if (!d) {
+      // Una dirección propia que el operador desactivó se avisa con su mensaje (revisión S3.2).
+      if (await esDireccionPropiaDesactivada(usuarioId, domicilioId)) throw direccionDesactivada();
+      throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Elige una de tus direcciones guardadas.', 404);
+    }
     if (!sinValor(slug) && String(slug).trim() !== d.conjunto.slug) {
       throw new AppError(CODIGOS.DATOS_INVALIDOS, 'La dirección no es de ese conjunto.', 400, { campo: 'conjunto' });
     }
@@ -351,8 +358,9 @@ export async function getFoto(req, res) {
     select: { id: true, fotoUrl: true, residenteId: true },
   });
   if (!pkg) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
+  // 404 (no 403) para el paquete de otra persona: un 403 confirmaría que el id existe.
   if (req.user.role === 'RESIDENT' && pkg.residenteId !== req.user.sub) {
-    throw new AppError(CODIGOS.PROHIBIDO, 'No tienes permiso para ver este paquete.', 403);
+    throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
   }
   // Nuevas: URLs firmadas del almacén (expiran en 10 min). Antiguas: las de fotoUrl.
   const fotos = await fotosDelPaquete({ almacen: req.app.locals.almacenFotos, paqueteId: pkg.id, fotoUrl: pkg.fotoUrl });

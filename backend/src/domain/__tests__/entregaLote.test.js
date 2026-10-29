@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { firmarTokenEntrega, verificarTokenEntrega } from '../tokenEntrega.js';
-import { seleccionarLote } from '../entregaLote.js';
+import { seleccionarLote, seleccionPorDuenoDelPin, clavePersona } from '../entregaLote.js';
 
 const secreto = 's3creto';
 const base = { operadorId: 'op1', conjuntoId: 'c1', residenteId: 'r1', paqueteIds: ['b', 'a'] };
@@ -76,4 +76,25 @@ test('claveDeApartamento: "TORRE 2"/710 y "T2"/710 son el mismo apartamento (un 
   assert.equal(k('torre 2 ', 'Apto 710'), k('2', '710'));
   assert.notEqual(k('TORRE 2', '710'), k('TORRE 3', '710'));
   assert.equal(k(null, '710'), 'cuenta:x');
+});
+
+// --- S3.2: el lote que mezcla personas del mismo apartamento ---
+
+test('seleccionPorDuenoDelPin: una sola persona -> todo marcado y variasPersonas=false', () => {
+  const lote = [{ id: 'p1', domicilioId: 'd1' }, { id: 'p2', domicilioId: 'd1' }];
+  const r = seleccionPorDuenoDelPin({ lote, coincidentes: [lote[0]] });
+  assert.equal(r.variasPersonas, false);
+  assert.deepEqual([...r.seleccionados].sort(), ['p1', 'p2']);
+});
+
+test('seleccionPorDuenoDelPin: dos domicilios -> solo se marcan los del dueño del PIN', () => {
+  const lote = [{ id: 'p1', domicilioId: 'd1' }, { id: 'p2', domicilioId: 'd2' }, { id: 'p3', domicilioId: 'd1' }];
+  const r = seleccionPorDuenoDelPin({ lote, coincidentes: [lote[1]] });
+  assert.equal(r.variasPersonas, true);
+  assert.deepEqual([...r.seleccionados], ['p2']);
+});
+
+test('clavePersona: sin Domicilio (paquete anterior a S1.1) cae a la cuenta', () => {
+  assert.equal(clavePersona({ domicilioId: null, residenteId: 'u1' }), 'cuenta:u1');
+  assert.notEqual(clavePersona({ domicilioId: 'd1', residenteId: 'u1' }), clavePersona({ domicilioId: 'd2', residenteId: 'u1' }));
 });

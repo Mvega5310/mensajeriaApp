@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Badge, Button, Sheet } from '../../design';
+import { Badge, Button, Sheet, Toast } from '../../design';
+import { api } from '../../services/api.js';
 import PhotoGallery from '../../components/PhotoGallery.jsx';
 import useFotosPaquete from '../../hooks/operador/useFotosPaquete.js';
 import { formatCOP } from '../../utils/format.js';
@@ -21,7 +22,7 @@ function motivo(p) {
   return null;
 }
 
-function Tarjeta({ p }) {
+function Tarjeta({ p, paraQuien }) {
   const [verFotos, setVerFotos] = useState(false);
   const { fotoUrl, cargando } = useFotosPaquete(p.id, verFotos);
   const nota = motivo(p);
@@ -29,6 +30,7 @@ function Tarjeta({ p }) {
     <div className="op-fila op-fila--lectura">
       <b>{TIERS.find((t) => t.value === p.categoriaPeso)?.label ?? p.categoriaPeso}</b>
       <Badge estado={ESTADO_BADGE[p.estado] ?? 'en-porteria'} />
+      {paraQuien && <span className="op-muted">Para: {paraQuien}</span>}
       <span className="op-muted">{quienTrajo(p)}{p.guia && p.guia !== "Sin Guía" ? ` · guía ${p.guia}` : ""}</span>
       <span className="op-muted">Recibido {fecha(p.recibidoEn ?? p.fechaIngreso)} · {formatCOP(p.costoServicio)}</span>
       {nota && <span className="op-muted">{nota}</span>}
@@ -46,21 +48,71 @@ function Tarjeta({ p }) {
 
 const ENTREGABLES = new Set(['EN_RECEPCION', 'PROGRAMADO']);
 
+// Direcciones (Domicilio) distintas que aparecen en los paquetes del detalle.
+function direccionesDe(paquetes = []) {
+  const por = new Map();
+  for (const p of paquetes) {
+    if (p.domicilioId && !por.has(p.domicilioId)) {
+      por.set(p.domicilioId, { id: p.domicilioId, nombre: p.residente?.nombre ?? '', fin: String(p.residente?.telefono ?? '').replace(/\D/g, '').slice(-4) });
+    }
+  }
+  return [...por.values()];
+}
+
+/** "Desactivar dirección" (revisión S3.2, C5): para una dirección impostor o equivocada. Pide
+ *  confirmar; ya no recibe paquetes nuevos ni sale en la búsqueda (los que tiene siguen su curso). */
+function DesactivarDireccion({ dir, varias }) {
+  const [paso, setPaso] = useState('inicio'); // inicio | confirmar | hecho
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState('');
+  async function desactivar() {
+    setEnviando(true);
+    setError('');
+    try {
+      await api(`/domicilios/${dir.id}/desactivar`, { method: 'PATCH' });
+      setPaso('hecho');
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setEnviando(false);
+    }
+  }
+  if (paso === 'hecho') return <Toast tipo="info">Dirección desactivada. No recibirá paquetes nuevos.</Toast>;
+  if (paso === 'confirmar') {
+    return (
+      <div className="op-fila op-fila--lectura">
+        <b>¿Desactivar la dirección de {dir.nombre}{dir.fin ? ` (•••• ${dir.fin})` : ''}?</b>
+        <span className="op-muted">Ya no saldrá en la búsqueda ni recibirá paquetes nuevos. Los que tiene ahora se entregan igual.</span>
+        {error && <Toast tipo="error">{error}</Toast>}
+        <Button className="op-peligro" onClick={desactivar} disabled={enviando}>{enviando ? 'Desactivando' : 'Sí, desactivar'}</Button>
+        <Button variante="secundario" onClick={() => setPaso('inicio')} disabled={enviando}>Cancelar</Button>
+      </div>
+    );
+  }
+  return (
+    <Button variante="secundario" onClick={() => setPaso('confirmar')}>
+      {varias ? `Desactivar dirección de ${dir.nombre}${dir.fin ? ` (•••• ${dir.fin})` : ''}` : 'Desactivar dirección'}
+    </Button>
+  );
+}
+
 /** Cuerpo del detalle: fotos, cobro, notas y bonos. Lo usan la hoja (móvil) y el panel (escritorio). */
 export function DetalleCuerpo({ detalle, config, bonos, onBonos }) {
   const residente = detalle?.paquetes?.[0]?.residente ? detalle.paquetes[0] : null;
   if (bonos) {
     return <BonosVista residenteId={residente.residenteId} config={config} onVolver={() => onBonos(false)} />;
   }
+  const direcciones = direccionesDe(detalle?.paquetes);
   return (
     <div className="op-hoja">
-      {detalle?.paquetes.map((p) => <Tarjeta key={p.id} p={p} />)}
+      {detalle?.paquetes.map((p) => <Tarjeta key={p.id} p={p} paraQuien={direcciones.length > 1 ? p.residente?.nombre : null} />)}
       {config?.bonosHabilitados && residente?.residenteId && (
         <Button variante="secundario" icono="regalo" onClick={() => onBonos(true)}>Ver bonos</Button>
       )}
       {detalle?.paquetes.some((p) => ENTREGABLES.has(p.estado)) && (
         <Button as={Link} to="/op/entregar">Entregar con PIN</Button>
       )}
+      {direcciones.map((d) => <DesactivarDireccion key={d.id} dir={d} varias={direcciones.length > 1} />)}
     </div>
   );
 }

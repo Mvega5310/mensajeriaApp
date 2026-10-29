@@ -113,7 +113,12 @@ test('solo apto devuelve todas las torres, y el formato de respuesta no expone c
   assert.deepEqual(body.map((r) => r.id).sort(), [ctx.ana.id, ctx.luis.id].sort());
   assert.deepEqual(body.map((r) => r.etiqueta), ['T1 · 304', 'T2 · 304']);
   for (const r of body) {
-    assert.deepEqual(Object.keys(r).sort(), ['apto', 'domicilioId', 'etiqueta', 'id', 'nombre', 'pendientes', 'residenteId', 'torre']);
+    // Sin correo ni teléfono completo: de la persona solo los 4 últimos dígitos (discriminador, S3.2).
+    assert.deepEqual(Object.keys(r).sort(), [
+      'apto', 'creadoEn', 'domicilioId', 'entregados', 'esNueva', 'etiqueta', 'id', 'nombre', 'pendientes',
+      'posibleDuplicado', 'prealertaCoincide', 'residenteId', 'telefonoFin', 'torre',
+    ]);
+    assert.equal(r.telefonoFin, '2222');
   }
 });
 

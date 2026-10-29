@@ -82,3 +82,23 @@ export function seleccionarLote({ entregables, pin, residenteId, apto }) {
   const lote = validos.filter((p) => claveDeApartamento(p.residente) === clave).sort((a, b) => fecha(a) - fecha(b));
   return { tipo: 'OK', residente: primero.residente, coincidentes, lote };
 }
+
+/** Clave de la PERSONA/dirección de un paquete: su Domicilio (o, sin él, la cuenta). */
+export function clavePersona(p) {
+  return p.domicilioId ?? `cuenta:${p.residenteId ?? p.residente?.id ?? ''}`;
+}
+
+/**
+ * Revisión S3.2 (C5): el lote es por apartamento físico, pero en un mismo apartamento puede
+ * haber dos personas (dos Domicilios) con paquetes. Marca cuáles se PRESELECCIONAN —solo los
+ * del Domicilio dueño del PIN tecleado (los `coincidentes`)— y si el lote mezcla personas
+ * (`variasPersonas`), para que el operador vea el nombre de cada paquete y desmarque los que
+ * no sean de quien dio el PIN.
+ * @returns {{seleccionados:Set<string>, variasPersonas:boolean}} ids preseleccionados.
+ */
+export function seleccionPorDuenoDelPin({ lote, coincidentes }) {
+  const duenos = new Set(coincidentes.map(clavePersona));
+  const variasPersonas = new Set(lote.map(clavePersona)).size > 1;
+  const seleccionados = new Set(lote.filter((p) => !variasPersonas || duenos.has(clavePersona(p))).map((p) => p.id));
+  return { seleccionados, variasPersonas };
+}

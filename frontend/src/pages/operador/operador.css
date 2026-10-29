@@ -38,6 +38,10 @@
 .op-sug { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 0 var(--sp-2); border-radius: var(--r-md); background: var(--surface); color: var(--ink); border: 2px solid var(--line); width: 100%; box-sizing: border-box; font-family: var(--font-texto); text-align: left; cursor: pointer; }
 .op-sug__apto { font: 700 22px var(--font-mono); font-variant-numeric: tabular-nums; min-width: 96px; }
 .op-sug__nombre { flex: 1; font-size: 17px; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.op-sug__col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 0; }
+.op-sug__col .op-sug__nombre { flex: none; }
+.op-sug__meta { font-size: var(--fs-texto); color: var(--muted); font-variant-numeric: tabular-nums; }
+.op-dup { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--raised); box-shadow: inset 0 0 0 2px var(--warn); color: var(--ink); font-size: var(--fs-texto); font-weight: 700; }
 .op-directo { display: flex; flex-direction: column; gap: 6px; }
 .op-directo__tamano { margin: 0; font-size: var(--fs-texto); color: var(--muted); text-align: center; }
 .op-directo__tamano b { color: var(--ink); }
@@ -84,6 +88,12 @@
 .op-seg button { flex: 1; min-height: 52px; border-radius: var(--r-sm); border: 0; background: transparent; color: var(--muted); font: 700 17px var(--font-texto); cursor: pointer; }
 .op-seg button[aria-checked="true"] { background: var(--raised); color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
 .op-scroll { flex: 1; overflow-y: auto; padding: var(--sp-2) var(--sp-2) 0; display: flex; flex-direction: column; gap: var(--sp-1); }
+.op-sel { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.op-sel > input { flex: none; width: 28px; height: 28px; margin: 14px 0 0; accent-color: var(--action); }
+.op-sel > .ds-label { flex: 1; min-width: 0; }
+.op-sel--fuera .ds-label { opacity: 0.6; }
+.op-aviso-lote { margin: 0; }
+.op-peligro { background: transparent; color: var(--danger); box-shadow: inset 0 0 0 2px var(--danger); }
 .op-pinok { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; color: var(--pin); }
 
 .op-busca { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 14px; border-radius: var(--r-sm); background: var(--surface); border: 2px solid var(--line-strong); color: var(--muted); }

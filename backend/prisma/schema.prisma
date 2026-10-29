@@ -75,6 +75,7 @@ model Conjunto {
   cortesias          CortesiaApartamento[]
   domicilios         Domicilio[]
   usuariosConjunto   UsuarioConjunto[]
+  domicilioEventos   DomicilioEvento[]
 }
 
 model User {
@@ -111,6 +112,7 @@ model User {
   clavesIdempotencia ClaveIdempotencia[]
   domicilios         Domicilio[]
   conjuntos          UsuarioConjunto[]
+  domicilioEventos   DomicilioEvento[]
 
   // Indice de tenant (A3). El compuesto sirve tambien para las consultas que
   // filtran solo por conjuntoId (Postgres usa la primera columna), asi que no
@@ -395,12 +397,37 @@ model Domicilio {
   ultimoUsoEn  DateTime @default(now())
   activo       Boolean  @default(true)
   creadoEn     DateTime @default(now())
+  // `nombreRecibe` sin tildes y en minúsculas (domain/apartamento.js#sinTildes), para que el
+  // operador busque por nombre EN LA BASE (`contains`) sin la extensión `unaccent` ni SQL
+  // crudo. Lo escribe services/domicilio.service.js en cada alta/cambio de nombre; la
+  // migración add_domicilio_busqueda_evento lo rellena para las filas existentes.
+  nombreBusqueda String  @default("")
 
   paquetes Package[]
+  eventos  DomicilioEvento[]
 
   @@unique([conjuntoId, usuarioId, torre, apto])
   // Búsqueda del operador por apartamento dentro de su conjunto.
   @@index([conjuntoId, apto])
+}
+
+// Bitácora de cambios sobre una dirección de entrega (revisión S3.2): hoy solo `DESACTIVAR`
+// (el operador desactiva un domicilio impostor o equivocado). Lleva tenant. No tiene trigger
+// de solo inserción (la app nunca la actualiza ni borra); `actorId` queda NULL si se borra
+// la cuenta del operador.
+model DomicilioEvento {
+  id          String    @id @default(cuid())
+  conjunto    Conjunto  @relation(fields: [conjuntoId], references: [id])
+  conjuntoId  String
+  domicilio   Domicilio @relation(fields: [domicilioId], references: [id], onDelete: Cascade)
+  domicilioId String
+  tipo        String    // DESACTIVAR
+  actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId     String?
+  datos       Json?
+  creadoEn    DateTime  @default(now())
+
+  @@index([conjuntoId, domicilioId, creadoEn])
 }
 
 // Índice "en qué conjuntos tiene domicilio esta persona" (PLAN-conjunto S1.2). Es la

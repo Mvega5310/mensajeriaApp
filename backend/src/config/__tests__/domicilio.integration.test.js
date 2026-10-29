@@ -169,7 +169,10 @@ test('búsqueda del operador: solo Domicilios de su conjunto; el de B no aparece
   // Ana en A: un solo resultado (el domicilio de A), con la forma nueva.
   const porNombre = await buscar(ctx.tOpA, 'ana gomez');
   assert.equal(porNombre.length, 1);
-  assert.deepEqual(Object.keys(porNombre[0]).sort(), ['apto', 'domicilioId', 'etiqueta', 'id', 'nombre', 'pendientes', 'residenteId', 'torre']);
+  assert.deepEqual(Object.keys(porNombre[0]).sort(), [
+    'apto', 'creadoEn', 'domicilioId', 'entregados', 'esNueva', 'etiqueta', 'id', 'nombre', 'pendientes',
+    'posibleDuplicado', 'prealertaCoincide', 'residenteId', 'telefonoFin', 'torre',
+  ]);
   assert.equal(porNombre[0].domicilioId, ctx.domPA.id);
   assert.equal(porNombre[0].residenteId, ctx.P.id);
   assert.equal(porNombre[0].etiqueta, 'T2 · 304');
@@ -225,7 +228,8 @@ test('un RESIDENT no puede leer la cuenta ni los paquetes de otra persona', { sk
   assert.ok(!('passwordHash' in me));
   // No hay ruta de residente que acepte el id de otra cuenta; las de operador son 403.
   assert.equal((await api(`/api/packages/${ctx.pAnaA.id}`, { token: ctx.tQ })).status, 403);
-  assert.equal((await api(`/api/packages/${ctx.pAnaA.id}/foto`, { token: ctx.tQ })).status, 403);
+  // La foto del paquete de otra persona es 404 (un 403 confirmaría que el id existe).
+  assert.equal((await api(`/api/packages/${ctx.pAnaA.id}/foto`, { token: ctx.tQ })).status, 404);
   assert.equal((await api(`/api/residentes/buscar?q=ana`, { token: ctx.tQ })).status, 403);
   assert.equal((await api(`/api/bonos/residente/${ctx.P.id}`, { token: ctx.tQ })).status, 403);
   // Una pre-alerta con el domicilioId de OTRA persona no sirve (404): solo se usan los propios.

@@ -137,7 +137,11 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 | `tenantExtension.interceptor.test.js` | unitaria¹ | lógica del interceptor por operación (lecturas/escrituras/creación/upsert, falla-cerrado, `GLOBAL_LOOKUP`). |
 | `invitacion.service.test.js` | unitaria | generación y normalización del código de invitación. |
 | `frontendSinFijos.test.js` | estática | falla si aparece "Ipanema" o montos de tarifa fijos en `frontend/src`. |
-| `auditoriaInvariantes.test.js` | estática | un solo `PrismaClient`; `GLOBAL_LOOKUP` y consultas crudas solo en su función. |
+| `auditoriaInvariantes.test.js` | estática | un solo `PrismaClient`; `GLOBAL_LOOKUP` y consultas crudas solo en su función; **E7.4 con `acorn`** (analiza el árbol, no regex): `User` solo desde `usuario.service.js` aunque se acceda con alias, `x['user']`, `const { user } = x` o en un `$transaction`; el cliente de `db.js` solo en archivos autorizados y sin alias/re-export/`import()`; ningún `select`/`include` trae `email`/`passwordHash` de una relación a `User`. |
+| `auditoriaAst.test.js` | estática | Pruebas DE la auditoría: fixtures con cada evasión (alias, `['user']`, desestructuración, `$transaction`, acceso dinámico, `residente: true`, constantes con `email`…) que ahora FALLAN, y código legítimo que pasa. |
+| `revisionS32.integration.test.js` | integración | Revisión S3.2 (C5, lote y spam): discriminador, `posibleDuplicado`, orden por guía/entregas/antigüedad, desactivar dirección (auditoría, 409, no se reactiva), lote que mezcla personas y entrega del subconjunto, tope de 10 y ráfaga en paralelo, límite por hora, **3100 domicilios de relleno y el legítimo se encuentra**, foto 404 y `tieneDomicilioEn` con Domicilio activo real. |
+| `revisionS32Bajas.integration.test.js` | integración | Revisión S3.2 (bajas): registro endurecido (tipos, largos, apartamento obligatorio), `config-publica` con `slug` y límite por IP, slug válido + código inválido (gana el slug) y slug A + código válido de B (400), `/bonos/mine` y `/comments/mine` de todos los conjuntos. |
+| `migracionBusquedaEvento.integration.test.js` | integración | Migración `add_domicilio_busqueda_evento` en base desechable: backfill de `nombreBusqueda` = `sinTildes` (JS), idempotencia, rollback y re-aplicar. |
 | `tenantGuard.routes.test.js` | estructural¹ | recorre el app real: toda ruta autenticada lleva `requireAuth`+`requireTenant`; rutas públicas declaradas. |
 | `tenantIsolation.integration.test.js` | integración | aislamiento CRUD entre dos conjuntos (findUnique/update/findMany, falla-cerrado). |
 | `registroLogin.integration.test.js` | integración | registro por código, login en dos conjuntos, 409 email cross-conjunto. |
@@ -188,14 +192,17 @@ Toda respuesta de error de la API tiene la forma `{ "code", "message", "details"
 - `message`: texto en español listo para mostrar (qué pasó y qué hacer).
 - `details`: opcional, datos de apoyo.
 
-Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `PIN_BLOQUEADO`, `DEMASIADOS_INTENTOS`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `TRANSICION_INVALIDA`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
+Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `LIMITE_DIRECCIONES`, `DIRECCION_DESACTIVADA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `PIN_BLOQUEADO`, `DEMASIADOS_INTENTOS`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `TRANSICION_INVALIDA`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
 
 **El conjunto se elige por solicitud (PLAN-conjunto S1.3).** El código de invitación ya no es
 requisito: `POST /api/auth/register` acepta `conjunto` (slug) + `torre` + `apto` + `nombre` +
-`telefono`; `codigoInvitacion` (o los `?c=` antiguos) sigue sirviendo y, si vienen ambos, deben
-ser del mismo conjunto. Sin slug ni código vale el **único** conjunto activo (QR viejos); con
+`telefono`; `codigoInvitacion` (o los `?c=` antiguos) sigue sirviendo. **Con slug válido, un código
+inválido o vencido se ignora (gana el slug)**; solo un código VÁLIDO de otro conjunto es
+`400 CONJUNTO_INVALIDO`. El registro valida tipos y largos (nada de 500 por `torre: 123` ni textos de
+5000 caracteres) con las mismas reglas que `POST /domicilios` (`direccionDeCuerpo`) y **exige el
+apartamento** (`400 DATOS_INVALIDOS`). Sin slug ni código vale el **único** conjunto activo (QR viejos); con
 varios activos, `400 CONJUNTO_REQUERIDO`; slug inexistente o inactivo, `400 CONJUNTO_INVALIDO`.
-`GET /api/conjuntos/config-publica` acepta `?conjunto=<slug>` además de `?c=` con el mismo criterio.
+`GET /api/conjuntos/config-publica` acepta `?conjunto=<slug>` además de `?c=` con el mismo criterio, devuelve también el `slug` (la pantalla de registro con un `?c=` antiguo lo usa para preseleccionar el conjunto) y tiene límite por IP (60/min, `429` con `Retry-After`).
 (El texto siguiente describe el hotfix original; hoy lo cubre ese criterio.)
 
 **Registro sin código mientras exista un solo conjunto** (hotfix `20a46b4`,
@@ -457,17 +464,45 @@ que han pedido o recibido en ese apartamento:
 
 ```json
 [{ "domicilioId": "…", "residenteId": "…", "id": "…", "nombre": "Ana Gómez",
-   "torre": "2", "apto": "304", "etiqueta": "T2 · 304", "pendientes": 2 }]
+   "torre": "2", "apto": "304", "etiqueta": "T2 · 304", "pendientes": 2,
+   "telefonoFin": "4567", "creadoEn": "2026-03-02T…", "esNueva": false, "entregados": 3,
+   "prealertaCoincide": false, "posibleDuplicado": false }]
 ```
 
 - `id` = `residenteId` (compatibilidad con los contratos actuales). `nombre` es el de
-  quien recibe en esa dirección. No se expone correo ni teléfono ni otros conjuntos.
+  quien recibe en esa dirección. No se expone correo, el teléfono completo ni otros conjuntos.
 - `pendientes` = paquetes de ese domicilio en `EN_RECEPCION` o `PROGRAMADO`.
+- **Discriminador (revisión S3.2, C5 "domicilio impostor").** Alguien puede registrarse en el
+  mismo apartamento con el mismo nombre que la residente real; para que el operador no entregue
+  el aviso (y el PIN) a la persona equivocada, cada fila trae lo que la distingue **sin pedirle
+  nada al residente**: `telefonoFin` (últimos 4 dígitos), antigüedad (`creadoEn`, y `esNueva` si
+  tiene menos de 7 días), `entregados` (paquetes ya entregados en ese domicilio) y `pendientes`.
+  `posibleDuplicado: true` si hay 2+ domicilios activos con el mismo nombre (sin tildes ni
+  mayúsculas) en el mismo apartamento. En la pantalla, cada fila dice p. ej.
+  `T2 · 304 / Ana Perez / •••• 4567 · nueva · sin entregas` o
+  `•••• 0001 · desde mar 2026 · 3 entregas`, y con duplicados aparece el aviso
+  **"Hay 2 personas con este nombre en este apartamento: confirma el teléfono."**
+- `guia` (opcional, `?q=…&guia=ABC123`): la guía que el operador ya tiene (la hoja "Asignar" manda
+  la del paquete sin dueño); el domicilio con una pre-alerta abierta de esa guía sale primero y
+  trae `prealertaCoincide: true`. Recibir no la manda (se escribe después de elegir).
+- **Desactivar una dirección:** `PATCH /api/domicilios/:id/desactivar` (OPERATOR, solo de su
+  conjunto; la de otro conjunto es 404) deja `Domicilio.activo = false` y un `DomicilioEvento`
+  `DESACTIVAR` con el operador. Una dirección inactiva no sale en la búsqueda, no recibe paquetes
+  nuevos (`409 DIRECCION_DESACTIVADA`, también con `residenteId`: se ignoran los inactivos) y **no se
+  reactiva sola** (crearla otra vez o usarla es `409 DIRECCION_DESACTIVADA`, "Esta dirección fue
+  desactivada por el operador"); la persona puede crear otra dirección. Los paquetes que ya tenía
+  se entregan igual. En la app: detalle del apartamento en Pendientes -> "Desactivar dirección" (con
+  confirmación).
 - `q` vacío (o de más de 60 caracteres) -> 400 `DATOS_INVALIDOS`.
 - Formatos de `q` (`domain/apartamento.js#interpretarBusqueda`): `304` (solo apto;
   también prefijo: `30` -> 301..309; con torre también es prefijo: `T2 30` -> 301, 304...), `T2 304`, `t2-304`, `2-304`, `2 304`,
   `2/304`, `Torre 2 apto 304`, y nombre libre (`ana`, `Ana Gó`, `gomez`).
-- Orden: apto exacto primero, luego torre y apto.
+- **Búsqueda EN LA BASE** (sin leer un bloque en memoria): apto como prefijo, torre canónica exacta
+  y el nombre contra `Domicilio.nombreBusqueda` (el nombre sin tildes ni mayúsculas, que escribe
+  `domicilio.service.js` y rellena la migración `add_domicilio_busqueda_evento`), con orden
+  determinista y tope de 100 candidatos. El spam de domicilios ya no puede esconder al legítimo.
+- Orden: pre-alerta de la `guia` escrita (si llega), apto exacto, torre y apto y, dentro del mismo
+  apartamento, más entregas previas primero y, a igualdad, el más antiguo.
 - Torre/apto se guardan en forma canónica (`torre` = token: `TORRE 2`, `T2` y `2` son `2`;
   `apto` solo dígitos; `''` si faltan). Ver DEPLOY.md, migración `add_domicilio`.
 - Tildes: el nombre se compara en memoria sin tildes ni mayúsculas (sin
@@ -496,7 +531,12 @@ CLAUDE.md.
   `[{ id, conjunto:{slug,nombre}, torre, apto, etiqueta, nombreRecibe, telefono, ultimoUsoEn }]`.
   **`POST /api/domicilios`** `{ conjunto, torre?, apto, nombreRecibe?, telefono? }` (201): crea o
   reutiliza (misma persona + conjunto + torre + apto) y la deja como la última usada; nombre y
-  teléfono que falten se precargan de la cuenta al crear. Sin `DELETE` por ahora.
+  teléfono que falten se precargan de la cuenta al crear. **Máximo 10 direcciones activas por persona y
+  conjunto** (`400 LIMITE_DIRECCIONES`: "Ya tienes 10 direcciones en este conjunto…"; las altas
+  simultáneas se serializan con el bloqueo de fila de `UsuarioConjunto`, así una ráfaga no lo salta)
+  y **20 altas por hora por cuenta** (`429 DEMASIADOS_INTENTOS`, limitador en memoria; también cuenta la
+  pre-alerta con dirección nueva). El índice `UsuarioConjunto` y el `Domicilio` se escriben en UNA
+  transacción. Sin `DELETE`; el operador la desactiva (ver "Buscar residentes").
 - **`POST /api/packages`** (pre-alerta): `{ domicilioId }` (propia, en cualquiera de sus conjuntos),
   o `{ conjunto, torre, apto, nombreRecibe?, telefono? }` (crea/reutiliza la dirección), o nada
   (la dirección más reciente: 0 campos). Corre en el conjunto de esa dirección y el correo va al
@@ -504,9 +544,9 @@ CLAUDE.md.
   la dirección y `User.conjuntoId` (último conjunto).
 - **Contexto de las demás rutas del residente:** `PATCH /packages/:id/schedule` y
   `GET /packages/:id/foto` buscan el paquete DEL residente en sus conjuntos y operan en el del
-  paquete (ajeno o en un conjunto sin domicilio suyo: 404). `GET /p/paquetes`, `GET /conjunto/config`
+  paquete (ajeno o en un conjunto sin domicilio suyo: 404, también la foto: nunca 403). `GET /p/paquetes`, `GET /conjunto/config`
   y `/comments` aceptan `?conjunto=<slug>` (en `POST /comments`, `conjunto` en el cuerpo): conjunto
-  activo donde tiene domicilio (si no, 404; inactivo/inexistente, 400). La sesión del enlace se queda
+  activo donde tiene un domicilio ACTIVO real (se comprueba el `Domicilio`, no solo la fila del índice; si no, 404; inactivo/inexistente, 400). `GET /bonos/mine` y `GET /comments/mine` sin `?conjunto=` juntan los de TODOS sus conjuntos (como `/packages/mine`, una consulta por conjunto) y cada uno trae su `conjunto` `{ slug, nombre }`; con `?conjunto=<slug>`, solo ese. La sesión del enlace se queda
   en el conjunto de su token, válido si la persona tiene domicilio ahí (ya no se compara con
   `User.conjuntoId`). El operador no elige conjunto.
 - **Operador:** `domicilioId` es el contrato de `POST /packages/recepcion` y `PATCH /packages/:id/asignar`
@@ -611,8 +651,14 @@ pendiente del apartamento con el total, elige Efectivo/Transferencia y
 
 **`POST /api/entregas/verificar-pin`** `{ "pin": "1234", "residenteId"?: "…", "apto"?: "T2 304" }` ->
 `200 { residente: { id, nombre, etiquetaApto }, paquetes: [{ id, categoriaPeso,
-transportadora, proveedor, recibidoEn, costo, motivoCobro, estado }], total,
-metodosPago: ["EFECTIVO","TRANSFERENCIA"], tokenEntrega, venceEn }`.
+transportadora, proveedor, recibidoEn, costo, motivoCobro, estado, nombreRecibe, seleccionado }],
+variasPersonas, total, metodosPago: ["EFECTIVO","TRANSFERENCIA"], tokenEntrega, venceEn }`.
+**Lote que mezcla personas (revisión S3.2):** el lote sigue siendo por apartamento físico, pero cada
+paquete trae su `nombreRecibe`; si hay paquetes de más de un `Domicilio`, `variasPersonas: true` y solo
+vienen `seleccionado: true` los del domicilio dueño del PIN tecleado (el `total` es el de lo
+seleccionado). Op-Cobrar muestra el aviso "Hay paquetes de más de una persona en este
+apartamento…", el nombre de cada paquete y una casilla por paquete; el botón pasa a "Entregar lo
+marcado" y `/entregas/confirmar` recibe solo los `paqueteIds` marcados (subconjunto del token).
 Errores: 400 `DATOS_INVALIDOS` (PIN no es de 4 dígitos), 400 `PIN_INCORRECTO`
 (ningún paquete entregable lo tiene; cuenta como fallo), 409 `PIN_AMBIGUO`
 (`details.opciones: [{ residenteId, etiquetaApto }]`), 423 `PIN_BLOQUEADO`,
@@ -747,12 +793,12 @@ Métodos: `avisarLlegada({ residente, paquete, conjunto, aviso })`,
 
 | Ruta | Pantalla | Qué hace |
 |---|---|---|
-| `/op/recibir` | Recibir | Teclado + "Torre", búsqueda con debounce (`/residentes/buscar`), "No sé de quién es" (sin dueño), contador "Hoy: N · M por entregar" (`GET /packages/resumen`). |
+| `/op/recibir` | Recibir | Teclado + "Torre", búsqueda con debounce (`/residentes/buscar`; cada fila con teléfono `•••• 4567`, antigüedad y entregas, y aviso de duplicado), "No sé de quién es" (sin dueño), contador "Hoy: N · M por entregar" (`GET /packages/resumen`). |
 | `/op/recibir/:domicilioId` | Peso | 4 tiles con la tarifa del conjunto, foto opcional (`maxFotos`, `utils/image.js`), "+ Guía", **Guardar** (`POST /packages/recepcion` con `Idempotency-Key`). `domicilioId = sin-dueno` para el flujo sin dueño; manda `domicilioId`. |
 | `/op/guardado/:id` | Guardado | Resumen, `motivoCobro` (sello de cortesía), vista previa del aviso y **Avisar por WhatsApp** (`aviso.waUrl`). |
 | `/op/entregar` | Entregar | PIN de 4 dígitos; verifica solo (`/entregas/verificar-pin`); `PIN_AMBIGUO` muestra chips de apartamento. |
-| `/op/entregar/lote` | Cobrar | Lote, total, Efectivo/Transferencia (de `metodosPago`) y **Entregar todo** (`/entregas/confirmar`). El `tokenEntrega` vive solo en memoria del módulo. |
-| `/op/pendientes` | Pendientes | Buscador, "Sin asignar" (Asignar → `PATCH /packages/:id/asignar`), "Por entregar" por apartamento (detalle con fotos y bonos si `bonosHabilitados`), avisos de residentes. "Más": tema, exportar CSV, buzón de comentarios, QR de invitación, salir. |
+| `/op/entregar/lote` | Cobrar | Lote, total, Efectivo/Transferencia (de `metodosPago`) y **Entregar todo** (`/entregas/confirmar`; con paquetes de varias personas, casillas y **Entregar lo marcado**). El `tokenEntrega` vive solo en memoria del módulo. |
+| `/op/pendientes` | Pendientes | Buscador, "Sin asignar" (Asignar → `PATCH /packages/:id/asignar`), "Por entregar" por apartamento (detalle con fotos, bonos si `bonosHabilitados` y **Desactivar dirección**), avisos de residentes. "Más": tema, exportar CSV, buzón de comentarios, QR de invitación, salir. |
 
 **Recibir en 4 toques (T8.1).** Cuando la búsqueda devuelve **una única** sugerencia y lo escrito
 tiene ≥ 3 dígitos de apartamento (o torre + el apto exacto del residente), Recibir muestra ya el
