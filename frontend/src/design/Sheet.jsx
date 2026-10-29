@@ -7,7 +7,7 @@ const FOCALIZABLES =
 /** Hoja inferior modal. open, onClose, title. Foco atrapado, Esc y toque al fondo cierran,
  *  el foco vuelve al elemento que la abrió. Va dentro de un contenedor `.pt` (hereda tema
  *  de <html data-tema>). */
-export default function Sheet({ open, onClose, title, children, cerrarLabel = 'Cerrar' }) {
+export default function Sheet({ open, onClose, title, children, cerrarLabel = 'Cerrar', tema = '' }) {
   const ref = useRef(null);
   const tituloId = useId();
 
@@ -55,7 +55,7 @@ export default function Sheet({ open, onClose, title, children, cerrarLabel = 'C
 
   if (!open) return null;
   return (
-    <div className="ds-sheet__scrim pt" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+    <div className={`ds-sheet__scrim pt ${tema}`.trim()} onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
       <div
         ref={ref}
         className="ds-sheet"

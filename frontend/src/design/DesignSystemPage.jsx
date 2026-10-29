@@ -2,7 +2,7 @@
 // componentes en día y noche lado a lado. Los datos son de ejemplo (DEMO).
 import { useState } from 'react';
 import {
-  Badge, BottomNav, Button, Field, Keypad, PackageLabel, PinInput, Sheet, Stamp, ThemeToggle, Toast, TopBar,
+  Badge, BottomNav, Button, DireccionEntrega, Field, SelectorConjunto, Keypad, PackageLabel, PinInput, Sheet, Stamp, ThemeToggle, Toast, TopBar,
 } from './index.js';
 
 const TABS = [
@@ -22,7 +22,33 @@ function Seccion({ titulo, children }) {
   );
 }
 
+const UNO = [{ slug: 'ejemplo', nombre: 'Conjunto Ejemplo' }];
+const TRES = [...UNO, { slug: 'jardines', nombre: 'Jardines de Muestra' }, { slug: 'torres', nombre: 'Torres Demo' }];
+const DIRS = [
+  { id: 'd1', conjunto: UNO[0], etiqueta: 'T2 · 304', nombreRecibe: 'Ana', telefono: '3001234567' },
+  { id: 'd2', conjunto: TRES[1], etiqueta: 'T1 · 502', nombreRecibe: 'Luis', telefono: '3001234567' },
+];
+const PRECARGA = { nombreRecibe: 'Ana', telefono: '3001234567' };
+
+function DemoDireccion({ tema, direcciones, conjuntos, mostrarConjunto }) {
+  const [valor, setValor] = useState(direcciones[0]?.id);
+  return (
+    <DireccionEntrega
+      tema={tema}
+      direcciones={direcciones}
+      valor={valor}
+      onElegir={setValor}
+      onCrear={() => new Promise((r) => setTimeout(r, 300))}
+      conjuntos={conjuntos}
+      mostrarConjunto={mostrarConjunto}
+      precarga={PRECARGA}
+    />
+  );
+}
+
 function Panel({ tema }) {
+  const [c1, setC1] = useState('');
+  const [c3, setC3] = useState('');
   const [pin, setPin] = useState('48');
   const [hoja, setHoja] = useState(false);
   const [tab, setTab] = useState('recibir');
@@ -77,6 +103,23 @@ function Panel({ tema }) {
         <Field label="Nombre" placeholder="Ana Gómez" />
         <Field label="Apartamento" mono defaultValue="304" ayuda="Solo números." />
         <Field label="Teléfono" error="El número no es válido. Revisa que tenga 10 dígitos." defaultValue="31234" />
+      </Seccion>
+
+      <Seccion titulo="Selector de conjunto">
+        <SelectorConjunto conjuntos={UNO} value={c1} onChange={setC1} />
+        <SelectorConjunto conjuntos={TRES} value={c3} onChange={setC3} />
+        <SelectorConjunto conjuntos={[]} cargando />
+        <SelectorConjunto conjuntos={[]} error="No pudimos cargar los conjuntos. Revisa tu conexión." onReintentar={() => {}} />
+      </Seccion>
+
+      <Seccion titulo="Dirección de entrega · 1 conjunto">
+        <DemoDireccion tema={tema} direcciones={[DIRS[0]]} conjuntos={UNO} mostrarConjunto={false} />
+      </Seccion>
+      <Seccion titulo="Dirección de entrega · 2 conjuntos">
+        <DemoDireccion tema={tema} direcciones={DIRS} conjuntos={TRES} mostrarConjunto />
+      </Seccion>
+      <Seccion titulo="Dirección de entrega · sin direcciones">
+        <DemoDireccion tema={tema} direcciones={[]} conjuntos={UNO} mostrarConjunto={false} />
       </Seccion>
 
       <Seccion titulo="Avisos">

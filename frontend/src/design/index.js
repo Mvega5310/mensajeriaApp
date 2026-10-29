@@ -15,3 +15,5 @@ export { default as Field } from './Field.jsx';
 export { default as Icon, ICONOS } from './Icon.jsx';
 export { default as ThemeToggle } from './ThemeToggle.jsx';
 export { default as useTheme } from './useTheme.js';
+export { default as SelectorConjunto } from './SelectorConjunto.jsx';
+export { default as DireccionEntrega } from './DireccionEntrega.jsx';

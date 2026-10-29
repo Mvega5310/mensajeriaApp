@@ -267,6 +267,54 @@
 .ds-field__ayuda { font-size: var(--fs-apoyo); color: var(--muted); }
 .ds-field__error { display: flex; align-items: center; gap: 6px; font-size: var(--fs-texto); color: var(--danger); font-weight: 700; }
 
+/* Enlace pequeño (área táctil de 48 px) */
+.ds-enlace {
+  box-sizing: border-box;
+  min-height: var(--tap-min);
+  min-width: var(--tap-min);
+  padding: 0 var(--sp-1);
+  background: transparent;
+  border: 0;
+  color: var(--action);
+  font: 700 var(--fs-texto) var(--font-texto);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+/* SelectorConjunto */
+.ds-selector__caja { position: relative; }
+.ds-selector__select { appearance: none; -webkit-appearance: none; padding-right: var(--sp-6); text-overflow: ellipsis; cursor: pointer; }
+.ds-selector__select:disabled { cursor: not-allowed; opacity: 1; color: var(--muted); background: var(--raised); }
+.ds-selector__flecha { position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%) rotate(90deg); pointer-events: none; color: var(--ink); }
+
+/* DireccionEntrega */
+.ds-dir { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ds-dir__titulo { margin: 0; font: 800 20px var(--font-titulo); letter-spacing: -0.02em; }
+.ds-dir__corta { display: flex; align-items: center; gap: var(--sp-1); min-height: var(--tap-min); color: var(--ink); }
+.ds-dir__linea { flex: 1; min-width: 0; margin: 0; font-weight: 700; font-size: var(--fs-texto); overflow-wrap: anywhere; }
+.ds-dir__lista { display: flex; flex-direction: column; gap: var(--sp-1); }
+.ds-dir__opcion {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--field-h);
+  padding: var(--sp-1) var(--sp-2);
+  border: 2px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-weight: 700;
+  cursor: pointer;
+}
+.ds-dir__opcion--sel { border-color: var(--action); background: var(--raised); }
+.ds-dir__opcion input { width: 24px; height: 24px; margin: 0; flex: none; accent-color: var(--action); }
+.ds-dir__opcion:has(:focus-visible) { outline: var(--focus-w) solid var(--action); outline-offset: var(--focus-offset); }
+.ds-dir__form { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ds-dir__fila { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-1); }
+.ds-dir__fila .ds-field__input { min-width: 0; }
+
 /* ThemeToggle */
 .ds-themetoggle { box-sizing: border-box; width: var(--tap-min); height: var(--tap-min); display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-sm); border: 2px solid var(--line-strong); background: var(--surface); color: var(--ink); cursor: pointer; }
 .ds-themetoggle:focus-visible { outline: var(--focus-w) solid var(--action); outline-offset: var(--focus-offset); }
