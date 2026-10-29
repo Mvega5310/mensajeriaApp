@@ -8,7 +8,7 @@
     "postinstall": "prisma generate",
     "start": "prisma migrate deploy && node src/index.js",
     "prisma:migrate": "prisma migrate dev",
-    "test": "node --test",
+    "test": "node --test --test-concurrency=1",
     "test:all": "bash scripts/test-db.sh",
     "seed": "node prisma/seed.js",
     "alta-conjunto": "node scripts/altaConjunto.js",

@@ -1,0 +1,13 @@
+{
+  "_comment": "EJEMPLO con valores FICTICIOS. Para el alta/backfill real, copia este archivo a 'ipanema.local.json' (ignorado por git) y pon los datos reales del operador. NUNCA pongas WhatsApp/domicilio reales en un archivo versionado: el repo es público. bonosHabilitados NO se incluye: siempre queda false.",
+  "nombre": "Conjunto Residencial Ejemplo",
+  "slug": "ejemplo",
+  "operadorNombre": "Nombre Apellido",
+  "operadorWhatsapp": "573000000000",
+  "operadorDomicilio": "Torre 0, Apto 000",
+  "puntoRecepcion": "Portería",
+  "tarifaMano": 3000,
+  "tarifaEstandar": 4500,
+  "tarifaVolumen": 7000,
+  "tarifaPesado": 12000
+}

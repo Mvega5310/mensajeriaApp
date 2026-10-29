@@ -4,14 +4,18 @@ import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
 import { franjasDe } from '../domain/conjuntoConfig.js';
 import { METODOS_PAGO } from '../domain/pago.js';
-import { soloPresentacionales, tarifasDe, conjuntoDelContexto } from '../services/conjunto.service.js';
+import { soloPresentacionales, tarifasDe, conjuntoDelContexto, conjuntoUnicoActivo } from '../services/conjunto.service.js';
 
 // GET /api/conjuntos/config-publica?c=<codigo>  (PÚBLICO, pre-sesión)
 // Devuelve solo campos presentacionales. Conjunto es modelo exento, así que la
 // lectura no requiere contexto. No expone tarifas ni flags. No parsea slug.
+// Sin `c`: responde con el conjunto solo si es el ÚNICO (mismo criterio que
+// register() sin código); si no, 400 como siempre.
 export async function configPublica(req, res) {
   const c = req.query.c;
   if (!c) {
+    const unico = await conjuntoUnicoActivo();
+    if (unico) return res.json(soloPresentacionales(unico));
     throw new AppError(CODIGOS.INVITACION_INVALIDA, 'Necesitas el enlace de invitación de tu conjunto. Pídelo a la administración.', 400);
   }
   const codigo = normalizarCodigoInvitacion(c);

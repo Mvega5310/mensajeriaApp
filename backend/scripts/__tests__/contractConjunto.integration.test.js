@@ -6,12 +6,16 @@
 // NOTA: esta prueba MUTA el esquema (NOT NULL / FKs) de la base de prueba. Al
 // final SIEMPRE corre el rollback para dejar la base como la encontró (columnas
 // nullable), de modo que no interfiera con otras integraciones en la misma base.
+//
+// Depende del estado GLOBAL de la base: el guard del contract exige 0 filas con
+// conjuntoId NULL en TODA la base, y el ALTER afecta a todas las pruebas. Por
+// eso las integraciones corren en serie (`--test-concurrency=1` en `npm test`);
+// la limpieza solo borra lo suyo (usuarios `@x.local` y conjuntos `itestct-%`).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -32,19 +36,23 @@ const omitir = razonSkip !== null;
 if (omitir) console.warn(`[contractConjunto.integration] OMITIDA: ${razonSkip}`);
 
 const aqui = dirname(fileURLToPath(import.meta.url));
-const MANUAL = join(aqui, '..', '..', 'prisma', 'manual');
-const SQL_CONTRACT = readFileSync(join(MANUAL, 'contract_conjunto_not_null.sql'), 'utf8');
-const SQL_ROLLBACK = readFileSync(join(MANUAL, 'rollback_contract_conjunto.sql'), 'utf8');
+const BACKEND = join(aqui, '..', '..');
+const MANUAL = join(BACKEND, 'prisma', 'manual');
+const SQL_CONTRACT = join(MANUAL, 'contract_conjunto_not_null.sql');
+const SQL_ROLLBACK = join(MANUAL, 'rollback_contract_conjunto.sql');
+const PRISMA_CLI = join(BACKEND, 'node_modules', 'prisma', 'build', 'index.js');
+const SCHEMA = join(BACKEND, 'prisma', 'schema.prisma');
 
 let prisma, runWithTenant;
 const SLUG = 'itestct-ipanema';
 const cuid = (p) => `${p}_${crypto.randomBytes(8).toString('hex')}`;
 
+// Solo lo de esta prueba: usuarios `@x.local` (y sus hijos) y conjuntos `itestct-%`.
 async function limpiarTodo() {
-  await prisma.$executeRaw`DELETE FROM "Comentario"`;
-  await prisma.$executeRaw`DELETE FROM "Bono"`;
-  await prisma.$executeRaw`DELETE FROM "Package"`;
-  await prisma.$executeRaw`DELETE FROM "User"`;
+  await prisma.$executeRaw`DELETE FROM "Comentario" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@x.local')`;
+  await prisma.$executeRaw`DELETE FROM "Bono" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@x.local')`;
+  await prisma.$executeRaw`DELETE FROM "Package" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@x.local')`;
+  await prisma.$executeRaw`DELETE FROM "User" WHERE "email" LIKE '%@x.local'`;
   await prisma.$executeRaw`DELETE FROM "Conjunto" WHERE "slug" LIKE 'itestct-%'`;
 }
 
@@ -61,23 +69,30 @@ async function sembrarBackfilleado() {
   return { conj, uid };
 }
 
-// Ejecuta un script SQL (con BEGIN/COMMIT y DO $$) tal como lo corre el runbook:
-// con psql. Prisma ($executeRawUnsafe) NO sirve aquí: usa sentencias preparadas
-// y Postgres rechaza varios comandos en una ("cannot insert multiple commands").
-// ON_ERROR_STOP aborta en el primer error; al cerrarse la sesión, Postgres revierte
-// la transacción abierta (igual que el guard del script real).
-async function ejecutarScript(sql) {
-  const r = spawnSync('psql', [dbUrl, '-v', 'ON_ERROR_STOP=1', '-q'], { input: sql, encoding: 'utf8' });
-  if (r.error) throw r.error;
-  if (r.status !== 0) throw new Error(r.stderr || `psql salió con código ${r.status}`);
+// Ejecuta un archivo SQL completo (BEGIN/COMMIT y DO $$) con `prisma db execute`.
+// No sirve `$executeRawUnsafe`: Prisma usa el protocolo extendido (sentencia
+// preparada) y Postgres rechaza varios comandos en una (42601). `db execute`
+// manda el script entero y, si el guard aborta, devuelve el mensaje del RAISE
+// ("CONTRACT abortado...") en stderr, que se relanza en la excepción. Se invoca
+// el CLI con node (sin npx) para que funcione igual en Windows.
+async function ejecutarScript(rutaSql) {
+  try {
+    execFileSync(process.execPath, [PRISMA_CLI, 'db', 'execute', '--file', rutaSql, '--schema', SCHEMA], {
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    throw new Error(`${e.stderr?.toString() || ''}${e.stdout?.toString() || ''}${e.message}`);
+  }
 }
 
 test('setup', { skip: omitir && razonSkip }, async () => {
   ({ prisma } = await import('../../src/config/db.js'));
   ({ runWithTenant } = await import('../../src/config/tenantContext.js'));
   await limpiarTodo();
-  // Asegura estado base nullable por si una corrida previa dejó el contract puesto.
-  try { await ejecutarScript(SQL_ROLLBACK); } catch { /* ya estaba nullable */ }
+  // Asegura estado base nullable por si una corrida previa dejó el contract
+  // puesto. El rollback es idempotente: si ya estaba nullable no falla.
+  await ejecutarScript(SQL_ROLLBACK);
 });
 
 test('contract: aplica sobre dataset backfilleado y endurece el esquema', { skip: omitir && razonSkip }, async () => {
@@ -94,13 +109,15 @@ test('contract: aplica sobre dataset backfilleado y endurece el esquema', { skip
       INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt")
       VALUES (${uid}, ${uid + '@x.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW())
     `,
+    // Prisma muestra el SQLSTATE y el DETAIL, no siempre el texto del error:
+    // 23502 = not_null_violation.
     /23502|not-null|null value/i
   );
 
   // (b) borrar un conjunto con datos FALLA (RESTRICT).
   await assert.rejects(
     prisma.$executeRaw`DELETE FROM "Conjunto" WHERE "id" = ${conj.id}`,
-    /23503|23001|violates foreign key|restrict/i
+    /23503|violates foreign key|restrict/i // 23503 = foreign_key_violation
   );
 });
 
@@ -116,7 +133,7 @@ test('contract: aborta si quedan NULLs (guard DO $$)', { skip: omitir && razonSk
     VALUES (${uid}, ${uid + '@x.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
   `;
   // El contract debe ABORTAR por el guard (hay NULLs), sin aplicar a medias.
-  await assert.rejects(ejecutarScript(SQL_CONTRACT), /conjuntoId NULL|CONTRACT abortado/i);
+  await assert.rejects(ejecutarScript(SQL_CONTRACT), /CONTRACT abortado/);
   // Y como abortó, un INSERT sin conjuntoId sigue permitido (esquema intacto).
   const uid2 = cuid('u');
   await prisma.$executeRaw`
@@ -145,7 +162,7 @@ test('rollback: revierte el contract (vuelve a permitir NULL y borrar)', { skip:
 });
 
 test('teardown: dejar la base en estado nullable', { skip: omitir && razonSkip }, async () => {
-  try { await ejecutarScript(SQL_ROLLBACK); } catch { /* ya nullable */ }
+  await ejecutarScript(SQL_ROLLBACK); // idempotente; si falla, que falle la prueba
   await limpiarTodo();
   await prisma.$disconnect();
 });

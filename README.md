@@ -7,10 +7,10 @@ seguridad y contractual que encontró que el control de roles y el PIN de entreg
 no tenían ningún respaldo del lado servidor. Con KAN-8 soporta **multi-conjunto**
 (cada conjunto con sus residentes, operador y paquetes, aislados entre sí).
 
-> **Estado del multi-conjunto:** implementado y validado en la rama
-> `feature/kan-8-multiconjunto`, **no desplegado en producción**. El corte
-> (backfill + fase *contract* + despliegue) es la Fase F y aún no se ejecuta; en
-> producción sigue el conjunto único Ipanema hasta entonces (ver DEPLOY.md).
+> **Estado del multi-conjunto:** **desplegado en producción desde el
+> 28-oct-2026** (ver DEPLOY.md). Producción tiene un solo conjunto, `ipanema`,
+> con `bonosHabilitados=false`. Mientras sea el único, el registro no necesita
+> código de invitación (ver "Registro sin código" más abajo).
 
 **En producción:**
 - App: https://mensajeria-app-iota.vercel.app
@@ -41,9 +41,13 @@ temporal en Docker** (abajo). El `provider` comiteado en
 **Postgres local desechable (Docker)**
 ```
 docker run --rm -d --name puertaya-pg -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=puertaya -p 5433:5432 postgres:16
+  -e POSTGRES_DB=puertaya -p 5433:5432 postgres:18
 # en backend/.env:  DATABASE_URL="postgresql://postgres:postgres@localhost:5433/puertaya"
 ```
+Producción (Railway) corre **PostgreSQL 18.6**; usa la misma versión mayor en
+local. La suite (`npm test`) está verificada en verde sobre 18.6 y
+también sobre 16. Sin Docker, sirven los binarios portables 18 con
+`initdb`/`pg_ctl` en el 5433 (ver `docs/runbook-corte-ipanema.md` §0.1).
 
 **Backend**
 ```
@@ -98,7 +102,7 @@ npm run dev              # http://localhost:5173 (proxy a /api -> :4000)
 **Pruebas del backend (KAN-8)**
 ```
 cd backend
-npm test                 # runner integrado de Node (node --test); NO usar
+npm test                 # node --test --test-concurrency=1 (en serie); NO usar
                          # 'node --test <carpeta>': no funciona en Windows.
 ```
 Las pruebas **unitarias/estáticas** corren sin base de datos. Las de
@@ -113,9 +117,18 @@ esquema con `prisma migrate deploy`, exporta `DATABASE_URL`, corre `node --test`
 (archivo por archivo, porque comparten esa base) y borra la base al terminar,
 incluso si fallan. Requiere `psql` y Postgres encendido; como root usa
 `su postgres`, o define `TEST_DB_ADMIN_URL` con un usuario administrador. La
-prueba de la migración contract ejecuta el SQL real con `psql`.
+prueba de la migración contract ejecuta el SQL real con `prisma db execute`.
 
-Qué cubre cada archivo (en `backend/src/**/__tests__/`):
+**Las pruebas corren en serie (`--test-concurrency=1`), a propósito.** Por
+defecto `node --test` ejecuta los archivos en paralelo, y todas las integraciones
+comparten la misma base. Las del backfill y el contract dependen del estado
+**global** de la base: el backfill cuenta todas las filas con `conjuntoId` NULL y
+aborta si hay filas de otro conjunto, y el guard del contract exige 0 NULL en
+toda la base y altera el esquema (NOT NULL). Si corren a la vez que otras, se
+pisan. Cada archivo limpia solo lo suyo (su prefijo de slug y su dominio de
+email), pero eso no basta mientras escriban en paralelo.
+
+Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tests__/`):
 
 | Archivo | Tipo | Qué verifica |
 |---|---|---|
@@ -132,6 +145,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `listadosSinFotos.integration.test.js` | integración | regresión T8.1: con una foto de 500 KB sembrada, ningún listado/lectura devuelve `fotoUrl` ni `data:image` y ninguna consulta de `Package` selecciona la columna; CSV sin inyección de fórmulas; filtros de fecha del CSV. |
 | `http.integration.test.js` | integración | flujo HTTP extremo a extremo (register→login→`/packages/mine`), cross-conjunto 404, sin `fotoUrl`, 401 sin token. |
 | `configConjunto.integration.test.js` | integración | `config-publica` y `/conjunto/config` por rol; tarifas distintas cobran distinto; gate de bonos. |
+| `registroConjuntoUnico.integration.test.js` | integración | registro y `config-publica` **sin código**: con 1 conjunto entra en él; inactivo o con 2 conjuntos → 400; con código sigue decidiendo el código. Exige empezar con 0 conjuntos en la base. |
 | `faseE.integration.test.js` | integración | aislamiento de negocio (operador del conjunto, cortesía por apto, schedule/checkin/confirm-delivery, bonos, comentarios). |
 | `contratosResidente.integration.test.js` | integración | T2.8: `transportadora` en la pre-alerta, `schedule` con `modalidad` RECOGER/DOMICILIO, `motivoCobro` en `/packages/mine` y `/p/paquetes`, `GET /bonos/mine`. |
 | `paquete.integration.test.js` | integración | T1.3: máquina de estados en `checkin`/`schedule`/`confirm-delivery` (409 al recibir un ENTREGADO o entregar un PREALERTADO), un `PaqueteEvento` por cambio, bono atómico (concurrencia), trigger de solo inserción y aislamiento de eventos. |
@@ -147,6 +161,9 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/`):
 | `notificador/__tests__/plantillas.test.js` | unitaria | T2.4: `escaparHtml`, plantillas escapadas y sin "Ipanema", selección `fake`/`resend`, `construirEnlace`. |
 | `backendSinFijos.test.js` | estática | T2.4: "Ipanema" no aparece en `backend/src` fuera de pruebas. |
 | `migracionRecepcion.integration.test.js` | integración | T2.1: la migración aplica sobre datos existentes en una base desechable; el rollback aborta con mensaje si hay paquetes sin residente y, sin ellos, revierte. |
+| `altaConjunto.integration.test.js` | integración | alta de conjunto + operador (`npm run alta-conjunto` sin el CLI), idempotencia por slug, atomicidad con email en uso. |
+| `backfillConjunto.integration.test.js` | integración | backfill sobre legado (filas NULL): asignación, idempotencia, pre-chequeos, rollback transaccional, `--solo-conjunto`, espera al lock ante escrituras concurrentes (también con 0 NULL visibles), `lock_timeout` con error legible. |
+| `contractConjunto.integration.test.js` | integración | migración *contract* manual (`prisma/manual/`) por `prisma db execute`: NOT NULL + FK `RESTRICT`, guard que aborta con NULLs, y su rollback. |
 
 ¹ Importan `@prisma/client`, así que requieren `npx prisma generate` (o
 `npm install`, que lo dispara) aunque no toquen la base de datos.
@@ -166,6 +183,19 @@ Toda respuesta de error de la API tiene la forma `{ "code", "message", "details"
 - `details`: opcional, datos de apoyo.
 
 Los códigos viven en `backend/src/domain/errores.js` (`NO_AUTENTICADO`, `SESION_INVALIDA`, `CREDENCIALES_INVALIDAS`, `PROHIBIDO`, `NO_ENCONTRADO`, `DATOS_INVALIDOS`, `CONFLICTO`, `INVITACION_INVALIDA`, `ENLACE_INVALIDO`, `PIN_INCORRECTO`, `PIN_BLOQUEADO`, `DEMASIADOS_INTENTOS`, `FUNCION_DESHABILITADA`, `CARGA_DEMASIADO_GRANDE`, `TRANSICION_INVALIDA`, `ERROR_INTERNO`). En el backend se lanza `throw new AppError(code, message, status, details?)`; toda ruta async va envuelta en `asyncHandler(...)` y el manejador global de `app.js` responde. Un error no previsto devuelve `500 ERROR_INTERNO` con mensaje genérico (el detalle solo va a la consola del servidor). El frontend (`services/api.js`) lanza un `Error` con `message`, `code`, `details` y `status`.
+
+**Registro sin código mientras exista un solo conjunto** (hotfix `20a46b4`,
+28-oct-2026). Si en toda la base hay
+**exactamente un** `Conjunto` con la invitación activa, `/registro` (sin `?c=`)
+funciona igual que antes del multi-conjunto: el residente queda en ese conjunto y
+la pantalla muestra su nombre. Así los folletos/QR antiguos, que apuntan sin
+código, siguen sirviendo. Se apaga solo: en cuanto existe un segundo conjunto (o
+el único tiene la invitación desactivada), el registro sin código responde
+`400 INVITACION_INVALIDA` y la pantalla pide el código. Lo mismo hace
+`GET /api/conjuntos/config-publica` sin `c` (solo los 5 campos públicos).
+**Antes de crear un segundo conjunto, reimprime los QR/folletos de los
+existentes con `?c=<código>`**: desde ese momento los enlaces sin código dejan de
+registrar.
 
 ## Funcionalidades
 

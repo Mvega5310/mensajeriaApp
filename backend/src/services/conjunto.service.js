@@ -26,6 +26,17 @@ export function soloPresentacionales(conjunto) {
   };
 }
 
+// Registro sin código (hotfix tras el corte KAN-8): mientras exista UN SOLO
+// conjunto, los folletos/QR antiguos sin ?c= siguen sirviendo. Devuelve ese
+// conjunto si es el único y tiene la invitación activa; si hay 0 o más de 1
+// (o el único está inactivo), null — y el código vuelve a ser obligatorio sin
+// tocar nada más. Conjunto es modelo exento: la lectura no requiere contexto.
+export async function conjuntoUnicoActivo() {
+  const conjuntos = await prisma.conjunto.findMany({ take: 2 });
+  if (conjuntos.length !== 1 || !conjuntos[0].invitacionActiva) return null;
+  return conjuntos[0];
+}
+
 // Tarifas como mapa { MANO, ESTANDAR, VOLUMEN, PESADO } desde las columnas.
 export function tarifasDe(conjunto) {
   return {

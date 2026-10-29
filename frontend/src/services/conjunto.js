@@ -9,6 +9,8 @@ export function getConjuntoConfig() {
 
 // Configuración presentacional por código de invitación (sin sesión).
 // GET /api/conjuntos/config-publica?c=<codigo>
+// Sin código, el backend responde solo si existe UN ÚNICO conjunto (si hay
+// varios, 400 INVITACION_INVALIDA y hay que pedir el código).
 export function getConfigPublica(codigo) {
-  return api(`/conjuntos/config-publica?c=${encodeURIComponent(codigo)}`);
+  return api(codigo ? `/conjuntos/config-publica?c=${encodeURIComponent(codigo)}` : '/conjuntos/config-publica');
 }

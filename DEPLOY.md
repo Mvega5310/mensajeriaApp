@@ -102,8 +102,23 @@ railway link                       # selecciona el proyecto/ambiente (no hace fa
 railway connect Postgres --tunnel-only -P 55432
 ```
 Esto deja un túnel local escuchando en `127.0.0.1:55432` y muestra la
-contraseña de la base. En otra terminal, con el schema en
-`provider = "postgresql"`:
+contraseña de la base.
+
+> **Antes de abrir el túnel, `railway status`:** debe mostrar el proyecto
+> **`astonishing-truth`** (ambiente `production`) con los servicios
+> `mensajeriaApp` y `Postgres`. La misma cuenta tiene otros proyectos, y estar
+> enlazado al equivocado da este síntoma: el túnel abre el puerto, pero `psql`
+> dice "el servidor ha cerrado la conexión inesperadamente" y el túnel imprime
+> `channel 1: open failed: connect failed`. El enlace es por carpeta: corre
+> `status`/`connect` desde donde hiciste el `link`. Si persiste, actualiza la CLI
+> (`railway upgrade`, o `npm install -g @railway/cli` si dice "Failed to execute
+> npm"; verificada v5.71.0). Que `mensajeriaApp` figure como *Sleeping* es normal.
+> **La contraseña nunca se pega en chats, tickets ni archivos:** va a
+> `$env:PGPASSWORD` y se limpia con `Remove-Item Env:PGPASSWORD`. Detalle en
+> [`docs/runbook-corte-ipanema.md`](docs/runbook-corte-ipanema.md) §0.1, y las
+> trampas de PowerShell 5.1 (BOM, comillas en `psql -c`) en su §5.
+
+En otra terminal, con el schema en `provider = "postgresql"`:
 ```
 cd backend
 $env:DATABASE_URL = "postgresql://postgres:<password>@127.0.0.1:55432/railway"   # PowerShell
@@ -130,15 +145,50 @@ ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\id_ed25519" -N '""'
 railway ssh keys add
 ```
 
+### Rotar la contraseña de Postgres (Railway)
+
+**Editar a mano la variable de contraseña NO cambia la contraseña real** del rol
+en la base: solo desalinea lo que creen los servicios. La contraseña se rota con
+el botón **"Regenerar contraseña"** del servicio **`Postgres`**, que cambia la
+contraseña real, actualiza sus variables y redespliega. Para que el backend la
+tome solo, `DATABASE_URL` del servicio **`mensajeriaApp`** debe ser la
+**referencia** `${{Postgres.DATABASE_URL}}`, no un texto literal (así quedó el
+28-oct-2026).
+
+Orden:
+1. **Dejar la referencia:** en `mensajeriaApp` → Variables, `DATABASE_URL` =
+   `${{Postgres.DATABASE_URL}}`.
+2. **Comprobar** antes de rotar: `railway status` (`astonishing-truth`, ambos
+   servicios en línea) y que la app responde.
+3. **Regenerar** desde el panel del servicio `Postgres`.
+4. **Redesplegar** `mensajeriaApp` si Railway no lo hace solo, para que tome la
+   variable nueva.
+5. **Verificar:**
+   - `railway status`: ambos en línea.
+   - Logs de `Postgres`: `database system is ready to accept connections`. Tras
+     el reinicio puede aparecer `database system was not properly shut down;
+     automatic recovery in progress`: es normal (Railway detiene el contenedor sin
+     apagado limpio) y la recuperación tarda menos de un segundo.
+   - Logs de `mensajeriaApp`: `No pending migrations to apply.` y
+     `API escuchando`, sin `P1000` ni `authentication failed`.
+   - Sin crear datos: login con un correo inexistente → **401** (un 500 indicaría
+     que no conecta a la base) y `GET /api/packages` sin token → **401**.
+   - Un túnel nuevo (`railway connect` ya entrega la contraseña nueva) y un
+     `SELECT` de lectura.
+
+La contraseña nunca se pega en chats, tickets ni archivos (ver la nota del túnel
+arriba). La rotación del 28-oct-2026 se hizo así, porque la anterior había
+aparecido en una conversación.
+
 6. Crea la cuenta de operador en la base real (una sola vez, por el mismo túnel):
    ```
    node prisma/seed.js
    ```
    (con `DATABASE_URL` apuntando al túnel y `OPERATOR_*` en el entorno o en `.env`).
-   > **Tras el corte multi-conjunto (KAN-8), esto cambia:** `prisma/seed.js` deja
-   > de usarse en producción. El alta de un conjunto y su operador pasa a ser el
-   > procedimiento operativo por conjunto (ver "Procedimientos operativos por
-   > conjunto" más abajo; el script de alta se construye en la Fase F).
+   > **Desde el corte multi-conjunto (KAN-8, 28-oct-2026), esto cambió:**
+   > `prisma/seed.js` ya no se usa en producción. El alta de un conjunto y su
+   > operador es el procedimiento operativo por conjunto (`npm run alta-conjunto`;
+   > ver "Procedimientos operativos por conjunto" más abajo).
 7. **Settings → Networking → Generate Domain** para obtener la URL pública del backend.
 
 ### Migración `add_paquete_evento` (T1.3, refactor mobile-first)
@@ -309,11 +359,17 @@ Agrega el índice `Package(conjuntoId, residenteId, estado)`: lo usan `GET /pack
 
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
-> **Estado:** el multi-conjunto está implementado y validado en la rama
-> `feature/kan-8-multiconjunto`, **NO desplegado**. Esta sección fija el ORDEN del
-> corte. El procedimiento ejecutable paso a paso está en
+> **Estado: corte EJECUTADO el 28-oct-2026.** El multi-conjunto está desplegado
+> en producción (`main`), con un solo conjunto, `ipanema` (`bonosHabilitados=false`).
+> Resultados reales: 4 usuarios y 0 paquetes al cortar; P0 16,8 s; contract
+> 2,86 s. El *contract* está aplicado y registrado, pero falta el paso 4 (su
+> carpeta de migración aún no está en el repo; ver notas abajo y "Pendiente").
+> Desviaciones del runbook: `docs/runbook-corte-ipanema.md` §6.
+>
+> Lo que sigue documenta el ORDEN del corte y su porqué (sirve de referencia para
+> un corte futuro). El procedimiento ejecutable paso a paso está en
 > [`docs/runbook-corte-ipanema.md`](docs/runbook-corte-ipanema.md); se ensaya
-> contra una copia antes de tocar producción. **No ejecutar nada de esto todavía.**
+> contra una copia antes de tocar producción.
 
 #### Por qué cambió el orden (ventana de fallo del orden ingenuo)
 
@@ -344,21 +400,55 @@ el *contract* se aplica **manualmente al final (C5)** y **no vive en
 | **P0** | Aplicar migración *expand* (`add_conjunto_multitenant`) en producción. Es **aditiva** (columnas nullable + tabla `Conjunto`); el código viejo la ignora. | Días antes | Inocua (no hace falta revertir) |
 | **P1** | Crear el `Conjunto` Ipanema **sin backfill** (`backfill-conjunto` reutiliza el conjunto si ya existe). Deja listo el `codigoInvitacion` para reimprimir el QR. | Días antes | `DELETE` del conjunto (aún sin filas asociadas) |
 | **C0** | Backup: `pg_dump` + conteos de las 4 tablas. | Día del corte | n/a |
-| **C1** | **Backfill #1** (transaccional, verificado): `UPDATE ... SET conjuntoId = <Ipanema> WHERE conjuntoId IS NULL`. | Día del corte | `UPDATE ... SET conjuntoId = NULL` (el script imprime este SQL) |
+| **C1** | **Backfill #1** (transaccional, verificado): `LOCK TABLE` de las 4 tablas + `UPDATE ... SET conjuntoId = <Ipanema> WHERE conjuntoId IS NULL`. | Día del corte | `UPDATE ... SET conjuntoId = NULL` (el script imprime este SQL) |
 | **C2** | **Merge a `main`** → Railway y Vercel despliegan el código con aislamiento. **Columnas siguen NULLABLE.** | Día del corte | Redeploy del commit anterior (la columna extra es inocua para el código viejo) |
 | **C3** | **Backfill #2** (idempotente): recoge lo que el código viejo escribió entre C1 y el fin del deploy de C2. | Tras C2 | Igual que C1 |
 | **C4** | Verificación: `0` NULL en las 4 tablas + smoke test en vivo (checklist del runbook). | Tras C3 | n/a |
-| **C5** | **Migración *contract*** (manual, por túnel SSH): `NOT NULL` en las 4 columnas + FKs `SET NULL → RESTRICT`. Solo ahora, porque ya ningún escritor produce NULL. | Tras C4 | SQL de rollback del contract (ver abajo) |
+| **C5** | **Migración *contract*** (manual, por túnel SSH): `NOT NULL` en las 4 columnas + FKs `SET NULL → RESTRICT`. Solo ahora, porque ya ningún escritor produce NULL. | Tras C4 | SQL de rollback del contract; si ya se registró con `resolve --applied`, además quitar la carpeta y la fila de `_prisma_migrations` (ver abajo) |
 
 Notas:
 - **`SET NULL → RESTRICT`** (C5): con `SET NULL`, borrar un `Conjunto` dejaría
   usuarios/paquetes huérfanos (sin conjunto) — justo lo que el aislamiento no debe
   permitir. `RESTRICT` impide borrar un conjunto que aún tiene datos.
 - **El *contract* no está en `prisma/migrations/`** hasta después de C5. Vive como
-  script en `backend/prisma/manual/` (ver §"Migración contract"). Tras aplicarlo en
+  script en `backend/prisma/manual/` (ver `docs/runbook-corte-ipanema.md`, paso C5,
+  y `backend/prisma/manual/`). Tras aplicarlo en
   C5, se registra en `migrations/` en un commit posterior y se marca como aplicado
   con `npx prisma migrate resolve --applied <nombre>`, para que los `migrate deploy`
   futuros no intenten re-aplicarlo.
+- **Estado real del contract (28-oct-2026):** aplicado en producción y registrado
+  en `_prisma_migrations` como **`20261028165010_contract_conjunto`**, pero **su
+  carpeta sigue fuera del repo** (el `resolve` se hizo con `--schema` apuntando a
+  una copia del árbol de Prisma fuera del repo). Mientras no esté en el repo,
+  `prisma migrate deploy` en producción no hace nada ("No pending migrations").
+  Al volver al repo (paso 4, ver "Pendiente"):
+  - la carpeta `backend/prisma/migrations/20261028165010_contract_conjunto/`
+    debe ser **byte a byte idéntica**: SHA-256 de su `migration.sql` =
+    `0241507B1C1B8E674AD5848893F81BEE03A98B0593490EF4ADBC37DF8DCED0FA` (es el
+    `checksum` que Prisma guardó);
+  - `schema.prisma` pasa a `conjuntoId String` (y relación `Conjunto` obligatoria)
+    en `User`, `Package`, `Bono` y `Comentario`;
+  - las pruebas de integración del backfill (y la del contract), que insertan
+    filas con `conjuntoId` NULL, **deberán adaptarse o retirarse**: con la carpeta
+    en el repo, toda base de pruebas nueva nace con NOT NULL.
+- **Revertir el contract (versión final, con la carpeta fuera del repo, que es el
+  estado actual):**
+  1. `rollback_contract_conjunto.sql` por el túnel con `psql -v ON_ERROR_STOP=1`
+     (esquema a nullable / FK `SET NULL`).
+  2. `DELETE FROM _prisma_migrations WHERE migration_name = '20261028165010_contract_conjunto';`
+     (por archivo `.sql`). Aquí **`prisma migrate resolve --rolled-back` no sirve:**
+     solo acepta migraciones fallidas y responde `P3012` (verificado con Prisma 5.22).
+  3. Verificar: `npx prisma migrate status` ("up to date") e `is_nullable = YES`
+     en las 4 columnas `conjuntoId`.
+
+  **Si la carpeta ya hubiera vuelto al repo (paso 4 hecho), retírala ANTES del
+  `DELETE`** (commit que la quite y devuelva `schema.prisma` a `String?`, ya
+  desplegado). Si no, cualquier arranque del backend re-aplicaría el contract.
+  Detalle y porqué del orden: runbook, paso C5 → "Abortar/rollback".
+- **Ensayo del 28-oct-2026** (copia real, PostgreSQL 18.6): todo el corte en
+  verde, con C1 ≈ 62 ms (lock ≈ 49 ms) y contract ≈ 0,35 s. Con el volumen de
+  ese día (4 usuarios, 0 paquetes) no hace falta ventana nocturna. La
+  recomendación es hacerlo antes de que haya operación real (runbook §0.3).
 - La activación del aislamiento es **orden de despliegue, no un flag**: no hay
   interruptor de runtime que lo prenda/apague.
 
@@ -370,7 +460,7 @@ después** (el frontend nuevo depende de endpoints del backend nuevo; al revés 
 
 | Combinación | Registro `?c=` | Registro sin `?c=` | `/api/auth/me`, config | Veredicto |
 |---|---|---|---|---|
-| **Frontend viejo + backend nuevo** (ventana normal, backend desplegó primero) | El form viejo no manda `codigoInvitacion` → `register` responde `400 INVITACION_INVALIDA`. Los **QR viejos de KAN-3 apuntan a la raíz sin `?c=`**, así que un residente nuevo no podría registrarse hasta que el frontend nuevo esté arriba. **Mitigación:** ventana corta y nocturna; avisar que el registro se habilita al terminar. | Igual: `400`. | `me` funciona (no cambió su forma). El frontend viejo no llama a `/conjunto/config`; las tarifas/WhatsApp que muestra son las que ya tenía hardcodeadas — cosméticamente viejas, sin romper. | Degradado pero **seguro**: operación de paquetes intacta; solo el registro nuevo queda en pausa breve. |
+| **Frontend viejo + backend nuevo** (ventana normal, backend desplegó primero) | El form viejo no manda `codigoInvitacion` → `register` responde `400 INVITACION_INVALIDA`. Los **QR viejos de KAN-3 apuntan a la raíz sin `?c=`**, así que un residente nuevo no podría registrarse hasta que el frontend nuevo esté arriba. **Mitigación:** ventana corta (con el volumen actual, en horario normal; ver runbook §0.3); avisar que el registro se habilita al terminar. | Igual: `400`. | `me` funciona (no cambió su forma). El frontend viejo no llama a `/conjunto/config`; las tarifas/WhatsApp que muestra son las que ya tenía hardcodeadas — cosméticamente viejas, sin romper. | Degradado pero **seguro**: operación de paquetes intacta; solo el registro nuevo queda en pausa breve. |
 | **Frontend nuevo + backend viejo** (NO debe ocurrir si se despliega backend primero) | El backend viejo ignora `codigoInvitacion` y crea el `User` sin tenant (columna nullable). `/conjunto/config` **no existe** → el frontend nuevo falla al cargar tarifas/bonos. | — | `/conjunto/config` da 404. | **Evitar**: por eso backend primero. |
 | **Ambos nuevos** (fin de C2) | Flujo completo con código. | Muestra el campo de código. | Todo desde config. | Correcto. |
 
@@ -381,10 +471,47 @@ que una sesión abierta de antes del corte sigue funcionando sin re-login. (Si p
 cualquier motivo un `User` quedara sin `conjuntoId`, el middleware **falla cerrado**
 con 401 — nunca opera sin tenant.)
 
+#### Backfill con tráfico vivo (C1/C3): el `LOCK TABLE`
+
+C1 y C3 corren **con el código viejo todavía escribiendo** (C1 antes del deploy;
+C3 durante la ventana del deploy). Si el conteo de "NULLs a asignar" se tomara
+fuera de la transacción, un `INSERT` del código viejo entre el conteo y el
+`UPDATE` (o entre el `UPDATE` y la verificación) haría que el backfill abortara
+por una verificación que ya no cuadra — un **aborto espurio** en plena noche del
+corte. Para evitarlo, el backfill, **dentro de su transacción y como primer
+paso**, toma `LOCK TABLE "User","Package","Bono","Comentario" IN SHARE ROW
+EXCLUSIVE MODE` y recuenta los NULL ahí mismo. Ese modo de lock **permite
+lecturas** (la app sigue mostrando datos) pero **bloquea escrituras concurrentes**
+unos segundos: los escritores viejos esperan al `COMMIT` y luego insertan con
+`conjuntoId` NULL — exactamente lo que C3 recoge después. El lock se libera al
+terminar la transacción (en segundos, salvo que el `UPDATE` de `Package` con
+muchas fotos tarde; de ahí el `timeout` holgado del `$transaction`).
+
+**Con `--apply` el lock se toma SIEMPRE, también cuando no hay nada que
+asignar.** El conteo de los pre-chequeos se hace fuera de la transacción y no ve
+un `INSERT` del código viejo que todavía no confirmó. Si con ese conteo (0 NULL)
+el script respondiera "nada que hacer" sin bloquear, esa fila quedaría en NULL
+segundos después. Por eso `SIN_CAMBIOS` ("0 filas por asignar") ahora significa
+**"0 NULL tras esperar a los escritores en curso"**: se decide después del lock y
+del recuento. El dry-run no toma lock (solo lee). Los guards finales siguen
+siendo C4 (`COUNT(*) WHERE conjuntoId IS NULL` = 0) y el `DO $$` del contract.
+
+Además, antes del `LOCK TABLE` el backfill fija un `lock_timeout` solo para su
+transacción (`set_config('lock_timeout', …, true)`, equivalente a `SET LOCAL`):
+si una **transacción vieja** tuviera sostenido un lock incompatible, el backfill
+**aborta al vencer** (y revierte, sin dejar nada escrito) en vez de quedarse
+esperando indefinidamente y **encolar detrás las escrituras de la app** en
+producción. El valor sale de la variable de entorno `BACKFILL_LOCK_TIMEOUT`
+(por defecto `10s`; formato entero con `ms` o `s`, p. ej. `500ms`; otro formato
+se rechaza antes de abrir nada). Al vencer, el CLI muestra, sin stack:
+*"No se obtuvo el lock en 10s: hay una transacción larga o colgada. No se
+escribió nada. Revisa pg_stat_activity y reintenta; el backfill es
+idempotente."* Un abort así es recuperable: se investiga qué transacción quedó
+colgada (consulta en el runbook) y se reintenta.
+
 ### Procedimientos operativos por conjunto
 
-> El multi-conjunto aún no está en producción; estos procedimientos aplican una
-> vez ejecutado el corte anterior.
+> Vigentes desde el corte del 28-oct-2026 (el multi-conjunto está en producción).
 
 **Alta de un conjunto nuevo.** Se hace con el script interactivo
 `npm run alta-conjunto` (en `backend/`). Da de alta el `Conjunto` (identidad,
@@ -421,6 +548,14 @@ Flujo recomendado:
 
 `bonosHabilitados` no se pregunta: queda `false` siempre (los bonos se activan
 por una acción deliberada aparte, nunca en el alta).
+
+**Registro sin código con un solo conjunto** (hotfix `20a46b4`). Mientras la base tenga
+**exactamente un** `Conjunto` con la invitación activa, `/registro` sin `?c=`
+crea al residente en ese conjunto (los folletos/QR antiguos sin código siguen
+sirviendo; ver README). **Dar de alta un segundo conjunto apaga esto en el acto:**
+desde ese momento los enlaces sin `?c=` responden `400 INVITACION_INVALIDA` y
+piden código. Antes de crear el segundo conjunto, reimprime los QR de los
+existentes con su `/registro?c=<código>`.
 
 **Desactivar un código de invitación.** Para cerrar temporalmente el registro de
 un conjunto, poner `invitacionActiva = false` en su fila de `Conjunto` (por el
@@ -553,7 +688,15 @@ Si algo no conecta, lo primero a revisar es `CORS_ORIGIN` en Railway y
 - WhatsApp automático (Twilio u otro proveedor) — decisión consciente de
   dejarlo fuera por el costo; el botón manual de WhatsApp sigue funcionando.
 - Mover fotos de custodia a almacenamiento de objetos en vez de base64 en Postgres.
-- Soporte multi-conjunto: **implementado y validado** en la rama
-  `feature/kan-8-multiconjunto` (KAN-8). Pendiente en producción: ejecutar el
-  corte (backfill + fase *contract* + despliegue del código con aislamiento) —
-  ver "Corte a producción del multi-conjunto" arriba.
+
+Tras el corte multi-conjunto (28-oct-2026):
+- **Paso 4 del contract:** devolver la carpeta `20261028165010_contract_conjunto`
+  al repo (idéntica, SHA-256 en "Estado real del contract"), `schema.prisma` a
+  `conjuntoId String`, adaptar o retirar las pruebas del backfill que insertan
+  NULL, `npm test` en verde; recién entonces commit (vía `develop`) y merge a
+  `main` con el OK explícito del usuario.
+- **Arreglo del PWA:** la app se recarga en la primera visita.
+- **Pantalla de residentes para el operador:** hoy no existe (no hay endpoint
+  que liste usuarios); el operador solo ve residentes a través de sus paquetes.
+- **Revisión legal de los Términos** (en especial la versión genérica).
+- **Jira KAN-8:** actualizar el ticket con el estado post-corte.

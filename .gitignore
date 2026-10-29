@@ -5,3 +5,8 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+
+# Config de alta/backfill de conjuntos con datos reales del operador (KAN-8).
+# El repo es público: nunca versionar WhatsApp/domicilio reales. Solo se versiona
+# el *.example.json con valores ficticios.
+*.local.json

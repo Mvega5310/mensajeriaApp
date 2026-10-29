@@ -92,6 +92,27 @@ export async function contarAsignadasAOtroConjunto(tx, conjuntoId) {
 }
 
 /**
+ * Bloquea las 4 tablas con tenant en SHARE ROW EXCLUSIVE MODE dentro de la
+ * transacción actual. Permite LECTURAS concurrentes pero BLOQUEA escrituras
+ * (INSERT/UPDATE/DELETE) de otras transacciones hasta el COMMIT/ROLLBACK. Así,
+ * durante C1/C3 con tráfico vivo, un escritor viejo espera unos segundos en vez
+ * de colarse entre el conteo y el UPDATE (lo que causaría un abort espurio).
+ * Los nombres de tabla son literales fijos.
+ * @param {import('@prisma/client').Prisma.TransactionClient} tx
+ * @param {string} lockTimeout  p. ej. '10s' o '500ms' (lo valida el llamador)
+ */
+export async function bloquearTablasConTenant(tx, lockTimeout = '10s') {
+  // lock_timeout acotado, solo para esta transacción (set_config(..., true)
+  // equivale a SET LOCAL, pero admite el valor como PARÁMETRO ligado, sin
+  // Unsafe): si una transacción vieja sostiene un lock incompatible, el
+  // backfill ABORTA al vencer en vez de quedarse esperando y encolar detrás las
+  // escrituras de la app en producción.
+  await tx.$queryRaw`SELECT set_config('lock_timeout', ${lockTimeout}, true)`;
+  // Un solo LOCK con las 4 tablas; literal fijo, sin interpolación de entrada.
+  await tx.$executeRaw`LOCK TABLE "User", "Package", "Bono", "Comentario" IN SHARE ROW EXCLUSIVE MODE`;
+}
+
+/**
  * Nº de User con role OPERATOR que quedarían en el conjunto: los que hoy están
  * sin conjunto (NULL) más los ya asignados al conjunto `idTentativo` (caso P1).
  * operadorDelConjuntoActual() depende de que sea exactamente 1.

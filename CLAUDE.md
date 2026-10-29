@@ -5,11 +5,14 @@ Repo: `Mvega5310/mensajeriaApp`. Nació monoconjunto (Ipanema, operado por
 Francisco Caro Yances) y ahora soporta **multi-conjunto**: cada conjunto tiene
 sus residentes, su operador y sus paquetes, aislados entre sí (KAN-8).
 
-> **Estado del multi-conjunto (KAN-8):** implementado y validado en la rama
-> `feature/kan-8-multiconjunto`, **NO desplegado en producción**. El corte a
-> producción (backfill + fase contract + despliegue) es la Fase F y aún no se
-> ha ejecutado — ver DEPLOY.md. Producción sigue siendo, por ahora, el conjunto
-> único Ipanema con el esquema previo hasta que se ejecute ese corte.
+> **Estado del multi-conjunto (KAN-8):** **desplegado en producción desde el
+> 28-oct-2026** (corte Fase F ejecutado; detalle en DEPLOY.md y en
+> `docs/runbook-corte-ipanema.md` §6). Producción tiene **un solo conjunto,
+> `ipanema`**, con `bonosHabilitados=false`. El *contract* (`conjuntoId` NOT NULL)
+> está aplicado y registrado en la base, pero **su carpeta de migración todavía
+> no está en el repo** (paso 4 pendiente; ver DEPLOY.md → "Pendiente"). Mientras
+> exista un único conjunto, el registro funciona sin código de invitación
+> (hotfix `20a46b4`).
 
 La rama de trabajo es `develop`, no `main` (ver regla de ramas abajo, es la más
 importante de este archivo).
@@ -31,21 +34,27 @@ no están ahí.
 - App: https://mensajeria-app-iota.vercel.app
 - API: https://mensajeriaapp-production.up.railway.app
 
-## Regla de ramas: todo el trabajo va a `develop`, nunca directo a `main`
+## Regla de ramas: todo el trabajo va a `develop`; a `main` solo por pull request
 
 `main` es lo que Railway y Vercel despliegan a producción automáticamente
-en cada push — y la app está a punto de arrancar de verdad con el
-conjunto, así que un push a `main` ya no es un ensayo, es tocar el
-sistema en uso. Desde ahora:
+en cada cambio que entra — y la app ya está en uso real con el conjunto,
+así que cada cambio en `main` toca el sistema en uso. Desde ahora:
 
 - **Todo commit va a `develop`** (`git checkout develop` si no estás ahí).
   `git push origin develop` es seguro: Railway solo despliega desde
   `main`, así que no dispara nada en producción (Vercel puede crear un
   *preview* aparte de esa rama, pero no toca la URL real).
-- **Nunca hacer merge/push a `main` por iniciativa propia.** Eso solo pasa
-  cuando el usuario lo pide explícitamente (ej. "ya podemos pasar esto a
-  producción", "mergea a main"). Si no lo dice, el trabajo se queda en
-  `develop` aunque esté terminado y probado.
+- **`main` está protegida en GitHub y solo se llega por pull request.** Nunca
+  `git push origin main`. Para pasar algo a producción se abre un PR hacia `main`
+  (`gh pr create --base main`, p. ej. `develop → main` o `fix/... → main`), y se
+  fusiona con `gh pr merge` **solo con el OK explícito del usuario** para ese PR.
+  Abrir el PR tampoco es por iniciativa propia: solo cuando el usuario pide pasar
+  algo a producción (ej. "ya podemos pasar esto a producción"). Si no lo dice, el
+  trabajo se queda en `develop` aunque esté terminado y probado. Fusionar el PR
+  redespliega Railway y Vercel igual que antes un push.
+- **Si un push o merge a `main` falla por la protección, no se esquiva**: nada de
+  `--force` ni de saltarse la regla; se le reporta al usuario qué pasó (él es
+  administrador y decide si la omite en una emergencia).
 - Esto **no** aplica a operaciones directas sobre la base de datos de
   producción (como una limpieza de datos) cuando el usuario las pide
   explícitamente — esas son independientes de qué rama esté commiteada.
@@ -55,8 +64,8 @@ requisitos/diseño), una migración de esquema, o cualquier trabajo que tome má
 un par de commits, se abre una rama de tarea desde `develop`
 (`feature/<nombre>`), se trabaja ahí con **un commit por paso**, y solo se
 integra a `develop` cuando está **validado en local**. Los cambios pequeños y ya
-probados siguen yendo directo a `develop`, como siempre. Referencia: la propia
-rama `feature/kan-8-multiconjunto` (KAN-8).
+probados siguen yendo directo a `develop`, como siempre. Referencia: KAN-8 se
+trabajó así en `feature/kan-8-multiconjunto` (borrada tras fusionarse).
 
 ## Regla de oro: documentación al día
 
@@ -80,9 +89,9 @@ docs/        # Prototipo original, flyer de campaña, logo — referencia histó
    - Si el cambio toca UI: levantar `npm run dev` en `backend/` y `frontend/`, y verificar en un navegador real — no solo `npm run build`. Playwright con Chromium ya está cacheado en esta máquina (`C:\Users\ACER\AppData\Local\ms-playwright\`); solo falta `npm install playwright@1.61.1` en el scratchpad de la sesión si no está.
    - Limpiar al terminar: matar `nodemon`/`vite`, borrar `backend/.env` y la base de desarrollo que hayas creado.
 2. **Si el cambio requiere migración de esquema**, aplicarla contra Postgres de producción vía túnel SSH de Railway — `railway run` NO funciona para esto (ver DEPLOY.md, sección "Migraciones de Postgres"). Nunca commitear migraciones generadas contra una base que no sea Postgres.
-3. **Commit + push a `develop`** (ver "Regla de ramas" arriba — nunca a `main` sin que el usuario lo pida). Nunca force-push, nunca amend de un commit ya publicado — siempre un commit nuevo.
-4. Solo cuando el usuario pida explícitamente pasar algo a producción: merge de `develop` a `main` y push. Ahí sí, **verificar en vivo** después: sondear el bundle/API de producción hasta confirmar que el deploy nuevo está activo (los hashes de archivo cambian con cada build), no asumir que terminó por el solo hecho de haber hecho push.
-5. **Actualizar README.md/DEPLOY.md** en el mismo commit (ver regla de oro arriba), sea en `develop` o al mergear a `main`.
+3. **Commit + push a `develop`** (push directo, como siempre; ver "Regla de ramas" arriba — nunca directo a `main`). Nunca force-push, nunca amend de un commit ya publicado — siempre un commit nuevo.
+4. Solo cuando el usuario pida explícitamente pasar algo a producción: **abrir un pull request hacia `main`** (`gh pr create --base main --head develop`, o desde una rama `fix/...`) y **esperar su OK explícito** antes de `gh pr merge`. Nunca `git push origin main`. Tras el merge, **verificar en vivo**: sondear el bundle/API de producción hasta confirmar que el deploy nuevo está activo (los hashes de archivo cambian con cada build), no asumir que terminó por el solo hecho de haber fusionado. Requiere el GitHub CLI (`gh`) instalado y autenticado.
+5. **Actualizar README.md/DEPLOY.md** en el mismo commit (ver regla de oro arriba), sea en `develop` o en la rama del PR a `main`.
 
 ## Cosas ya decididas — no las reabras sin que el usuario lo pida
 
@@ -92,6 +101,7 @@ docs/        # Prototipo original, flyer de campaña, logo — referencia histó
 - **Fotos fuera de los listados**: `GET /packages` y `GET /packages/mine` NUNCA deben incluir `fotoUrl` (pueden pesar cientos de KB en base64 cada una) — se piden aparte vía `GET /packages/:id/foto`, solo al abrir el detalle de un paquete puntual. Esto fue la causa real de una caída seria en producción (ver historial de commits) — no revertir este patrón.
 - **Sin pasarela de pagos real**: todo el cobro es manual/efectivo/transferencia, coordinado por fuera de la app.
 - **La app ya no es exclusiva de Ipanema**: no incrustar el nombre "Ipanema", el operador, su domicilio, WhatsApp ni tarifas en el código. Todo eso es configuración por conjunto (ver reglas del multi-conjunto abajo).
+- **Registro sin código con un solo conjunto** (hotfix `20a46b4`): si en la base hay exactamente 1 `Conjunto` con la invitación activa, `register` y `config-publica` sin código usan ese conjunto; con 0, 2 o más, el código vuelve a ser obligatorio solo. Existe porque los QR/folletos repartidos apuntan sin `?c=`. **Antes de crear un segundo conjunto, reimprimir los QR/folletos con `?c=<código>`.**
 
 ## Reglas del multi-conjunto (no negociables)
 

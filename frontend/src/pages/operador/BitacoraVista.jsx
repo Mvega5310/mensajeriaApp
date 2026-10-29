@@ -24,8 +24,10 @@ export default function BitacoraVista({ onVolver }) {
   return (
     <div className="op-hoja">
       <Field label="Buscar" placeholder="Apartamento, nombre o guía" value={q} onChange={(e) => setQ(e.target.value)} autoComplete="off" />
-      <Field label="Desde" type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} />
-      <Field label="Hasta" type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} />
+      <div className="op-fechas">
+        <Field label="Desde" type="date" value={desde} max={hasta || undefined} onChange={(e) => setDesde(e.target.value)} />
+        <Field label="Hasta" type="date" value={hasta} min={desde || undefined} onChange={(e) => setHasta(e.target.value)} />
+      </div>
       <div className="ds-field">
         <label className="ds-field__label" htmlFor="bit-estado">Estado</label>
         <select id="bit-estado" className="ds-field__input" value={estado} onChange={(e) => setEstado(e.target.value)}>

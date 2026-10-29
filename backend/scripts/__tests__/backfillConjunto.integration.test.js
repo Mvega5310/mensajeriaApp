@@ -22,7 +22,7 @@ const razonSkip = !dbUrl
 const omitir = razonSkip !== null;
 if (omitir) console.warn(`[backfillConjunto.integration] OMITIDA: ${razonSkip}`);
 
-let prisma, runWithTenant, backfillConjunto, RESULTADO;
+let prisma, runWithTenant, backfillConjunto, RESULTADO, BackfillError;
 
 const SLUG = 'itestbf-ipanema';
 
@@ -90,12 +90,19 @@ async function contarNulosCrudo() {
   };
 }
 
-// Limpia TODO (el dataset de legado no tiene conjunto; se borra por SQL crudo).
+// Limpia SOLO lo de esta prueba: usuarios `@legado.local` (todos los helpers y
+// el INSERT concurrente de C3 usan ese dominio), sus hijos por residenteId, y
+// los conjuntos `itestbf-%`. Se borra por SQL crudo (el legado no tiene conjunto).
+//
+// Ojo: backfillConjunto() mira el estado GLOBAL de la base (todas las filas
+// NULL, filas de otro conjunto, operadores sin conjunto). Estas pruebas asumen
+// que ninguna otra prueba escribe a la vez; por eso las integraciones corren en
+// serie (`--test-concurrency=1` en `npm test`).
 async function limpiarTodo() {
-  await prisma.$executeRaw`DELETE FROM "Comentario"`;
-  await prisma.$executeRaw`DELETE FROM "Bono"`;
-  await prisma.$executeRaw`DELETE FROM "Package"`;
-  await prisma.$executeRaw`DELETE FROM "User"`;
+  await prisma.$executeRaw`DELETE FROM "Comentario" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@legado.local')`;
+  await prisma.$executeRaw`DELETE FROM "Bono" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@legado.local')`;
+  await prisma.$executeRaw`DELETE FROM "Package" WHERE "residenteId" IN (SELECT "id" FROM "User" WHERE "email" LIKE '%@legado.local')`;
+  await prisma.$executeRaw`DELETE FROM "User" WHERE "email" LIKE '%@legado.local'`;
   await prisma.$executeRaw`DELETE FROM "Conjunto" WHERE "slug" LIKE 'itestbf-%'`;
 }
 
@@ -115,9 +122,40 @@ async function sembrarLegado() {
 test('setup', { skip: omitir && razonSkip }, async () => {
   ({ prisma } = await import('../../src/config/db.js'));
   ({ runWithTenant } = await import('../../src/config/tenantContext.js'));
-  ({ backfillConjunto, RESULTADO } = await import('../lib/backfillConjunto.js'));
+  ({ backfillConjunto, RESULTADO, BackfillError } = await import('../lib/backfillConjunto.js'));
   await limpiarTodo();
 });
+
+// Abre una transacción que inserta un User con conjuntoId NULL y la SOSTIENE
+// `ms` antes del COMMIT (un escritor del código viejo a mitad de camino: su fila
+// aún no es visible para nadie). `insertado` resuelve cuando el INSERT ya corrió
+// (sin confirmar); `fin` resuelve tras el COMMIT.
+function sostenerInsertSinCommit(ms) {
+  const uid = cuid('u');
+  let marcarInsertado;
+  const insertado = new Promise((r) => { marcarInsertado = r; });
+  const fin = prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt","conjuntoId")
+      VALUES (${uid}, ${uid + '@legado.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
+    `;
+    marcarInsertado();
+    await new Promise((r) => setTimeout(r, ms));
+  }, { timeout: ms + 10_000 });
+  return { uid, insertado, fin };
+}
+
+// Fija BACKFILL_LOCK_TIMEOUT durante `fn` y lo restaura siempre.
+async function conLockTimeout(valor, fn) {
+  const previo = process.env.BACKFILL_LOCK_TIMEOUT;
+  process.env.BACKFILL_LOCK_TIMEOUT = valor;
+  try {
+    return await fn();
+  } finally {
+    if (previo === undefined) delete process.env.BACKFILL_LOCK_TIMEOUT;
+    else process.env.BACKFILL_LOCK_TIMEOUT = previo;
+  }
+}
 
 test('1+2: backfill feliz; luego la app ve los datos y están aislados', { skip: omitir && razonSkip }, async () => {
   await limpiarTodo();
@@ -169,14 +207,12 @@ test('4: reanudación C3 — 2 filas NULL nuevas se asignan exactamente', { skip
   assert.equal(rep.afectadas.Package, 0);
 });
 
-test('5: rollback — una discrepancia deja todo sin escribir (ni el conjunto)', { skip: omitir && razonSkip }, async () => {
+test('5a: pre-chequeo — filas de otro conjunto abortan ANTES de abrir la transacción', { skip: omitir && razonSkip }, async () => {
   await limpiarTodo();
   await sembrarLegado(); // incluye 1 operador
 
-  // Forzamos discrepancia de integridad cruzada: un paquete cuyo residente
-  // quedará en Ipanema pero el paquete ya apunta a OTRO conjunto preexistente.
-  // Más simple y determinista: insertar un Package con conjuntoId de un conjunto
-  // "intruso" -> el pre-chequeo de "filas de otro conjunto" aborta ANTES de crear.
+  // Insertar un User con conjuntoId de un conjunto "intruso" -> el pre-chequeo de
+  // "filas de otro conjunto" aborta ANTES de crear nada.
   const intruso = await prisma.conjunto.create({
     data: { nombre: 'Intruso', slug: 'itestbf-intruso', codigoInvitacion: 'itestbf-intruso-X', operadorNombre: 'o', operadorWhatsapp: '1', operadorDomicilio: 'd', puntoRecepcion: 'r' },
   });
@@ -191,6 +227,43 @@ test('5: rollback — una discrepancia deja todo sin escribir (ni el conjunto)',
 
   await prisma.$executeRaw`DELETE FROM "User" WHERE "id" = ${rIntruso}`;
   await prisma.conjunto.deleteMany({ where: { slug: 'itestbf-intruso' } });
+});
+
+test('5b: rollback transaccional — un fallo DENTRO de la txn no deja nada escrito', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado(); // 1 operador + residentes con paquete/bono/comentario, todo NULL
+
+  // Trigger temporal que lanza al actualizar "Comentario": el backfill crea el
+  // conjunto y actualiza User/Package/Bono DENTRO de la transacción, y al llegar
+  // al UPDATE de Comentario el trigger revienta -> debe hacer ROLLBACK COMPLETO.
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE FUNCTION itestbf_boom() RETURNS trigger AS $$
+    BEGIN RAISE EXCEPTION 'boom de prueba'; END;
+    $$ LANGUAGE plpgsql;
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER itestbf_boom_trg BEFORE UPDATE ON "Comentario"
+    FOR EACH ROW EXECUTE FUNCTION itestbf_boom();
+  `);
+
+  try {
+    await assert.rejects(backfillConjunto({ config: configBase(), apply: true }), /boom de prueba/i);
+
+    // Nada quedó escrito: User/Package/Bono siguen TODOS en NULL...
+    const nulos = await contarNulosCrudo();
+    const q = async (sql) => (await prisma.$queryRawUnsafe(sql))[0].n;
+    const totalUser = await q(`SELECT COUNT(*)::int AS n FROM "User"`);
+    const totalPackage = await q(`SELECT COUNT(*)::int AS n FROM "Package"`);
+    const totalBono = await q(`SELECT COUNT(*)::int AS n FROM "Bono"`);
+    assert.equal(nulos.User, totalUser, 'todos los User siguen en NULL (rollback)');
+    assert.equal(nulos.Package, totalPackage, 'todos los Package siguen en NULL (rollback)');
+    assert.equal(nulos.Bono, totalBono, 'todos los Bono siguen en NULL (rollback)');
+    // ...y el Conjunto NO existe (su creación también se revirtió).
+    assert.equal(await prisma.conjunto.findUnique({ where: { slug: SLUG } }), null);
+  } finally {
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS itestbf_boom_trg ON "Comentario"`);
+    await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS itestbf_boom()`);
+  }
 });
 
 test('6: pre-chequeo de operadores — 0 y 2 abortan sin escribir', { skip: omitir && razonSkip }, async () => {
@@ -262,6 +335,166 @@ test('10: el SQL de rollback impreso, ejecutado, deja todo en NULL otra vez', { 
   const nulos = await contarNulosCrudo();
   // Todas las filas vuelven a NULL (quedan "de legado" otra vez).
   assert.ok(nulos.User > 0 && nulos.Package > 0 && nulos.Bono > 0 && nulos.Comentario > 0);
+});
+
+test('C1: --solo-conjunto crea el conjunto y DEJA las filas en NULL', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado(); // filas con conjuntoId NULL
+  const nulosAntes = await contarNulosCrudo();
+  assert.ok(nulosAntes.User > 0 && nulosAntes.Package > 0);
+
+  const rep = await backfillConjunto({ config: configBase(), apply: true, soloConjunto: true });
+  assert.equal(rep.resultado, RESULTADO.CONJUNTO_CREADO);
+  assert.ok(rep.codigoInvitacion);
+
+  // El conjunto existe...
+  assert.ok(await prisma.conjunto.findUnique({ where: { slug: SLUG } }));
+  // ...pero NINGUNA fila fue tocada (siguen NULL, iguales a antes).
+  const nulosDespues = await contarNulosCrudo();
+  assert.deepEqual(nulosDespues, nulosAntes);
+});
+
+test('C1: --solo-conjunto es idempotente (segunda corrida no hace nada)', { skip: omitir && razonSkip }, async () => {
+  const rep = await backfillConjunto({ config: configBase(), apply: true, soloConjunto: true });
+  assert.equal(rep.resultado, RESULTADO.CONJUNTO_YA_EXISTE);
+});
+
+test('C1: --solo-conjunto con config distinta aborta', { skip: omitir && razonSkip }, async () => {
+  await assert.rejects(
+    backfillConjunto({ config: configBase({ operadorWhatsapp: '570000000000' }), apply: true, soloConjunto: true }),
+    /config DISTINTA/i
+  );
+});
+
+test('C1: P1 (solo-conjunto) -> C1 (backfill normal) reutiliza y asigna todo', { skip: omitir && razonSkip }, async () => {
+  // Estado: conjunto creado por --solo-conjunto, filas aún NULL (de los tests
+  // anteriores de este bloque). Un backfill normal reutiliza ese conjunto y
+  // asigna todas las filas.
+  const nulosAntes = await contarNulosCrudo();
+  const totalNulos = nulosAntes.User + nulosAntes.Package + nulosAntes.Bono + nulosAntes.Comentario;
+  assert.ok(totalNulos > 0, 'debe haber filas NULL por asignar');
+
+  const rep = await backfillConjunto({ config: configBase(), apply: true });
+  assert.equal(rep.resultado, RESULTADO.APLICADO);
+  const nulosDespues = await contarNulosCrudo();
+  assert.deepEqual(nulosDespues, { User: 0, Package: 0, Bono: 0, Comentario: 0 });
+});
+
+test('C3: un INSERT concurrente espera al lock y termina después, sin romper el backfill', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado(); // filas NULL + 1 operador
+
+  // Trigger temporal que hace DORMIR el UPDATE de "User" ~2s. Como el backfill
+  // ya tomó el LOCK TABLE antes del UPDATE, durante ese sleep SOSTIENE el lock
+  // de forma determinista (no depende de que haya muchos datos). Así el INSERT
+  // concurrente choca de verdad contra el lock. Sin este sleep, con pocos datos
+  // el backfill terminaría antes de que el insert llegue a competir y la prueba
+  // no probaría nada (mismo motivo por el que 5b usa un trigger).
+  await prisma.$executeRawUnsafe(`
+    CREATE OR REPLACE FUNCTION itestbf_sleep() RETURNS trigger AS $$
+    BEGIN PERFORM pg_sleep(2); RETURN NEW; END;
+    $$ LANGUAGE plpgsql;
+  `);
+  await prisma.$executeRawUnsafe(`
+    CREATE TRIGGER itestbf_sleep_trg BEFORE UPDATE ON "User"
+    FOR EACH ROW EXECUTE FUNCTION itestbf_sleep();
+  `);
+
+  const orden = [];
+  const uid = cuid('u');
+  try {
+    // Backfill (toma el lock y luego duerme en el UPDATE de User sosteniéndolo).
+    const pBackfill = backfillConjunto({ config: configBase(), apply: true }).then((r) => {
+      orden.push('backfill');
+      return r;
+    });
+
+    // Tras 500ms (el backfill ya tiene el lock y está dormido), un INSERT
+    // concurrente de User NULL (código viejo). Debe ESPERAR el lock y resolver
+    // DESPUÉS del backfill. Va por otra conexión del pool del cliente global.
+    const pInsert = new Promise((resolve, reject) => {
+      setTimeout(() => {
+        prisma.$executeRaw`
+          INSERT INTO "User" ("id","email","passwordHash","role","nombre","telefono","termsAcceptedAt","createdAt","conjuntoId")
+          VALUES (${uid}, ${uid + '@legado.local'}, 'x', 'RESIDENT', 'N', '1', NOW(), NOW(), NULL)
+        `.then(() => { orden.push('insert'); resolve(); }, reject);
+      }, 500);
+    });
+
+    const [rep] = await Promise.all([pBackfill, pInsert]);
+
+    assert.equal(rep.resultado, RESULTADO.APLICADO);
+    // El insert resolvió DESPUÉS del backfill: esperó el lock (no se coló).
+    assert.deepEqual(orden, ['backfill', 'insert']);
+
+    // La fila insertada quedó en NULL (la recogería C3), no rompió el backfill.
+    const fila = await prisma.$queryRawUnsafe(`SELECT "conjuntoId" FROM "User" WHERE "id" = '${uid}'`);
+    assert.equal(fila[0].conjuntoId, null);
+  } finally {
+    await prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS itestbf_sleep_trg ON "User"`);
+    await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS itestbf_sleep()`);
+  }
+});
+
+test('D3: con 0 NULLs visibles, el backfill igual toma el lock: espera un INSERT en curso y lo asigna', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado();
+  const rep1 = await backfillConjunto({ config: configBase(), apply: true });
+  assert.equal(rep1.resultado, RESULTADO.APLICADO);
+  assert.deepEqual(await contarNulosCrudo(), { User: 0, Package: 0, Bono: 0, Comentario: 0 });
+
+  // Conjunto existente y 0 NULLs visibles, pero hay un INSERT NULL sin confirmar.
+  // Antes, el pre-chequeo (fuera de la txn) no lo veía y el backfill respondía
+  // SIN_CAMBIOS sin tomar el lock; la fila quedaba NULL al confirmar.
+  await conLockTimeout('5s', async () => {
+    const escritor = sostenerInsertSinCommit(1500);
+    await escritor.insertado;
+    const t0 = Date.now();
+    const rep = await backfillConjunto({ config: configBase(), apply: true });
+    const espera = Date.now() - t0;
+    await escritor.fin;
+
+    assert.equal(rep.resultado, RESULTADO.APLICADO, 'debe asignar la fila, no responder SIN_CAMBIOS');
+    assert.equal(rep.afectadas.User, 1);
+    assert.ok(espera >= 1000, `el backfill debió esperar el COMMIT del escritor (esperó ${espera}ms)`);
+    const fila = await prisma.$queryRaw`SELECT "conjuntoId" FROM "User" WHERE "id" = ${escritor.uid}`;
+    assert.equal(fila[0].conjuntoId, rep.conjunto.id);
+  });
+});
+
+test('D4: lock_timeout vencido -> BackfillError legible y no escribe nada; valor inválido se rechaza', { skip: omitir && razonSkip }, async () => {
+  await limpiarTodo();
+  await sembrarLegado(); // todo NULL, conjunto sin crear
+
+  await conLockTimeout('500ms', async () => {
+    const escritor = sostenerInsertSinCommit(2000); // sostiene el lock más que el timeout
+    await escritor.insertado;
+    try {
+      await assert.rejects(
+        backfillConjunto({ config: configBase(), apply: true }),
+        (err) => {
+          assert.ok(err instanceof BackfillError, `se esperaba BackfillError, llegó ${err?.constructor?.name}`);
+          assert.match(err.message, /No se obtuvo el lock en 500ms: hay una transacción larga o colgada\. No se escribió nada\./);
+          return true;
+        }
+      );
+    } finally {
+      await escritor.fin;
+    }
+  });
+
+  // Nada escrito: sin conjunto y todas las filas siguen NULL (incluida la del escritor).
+  assert.equal(await prisma.conjunto.findUnique({ where: { slug: SLUG } }), null);
+  const nulos = await contarNulosCrudo();
+  const totalUser = (await prisma.$queryRaw`SELECT COUNT(*)::int AS n FROM "User" WHERE "email" LIKE '%@legado.local'`)[0].n;
+  assert.equal(nulos.User, totalUser);
+  assert.ok(nulos.Package > 0 && nulos.Bono > 0 && nulos.Comentario > 0);
+
+  // Formato inválido: error claro antes de abrir nada.
+  await conLockTimeout('10', async () => {
+    await assert.rejects(backfillConjunto({ config: configBase(), apply: true }), /BACKFILL_LOCK_TIMEOUT inválido/);
+  });
+  assert.equal(await prisma.conjunto.findUnique({ where: { slug: SLUG } }), null);
 });
 
 test('teardown', { skip: omitir && razonSkip }, async () => {

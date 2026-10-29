@@ -101,6 +101,11 @@
 .op-hoja { display: flex; flex-direction: column; gap: var(--sp-1); }
 .op-hoja h3 { margin: var(--sp-1) 0 0; font: 800 18px var(--font-titulo); }
 .op-hoja p { margin: 0; }
+/* Desde/Hasta en dos columnas iguales, etiqueta arriba (ajuste de main). appearance:none
+   evita que el <input type=date> de iOS Safari se salga de la pantalla; validar en iPhone real. */
+.op-fechas { display: flex; gap: var(--sp-1); align-items: flex-start; }
+.op-fechas > * { flex: 1 1 0; min-width: 0; }
+.op-fechas input[type="date"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; min-width: 0; max-width: 100%; }
 .op-muted { color: var(--muted); font-size: var(--fs-texto); }
 .op-qr { align-self: center; width: 240px; height: 240px; border-radius: var(--r-sm); background: var(--surface); }
 .op-fila--lectura { cursor: default; flex-direction: column; align-items: stretch; gap: 6px; }

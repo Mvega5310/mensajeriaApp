@@ -10,6 +10,7 @@ import { PASSWORD_POLICY, PASSWORD_POLICY_MSG } from '../services/password.servi
 import { enSegundoPlano } from '../services/avisos.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
+import { conjuntoUnicoActivo } from '../services/conjunto.service.js';
 
 // ÚNICO punto del código autorizado a abrir el scope GLOBAL_LOOKUP
 // (invariante design.md §2.3.1). Resuelve un usuario por email SIN filtro de
@@ -59,15 +60,22 @@ export async function register(req, res) {
   //    lectura está exenta del filtro y no requiere contexto.
   // El campo `code` estable permite que el frontend detecte este caso sin
   // depender del texto del mensaje (revisión C5).
+  // Sin código: solo vale mientras exista UN ÚNICO conjunto (folletos/QR sin
+  // ?c= de antes del corte). Con 0 o varios, el código es obligatorio.
+  let conjunto;
   if (!codigoInvitacion) {
-    throw new AppError(CODIGOS.INVITACION_INVALIDA, 'Necesitas el enlace de invitación de tu conjunto para registrarte. Pídelo a la administración.', 400);
-  }
-  // Normaliza caja y espacios para que un código tecleado a mano coincida con
-  // la forma canónica persistida (revisión C5).
-  const codigoNormalizado = normalizarCodigoInvitacion(codigoInvitacion);
-  const conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion: codigoNormalizado } });
-  if (!conjunto || !conjunto.invitacionActiva) {
-    throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
+    conjunto = await conjuntoUnicoActivo();
+    if (!conjunto) {
+      throw new AppError(CODIGOS.INVITACION_INVALIDA, 'Necesitas el enlace de invitación de tu conjunto para registrarte. Pídelo a la administración.', 400);
+    }
+  } else {
+    // Normaliza caja y espacios para que un código tecleado a mano coincida con
+    // la forma canónica persistida (revisión C5).
+    const codigoNormalizado = normalizarCodigoInvitacion(codigoInvitacion);
+    conjunto = await prisma.conjunto.findUnique({ where: { codigoInvitacion: codigoNormalizado } });
+    if (!conjunto || !conjunto.invitacionActiva) {
+      throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
+    }
   }
 
   // 2) ¿Correo ya registrado? email es @unique GLOBAL; el lookup sin sesión

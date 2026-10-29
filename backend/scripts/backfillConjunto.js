@@ -9,13 +9,42 @@
 
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
 import { prisma } from '../src/config/db.js';
 import { backfillConjunto, RESULTADO, BackfillError } from './lib/backfillConjunto.js';
 
+// C5: avisa si el --config apunta a un archivo que está DENTRO del repo y NO
+// está ignorado por git (riesgo de versionar datos reales del operador en un
+// repo público). Defensivo: si git no está disponible, no bloquea.
+function advertirSiConfigVersionado(rutaConfig) {
+  try {
+    const abs = resolve(rutaConfig);
+    // ¿Está dentro del árbol de trabajo de git?
+    const top = execFileSync('git', ['rev-parse', '--show-toplevel'], { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString().trim();
+    if (!abs.startsWith(resolve(top))) return; // fuera del repo: ok
+    // ¿git lo ignora? check-ignore sale 0 si está ignorado.
+    let ignorado = false;
+    try {
+      execFileSync('git', ['check-ignore', '-q', abs], { stdio: 'ignore' });
+      ignorado = true;
+    } catch { ignorado = false; }
+    if (!ignorado) {
+      linea(negrita('⚠️  El --config está DENTRO del repo y NO está ignorado por git.'));
+      linea(negrita('    Si contiene datos reales del operador (WhatsApp/domicilio), NO lo commitees.'));
+      linea(negrita('    Usa un archivo fuera del repo o nómbralo *.local.json (ya ignorado).'));
+    }
+  } catch {
+    /* git no disponible: no bloquea */
+  }
+}
+
 const args = process.argv.slice(2);
 const APPLY = args.includes('--apply');
+const SOLO_CONJUNTO = args.includes('--solo-conjunto');
 const idxConfig = args.indexOf('--config');
 const CONFIG_PATH = idxConfig !== -1 ? args[idxConfig + 1] : null;
 
@@ -30,7 +59,7 @@ const esLocal = (h) => h === 'localhost' || h === '127.0.0.1' || h === '::1';
 
 async function main() {
   linea();
-  linea(negrita('== Backfill de conjunto (legado) — Puertaya =='));
+  linea(negrita(`== ${SOLO_CONJUNTO ? 'Crear conjunto (P1, sin backfill)' : 'Backfill de conjunto (legado)'} — Puertaya ==`));
   if (!CONFIG_PATH) throw new Error('Falta --config <archivo.json>');
 
   // Cargar y parsear la config.
@@ -42,6 +71,9 @@ async function main() {
   }
   // bonosHabilitados nunca se acepta (la lib también lo rechaza si viene true).
   delete config.bonosHabilitados;
+
+  // C5: aviso si el config vive dentro del repo sin estar ignorado.
+  advertirSiConfigVersionado(CONFIG_PATH);
 
   // --- Salvaguarda de host ---
   const host = hostDeDatabaseUrl();
@@ -65,13 +97,31 @@ async function main() {
   }
 
   // --- Ejecutar (o ensayar) ---
-  const reporte = await backfillConjunto({ config, apply: APPLY, log: (m) => linea(`  ${m}`) });
+  const reporte = await backfillConjunto({ config, apply: APPLY, soloConjunto: SOLO_CONJUNTO, log: (m) => linea(`  ${m}`) });
 
   // --- Reporte final ---
   linea();
   linea(negrita('Conteos ANTES (total / NULL / asignados):'));
   for (const [t, c] of Object.entries(reporte.conteosAntes)) {
     linea(`  ${t.padEnd(12)} ${c.total} / ${c.nulos} / ${c.asignados}`);
+  }
+
+  // --- Modo --solo-conjunto (P1): crea el conjunto sin tocar filas ---
+  if (reporte.soloConjunto) {
+    linea();
+    if (reporte.resultado === RESULTADO.DRY_RUN) {
+      linea(negrita('*** DRY-RUN (--solo-conjunto): no se escribió nada. Crearía el conjunto, sin tocar filas. ***'));
+      linea('Para aplicar: repite el comando con --apply --solo-conjunto.');
+    } else if (reporte.resultado === RESULTADO.CONJUNTO_YA_EXISTE) {
+      linea(negrita(`El conjunto "${reporte.conjunto.nombre}" ya existía (config igual). No se tocó nada.`));
+      imprimirInvitacion(reporte);
+    } else {
+      linea(negrita(`✅ Conjunto "${reporte.conjunto.nombre}" creado (P1), SIN tocar filas.`));
+      linea('   Ninguna fila fue asignada. El backfill de filas es un paso posterior (C1).');
+      imprimirInvitacion(reporte);
+    }
+    await cerrar(0);
+    return;
   }
 
   if (reporte.resultado === RESULTADO.DRY_RUN) {
@@ -114,8 +164,12 @@ function imprimirInvitacion(reporte) {
 
 function imprimirRollback(reporte) {
   linea();
-  linea(negrita('SQL de rollback (deja en NULL lo asignado a este conjunto):'));
+  linea(negrita('SQL de rollback (deja en NULL TODAS las filas de este conjunto):'));
   for (const s of reporte.sqlRollback) linea(`  ${s}`);
+  linea(negrita('  ⚠️  Alcance: afecta a TODAS las filas del conjunto, incluidas las que el'));
+  linea(negrita('      código nuevo cree DESPUÉS del deploy (C2). Válido para deshacer C1 antes'));
+  linea(negrita('      del deploy o como reversión total; después de C2 con tráfico real, no lo'));
+  linea(negrita('      ejecutes sin decidirlo explícitamente.'));
 }
 
 async function cerrar(code) {
