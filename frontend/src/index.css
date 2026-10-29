@@ -6,6 +6,9 @@
 @import "./puertaya-brand/tokens.css";
 
 :root{
+  /* Separación vertical única entre secciones de una pantalla (contadores,
+     botones, campos, tarjetas). No depende del tema. */
+  --space-section: 12px;
   --brand: #1E63C9;
   --brand-dark: #13294B;
   --brand-hover: #0C2E73;
@@ -199,7 +202,7 @@ button, input, select { font: inherit; }
 
 .card{
   background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
-  padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  padding: 16px; margin-bottom: var(--space-section); box-shadow: 0 1px 2px rgba(15,23,42,.04);
 }
 
 .card-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
@@ -213,7 +216,7 @@ button, input, select { font: inherit; }
 .badge-PROGRAMADO{ background:var(--badge-warn-bg); color:var(--badge-warn-fg); }
 .badge-ENTREGADO{ background:var(--badge-success-bg); color:var(--badge-success-fg); }
 
-.stat-row{ display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom:16px; }
+.stat-row{ display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom: var(--space-section); }
 .stat{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; }
 .stat .n{ font-size:18px; font-weight:800; }
 .stat .l{ font-size:10.5px; color: var(--ink-soft); }
@@ -246,7 +249,9 @@ button, input, select { font: inherit; }
   font-size:12.5px; color:var(--gold); font-weight:700; margin-top:10px;
 }
 
-.field{ margin-bottom:12px; }
+.field{ margin-bottom: var(--space-section); }
+/* Botón u otro bloque suelto entre secciones: misma separación que .field. */
+.stack-gap{ margin-bottom: var(--space-section); }
 .field label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; }
 .field input, .field select, .field textarea{
   width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:10px;
