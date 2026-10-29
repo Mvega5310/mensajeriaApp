@@ -5,11 +5,14 @@ Repo: `Mvega5310/mensajeriaApp`. Nació monoconjunto (Ipanema, operado por
 Francisco Caro Yances) y ahora soporta **multi-conjunto**: cada conjunto tiene
 sus residentes, su operador y sus paquetes, aislados entre sí (KAN-8).
 
-> **Estado del multi-conjunto (KAN-8):** implementado y validado en la rama
-> `feature/kan-8-multiconjunto`, **NO desplegado en producción**. El corte a
-> producción (backfill + fase contract + despliegue) es la Fase F y aún no se
-> ha ejecutado — ver DEPLOY.md. Producción sigue siendo, por ahora, el conjunto
-> único Ipanema con el esquema previo hasta que se ejecute ese corte.
+> **Estado del multi-conjunto (KAN-8):** **desplegado en producción desde el
+> 28-oct-2026** (corte Fase F ejecutado; detalle en DEPLOY.md y en
+> `docs/runbook-corte-ipanema.md` §6). Producción tiene **un solo conjunto,
+> `ipanema`**, con `bonosHabilitados=false`. El *contract* (`conjuntoId` NOT NULL)
+> está aplicado y registrado en la base, pero **su carpeta de migración todavía
+> no está en el repo** (paso 4 pendiente; ver DEPLOY.md → "Pendiente"). Mientras
+> exista un único conjunto, el registro funciona sin código de invitación
+> (hotfix `20a46b4`).
 
 La rama de trabajo es `develop`, no `main` (ver regla de ramas abajo, es la más
 importante de este archivo).
@@ -86,6 +89,7 @@ docs/        # Prototipo original, flyer de campaña, logo — referencia histó
 - **Fotos fuera de los listados**: `GET /packages` y `GET /packages/mine` NUNCA deben incluir `fotoUrl` (pueden pesar cientos de KB en base64 cada una) — se piden aparte vía `GET /packages/:id/foto`, solo al abrir el detalle de un paquete puntual. Esto fue la causa real de una caída seria en producción (ver historial de commits) — no revertir este patrón.
 - **Sin pasarela de pagos real**: todo el cobro es manual/efectivo/transferencia, coordinado por fuera de la app.
 - **La app ya no es exclusiva de Ipanema**: no incrustar el nombre "Ipanema", el operador, su domicilio, WhatsApp ni tarifas en el código. Todo eso es configuración por conjunto (ver reglas del multi-conjunto abajo).
+- **Registro sin código con un solo conjunto** (hotfix `20a46b4`): si en la base hay exactamente 1 `Conjunto` con la invitación activa, `register` y `config-publica` sin código usan ese conjunto; con 0, 2 o más, el código vuelve a ser obligatorio solo. Existe porque los QR/folletos repartidos apuntan sin `?c=`. **Antes de crear un segundo conjunto, reimprimir los QR/folletos con `?c=<código>`.**
 
 ## Reglas del multi-conjunto (no negociables)
 

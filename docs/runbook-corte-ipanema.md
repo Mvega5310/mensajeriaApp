@@ -1,10 +1,11 @@
 # Runbook — Corte a producción del multi-conjunto (Ipanema) · KAN-8 Fase F
 
-> **Estado:** NO ejecutado en producción. **Ensayado el 28-oct-2026** contra una
-> copia real de producción, sin incidencias (resultados en §0.3). La ejecución
-> real requiere aprobación explícita del usuario, paso por paso. El orden y su
-> justificación están en
-> [`DEPLOY.md` → "Corte a producción del multi-conjunto"](../DEPLOY.md).
+> **Estado: EJECUTADO en producción el 28-oct-2026** (P0 → C5 pasos 1–3), tras
+> ensayarlo ese mismo día contra una copia real (§0.3). Resultados y desviaciones
+> del corte real en **§6**. **Queda pendiente el paso 4 de C5** (carpeta de
+> migración al repo). Cualquier ejecución futura de este runbook sigue requiriendo
+> aprobación explícita del usuario, paso por paso. El orden y su justificación
+> están en [`DEPLOY.md` → "Corte a producción del multi-conjunto"](../DEPLOY.md).
 
 Regla que atraviesa todo el runbook: **no improvisar.** Ante cualquier resultado
 inesperado (un conteo que no cuadra, un error de un script, un smoke test que
@@ -227,7 +228,9 @@ paquetes reales**.
   luego `--apply --solo-conjunto`. Revisar host y resumen.
 - **Esperado:** se crea el `Conjunto` Ipanema con su `codigoInvitacion`, **sin
   tocar ninguna fila**. Con esto ya se puede **reimprimir el QR/flyer** con
-  `/registro?c=<código>`.
+  `/registro?c=<código>`. El enlace que imprime el CLI usa `FRONTEND_URL` y, si no
+  está definida, `http://localhost:5173`; la URL real es
+  `https://mensajeria-app-iota.vercel.app/registro?c=<código>`.
 - **Continuar si:** el conjunto existe y el código quedó anotado.
 - **Rollback:** `DELETE FROM "Conjunto" WHERE slug='ipanema'` (aún no tiene filas
   asociadas). Reportar.
@@ -253,9 +256,10 @@ paquetes reales**.
 > a la ventana de bajo tráfico y evita el fin de mes (pico de paquetes).
 
 ### Checklist previo (antes de C0)
-- [ ] **Rotar la contraseña de la base de producción** (pendiente: se mostró en una
-      conversación; el procedimiento se acuerda aparte) y confirmar que el backend
-      `mensajeriaApp` se reconecta con la nueva.
+- [ ] **Rotar la contraseña de la base de producción** si se expuso, y confirmar
+      que el backend `mensajeriaApp` se reconecta con la nueva (procedimiento en
+      DEPLOY.md → "Rotar la contraseña de Postgres"; la del 28-oct-2026 se hizo
+      tras el corte, ver §6).
 - [ ] **Avisar a Francisco** (fecha, hora y qué cambia; ver §3).
 - [ ] **Tras P1:** reimprimir el QR/flyer con `/registro?c=<código>` y dejar el
       código visible en recepción. Los QR viejos apuntan a la raíz sin `?c=` y,
@@ -277,8 +281,10 @@ paquetes reales**.
 
 ### C1 — Backfill #1
 - **Comando:** `npm run backfill-conjunto -- --config C:\puertaya-privado\ipanema.local.json --apply`
-  (por el túnel ya verificado en C0 con `railway status`; al ser host remoto, el
-  script pedirá reescribir el slug `ipanema`).
+  (por el túnel ya verificado en C0 con `railway status`). **Ojo:** por el túnel
+  el host de `DATABASE_URL` es `127.0.0.1`, así que el CLI lo trata como local y
+  **no pide reescribir el slug** (esa protección solo actúa con un host remoto).
+  En el corte, **la compuerta es el OK humano** antes de cada `--apply`.
 - **Esperado:** reporte `APLICADO`, `0` NULL en las 4 tablas, conteos coherentes.
   **Anotar el SQL de rollback** del reporte.
 - **Continuar si:** reporte `APLICADO` y verificación de `0` NULL ok.
@@ -367,34 +373,35 @@ paquetes reales**.
     ```powershell
     & "$PG18\psql.exe" -h 127.0.0.1 -p 55432 -U postgres -d railway -v ON_ERROR_STOP=1 -f backend/prisma/manual/rollback_contract_conjunto.sql
     ```
-  - **Si el `resolve --applied` YA se hizo:** el SQL solo no basta. `_prisma_migrations`
-    seguiría marcando la migración como aplicada mientras el esquema vuelve a ser
-    nullable: un `migrate deploy` (corre en el `start` de Railway) **asumiría el
-    contract aplicado**. Y si se quita esa marca con la carpeta todavía en `main`,
-    el siguiente arranque **lo volvería a aplicar**. Procedimiento completo, en
-    este orden:
-    1. **SQL de rollback** (el comando de arriba): esquema a nullable / `SET NULL`.
-    2. **Si la carpeta `prisma/migrations/<nombre>/` ya llegó a `main`:** un commit
-       que **quite** esa carpeta y devuelva `schema.prisma` a `conjuntoId String?`,
-       push y esperar el deploy, **antes** del paso 3. Mientras la marca siga como
-       aplicada, ese deploy no hace nada (verificado: "No pending migrations").
-       Hacerlo al revés abre una ventana en la que **cualquier arranque del
-       backend** (deploy, reinicio y, previsiblemente, el despertar de
-       *Sleeping*) vuelve a aplicar el contract. Si la carpeta solo existe en
-       local, bórrala y listo.
-    3. **Quitar la marca de `_prisma_migrations`.** ⚠️ **`npx prisma migrate resolve
-       --rolled-back <nombre>` NO sirve aquí:** solo acepta migraciones en estado
-       *fallido* y con una aplicada responde
-       `Error: P3012 … cannot be rolled back because it is not in a failed state`
-       (verificado en PostgreSQL 18.6 con Prisma 5.22). Lo que sí funciona es
-       borrar esa fila del historial, por el túnel y con un archivo `.sql` (§5):
+  - **Si el `resolve --applied` YA se hizo (es el estado real desde el 28-oct-2026,
+    migración `20261028165010_contract_conjunto`):** el SQL solo no basta.
+    `_prisma_migrations` seguiría marcando la migración como aplicada mientras el
+    esquema vuelve a ser nullable: un `migrate deploy` (corre en el `start` de
+    Railway) **asumiría el contract aplicado**. Y si se quita esa marca con la
+    carpeta en `main`, el siguiente arranque **lo volvería a aplicar**.
+    **Versión final, con la carpeta fuera del repo (estado actual):**
+    1. **SQL de rollback** (el comando de arriba, con `ON_ERROR_STOP`): esquema a
+       nullable / `SET NULL`.
+    2. **Quitar la marca de `_prisma_migrations`**, por el túnel y con un archivo
+       `.sql` (§5):
        ```sql
-       DELETE FROM _prisma_migrations WHERE migration_name = '<timestamp>_contract_conjunto';
+       DELETE FROM _prisma_migrations WHERE migration_name = '20261028165010_contract_conjunto';
        ```
-    4. **Verificar:** `npx prisma migrate status` → "Database schema is up to date!"
-       (sin la migración pendiente ni aplicada), y
-       `SELECT table_name, is_nullable FROM information_schema.columns WHERE column_name = 'conjuntoId';`
+       ⚠️ **`npx prisma migrate resolve --rolled-back <nombre>` NO sirve aquí:** solo
+       acepta migraciones en estado *fallido* y con una aplicada responde
+       `Error: P3012 … cannot be rolled back because it is not in a failed state`
+       (verificado en PostgreSQL 18.6 con Prisma 5.22).
+    3. **Verificar:** `npx prisma migrate status` → "Database schema is up to date!",
+       y `SELECT table_name, is_nullable FROM information_schema.columns WHERE column_name = 'conjuntoId';`
        → `YES` en las 4 tablas.
+
+    **Si la carpeta ya hubiera vuelto al repo (paso 4 hecho):** entre el paso 1 y el
+    2, un commit que **quite** esa carpeta y devuelva `schema.prisma` a
+    `conjuntoId String?`, push y esperar el deploy, **antes** del `DELETE`. Mientras
+    la marca siga como aplicada, ese deploy no hace nada (verificado: "No pending
+    migrations"). Al revés se abre una ventana en la que **cualquier arranque del
+    backend** (deploy, reinicio y, previsiblemente, el despertar de *Sleeping*)
+    vuelve a aplicar el contract.
 
     Con la fila borrada y la carpeta fuera, el estado equivale a "contract nunca
     aplicado". Un reintento posterior repite C5 desde el principio.
@@ -449,7 +456,7 @@ Con una cuenta real de Ipanema (operador y residente):
 | C3 | quedan NULL tras la corrida | investigar escritor viejo; no seguir a C5 |
 | C4 | cualquier NULL o checklist en rojo | **no aplicar contract**; reportar |
 | C5 | el contract falla (guard o FK) | rollback SQL; reportar |
-| C5 | hay que revertir **tras** `resolve --applied` | rollback SQL → quitar la carpeta de `main` (commit + deploy) → `DELETE` de la fila en `_prisma_migrations` (**no** `resolve --rolled-back`: P3012) → `migrate status` + `is_nullable` (C5, "Abortar/rollback") |
+| C5 | hay que revertir **tras** `resolve --applied` | rollback SQL → (solo si la carpeta está en el repo: quitarla de `main`, commit + deploy) → `DELETE` de la fila en `_prisma_migrations` (**no** `resolve --rolled-back`: P3012) → `migrate status` + `is_nullable` (C5, "Abortar/rollback") |
 | Túnel | `channel 1: open failed` / "el servidor ha cerrado la conexión" | `railway status` (¿`astonishing-truth`?), `railway link`, actualizar CLI (§0.1) |
 
 En todos los casos: **detenerse y reportar**, no improvisar.
@@ -482,3 +489,49 @@ Problemas reales del ensayo; ninguno es un fallo de la app.
   pierde líneas y el script se corta en la segunda pregunta.
 - **`pg_ctl start`** puede bloquear herramientas que capturan la salida: lánzalo
   con `Start-Process` sin `-Wait` (§0.1, paso 4).
+
+---
+
+## 6. Ejecución real del 28-oct-2026
+
+Corte ejecutado en producción, un paso a la vez y con OK explícito del usuario en
+cada compuerta. Sin incidencias en los datos.
+
+| Paso | Resultado real |
+|---|---|
+| Paso 0 | `astonishing-truth` confirmado; producción con 4 usuarios (1 `OPERATOR`, 3 `RESIDENT`), 0 paquetes/bonos/comentarios, 5 migraciones. |
+| C0 | Dump `-Fc` verificado con `pg_restore --list` (28 entradas, sin errores). |
+| P0 | `migrate deploy` aplicó solo `add_conjunto_multitenant`: **16,8 s**. El backend viejo siguió respondiendo. |
+| P1 | `ipanema` creado (`bonosHabilitados=false`, tarifas 3000/4500/7000/12000), sin tocar filas. |
+| C1 | 4 usuarios asignados, 0 NULL. CLI completa ≈ 11 s. |
+| C2 | Fast-forward de `main`; ventana con frontend nuevo y backend viejo ≈ 45 s (Vercel terminó antes que Railway). |
+| C3 | "0 filas por asignar". |
+| C4 | Registro sin código / con código inválido → 400; smoke manual del usuario aprobado. |
+| C5 (1–3) | Contract: **2,86 s**; NOT NULL ×4 y FK `RESTRICT`; `resolve --applied 20261028165010_contract_conjunto`, `migrate status` "up to date". |
+| C5 (4) | **Pendiente** (ver DEPLOY.md → "Pendiente"). |
+
+**Desviaciones respecto a este runbook:**
+- **El CLI no pidió reescribir el slug** en C1/C3: por el túnel el host es
+  `127.0.0.1` y la protección solo actúa con hosts remotos. La compuerta real es
+  el OK humano antes de cada `--apply` (corregido en C1).
+- **El enlace que imprime el CLI usa `localhost:5173`** si `FRONTEND_URL` no está
+  definida. La URL real para el QR es
+  `https://mensajeria-app-iota.vercel.app/registro?c=<código>` (anotado en P1).
+- **La carpeta para `resolve` se creó fuera del repo**, en una copia del árbol de
+  Prisma (`schema.prisma` + `migrations/`), con `--schema` apuntando a ella, en vez
+  de `backend/prisma/migrations/` (C5 paso 2). Por eso el repo no cambió y el
+  paso 4 sigue pendiente; la carpeta debe volver byte a byte idéntica (SHA-256 en
+  DEPLOY.md).
+- **La transacción de C1 no se midió en el servidor** (habría requerido activar
+  `log_statement` en producción). La CLI completa tardó ≈ 11 s; en el ensayo, la
+  transacción fue ≈ 62 ms.
+- **Volumen real:** el que preveía §0.3 (4 usuarios, 0 paquetes), así que el corte
+  se hizo en horario normal.
+
+**Después del corte, el mismo día:**
+- **Hotfix `20a46b4`:** registro sin código mientras exista un solo conjunto (los
+  QR/folletos repartidos apuntan sin `?c=`). Antes de crear un segundo conjunto,
+  reimprimir los QR con `?c=<código>` (ver README y DEPLOY.md).
+- **Rotación de la contraseña de Postgres** con "Regenerar contraseña" en Railway
+  (procedimiento en DEPLOY.md → "Rotar la contraseña de Postgres"). Verificada:
+  backend sin errores de autenticación y túnel nuevo funcionando.

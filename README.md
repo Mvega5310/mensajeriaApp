@@ -7,10 +7,10 @@ seguridad y contractual que encontró que el control de roles y el PIN de entreg
 no tenían ningún respaldo del lado servidor. Con KAN-8 soporta **multi-conjunto**
 (cada conjunto con sus residentes, operador y paquetes, aislados entre sí).
 
-> **Estado del multi-conjunto:** implementado y validado en la rama
-> `feature/kan-8-multiconjunto`, **no desplegado en producción**. El corte
-> (backfill + fase *contract* + despliegue) es la Fase F y aún no se ejecuta; en
-> producción sigue el conjunto único Ipanema hasta entonces (ver DEPLOY.md).
+> **Estado del multi-conjunto:** **desplegado en producción desde el
+> 28-oct-2026** (ver DEPLOY.md). Producción tiene un solo conjunto, `ipanema`,
+> con `bonosHabilitados=false`. Mientras sea el único, el registro no necesita
+> código de invitación (ver "Registro sin código" más abajo).
 
 **En producción:**
 - App: https://mensajeria-app-iota.vercel.app
@@ -143,7 +143,8 @@ invitación de su conjunto (ese formulario nunca puede crear una cuenta de
 operador — el rol lo fuerza el backend). Cada residente queda asociado al
 conjunto de su código; los conjuntos están aislados entre sí.
 
-**Registro sin código mientras exista un solo conjunto.** Si en toda la base hay
+**Registro sin código mientras exista un solo conjunto** (hotfix `20a46b4`,
+28-oct-2026). Si en toda la base hay
 **exactamente un** `Conjunto` con la invitación activa, `/registro` (sin `?c=`)
 funciona igual que antes del multi-conjunto: el residente queda en ese conjunto y
 la pantalla muestra su nombre. Así los folletos/QR antiguos, que apuntan sin
@@ -151,6 +152,9 @@ código, siguen sirviendo. Se apaga solo: en cuanto existe un segundo conjunto (
 el único tiene la invitación desactivada), el registro sin código responde
 `400 INVITACION_INVALIDA` y la pantalla pide el código. Lo mismo hace
 `GET /api/conjuntos/config-publica` sin `c` (solo los 5 campos públicos).
+**Antes de crear un segundo conjunto, reimprime los QR/folletos de los
+existentes con `?c=<código>`**: desde ese momento los enlaces sin código dejan de
+registrar.
 
 ## Funcionalidades
 
