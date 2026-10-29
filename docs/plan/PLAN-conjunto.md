@@ -23,7 +23,12 @@ Fecha: 2026-10-29 (v2, con la definición del usuario). Rama de trabajo: `refact
 
 **El aislamiento entre conjuntos no se debilita:** `Package`, `Domicilio`, `Bono` y `Comentario` siguen llevando `conjuntoId`. La extensión de Prisma los sigue filtrando por el conjunto del contexto. Lo único que cambia es que **la cuenta de la persona deja de ser un dato de un conjunto**.
 
-**El selector recuerda la última dirección usada,** para que la siguiente solicitud salga con 0 toques extra.
+**Regla de oro: no se pide dos veces lo mismo.**
+
+- **Una sola vez:** el conjunto, la torre, el apartamento y el teléfono se piden al registrarse, o la primera vez que se usan. Quedan guardados como dirección.
+- **En cada solicitud no se pregunta nada.** La dirección guardada (la última usada) ya viene puesta y se muestra en una sola línea, por ejemplo "Ipanema · T2 · 304". No hay campos de dirección en el formulario.
+- **"Cambiar" es opcional.** Es un enlace pequeño que solo se toca si la persona lo necesita (por ejemplo, para pedir para un amigo). Si lo toca, puede elegir otra dirección guardada o agregar una nueva una sola vez. Esa dirección queda guardada para la próxima.
+- **0 campos y 0 toques extra** respecto al recorrido de hoy. Hay una prueba E2E que lo verifica.
 
 ## Punto de partida (igual que en la v1)
 
@@ -117,7 +122,7 @@ Fecha: 2026-10-29 (v2, con la definición del usuario). Rama de trabajo: `refact
 
 **S2.3 · Sonnet.** Pantallas que lo usan.
 - **Registro:** selector de conjunto, torre y apartamento. Con 1 conjunto el selector sale deshabilitado.
-- **Avisar un paquete:** `DireccionEntrega` va arriba en vista corta. **El recorrido de hoy no gana toques.**
+- **Avisar un paquete y Pedir entrega:** `DireccionEntrega` va arriba en vista corta, con la dirección guardada ya puesta y sin campos de dirección. **El recorrido de hoy no gana toques ni campos;** solo se toca "Cambiar" si hace falta.
 - **Mis paquetes:** cada tarjeta muestra el conjunto si la persona tiene más de uno.
 - **Se acepta si:** con 1 conjunto los toques son los mismos que hoy, y el E2E "ayudar a un amigo" pasa con 2 conjuntos.
 
