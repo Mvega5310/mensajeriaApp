@@ -153,6 +153,8 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 | `recepcion.integration.test.js` | integración | T2.3: `POST /packages/recepcion` (con pre-alerta por guía / más antigua / sin pre-alerta / sin dueño), `PATCH /packages/:id/asignar`, cortesía y bono atómico, PIN entregable, `Idempotency-Key` (incl. carrera), `maxFotos` en recepción y checkin, `waUrl`, aislamiento y roles. |
 | `contratosOperador.integration.test.js` | integración | T2.7: `/packages/resumen` (día de Bogotá, aislamiento, 403), `GET /packages/:id` (shape, sin pin/fotos, aviso `/p#`, 403/404), búsqueda `T2 30` por prefijo, bitácora (arreglo sin `pagina`, paginación, filtros). `fechas.test.js`: día de Bogotá y filtros de fecha. |
 | `entregaLote.test.js` | unitaria | T2.5: token de entrega (firma, vencimiento, alteración) y regla de selección del lote. |
+| `domicilio.integration.test.js` | integración | S1.1/S1.2: persona con paquetes en A y B ve todos; el operador de A no ve nada de B (búsqueda, listados, `/packages/:id`, entrega por PIN, CSV, recepción/asignar) ni su `Domicilio`; un RESIDENT no lee otra cuenta; deduplicación canónica de torre/apto. |
+| `migracionDomicilio.integration.test.js` | integración | S1.1: migración `add_domicilio` con datos (un `Domicilio` por residente, paquetes enlazados, paridad SQL/JS de la forma canónica, idempotencia), rollback y re-aplicar, en base desechable. |
 | `entregaLote.integration.test.js` | integración | T2.5: `/entregas/verificar-pin` y `/confirmar` (lote por apartamento, `PIN_AMBIGUO`, límite por operador, token ajeno/vencido, carrera sin entregas parciales, aislamiento). |
 | `revisionF2.integration.test.js` | integración | Revisión F2: cortesía única (escenario lunes/martes, carrera de 5 recepciones, "T2" = "TORRE 2"), ninguna respuesta al operador lleva el PIN, bloqueo por paquete en lote, presupuesto de fotos del JSON. |
 | `enlace.integration.test.js` + `domain/__tests__/enlace.test.js` | integración + pura | T3.1 (+T2.8: foto propia 200 / ajena no): token válido/vencido/alterado/basura/otro secreto/conjunto manipulado, residente borrado, sesión limitada (schedule propio sí, ajeno 404, todas las demás rutas del app real 403), URL `/p#` en el aviso. |
@@ -435,29 +437,43 @@ pre-alertado (fase *expand*, ver DEPLOY.md):
   fijos: los lee de esa misma config (`utils/schedule.js` se borró). La prueba
   `frontendSinFijos.test.js` falla si vuelven a aparecer.
 
-### Buscar residentes: `GET /api/residentes/buscar?q=` (T2.2)
+### Buscar residentes: `GET /api/residentes/buscar?q=` (T2.2, S1.2)
 
-Solo `OPERATOR` (`requireAuth` + `requireTenant` + `requireRole`). Devuelve como
-máximo 5 residentes del conjunto del operador (los de otro conjunto nunca
-aparecen):
+Solo `OPERATOR` (`requireAuth` + `requireTenant` + `requireRole`). Desde S1.2 busca
+**direcciones de entrega** (`Domicilio`), no cuentas: devuelve como máximo 5 del
+conjunto del operador (las de otro conjunto nunca aparecen). "304" muestra a todos los
+que han pedido o recibido en ese apartamento:
 
 ```json
-[{ "id": "…", "nombre": "Ana Gómez", "torre": "TORRE 2", "apto": "304",
-   "etiqueta": "T2 · 304", "pendientes": 2 }]
+[{ "domicilioId": "…", "residenteId": "…", "id": "…", "nombre": "Ana Gómez",
+   "torre": "2", "apto": "304", "etiqueta": "T2 · 304", "pendientes": 2 }]
 ```
 
-- `pendientes` = paquetes del residente en `EN_RECEPCION` o `PROGRAMADO`.
-  No se expone email ni teléfono.
+- `id` = `residenteId` (compatibilidad con los contratos actuales). `nombre` es el de
+  quien recibe en esa dirección. No se expone correo ni teléfono ni otros conjuntos.
+- `pendientes` = paquetes de ese domicilio en `EN_RECEPCION` o `PROGRAMADO`.
 - `q` vacío (o de más de 60 caracteres) -> 400 `DATOS_INVALIDOS`.
 - Formatos de `q` (`domain/apartamento.js#interpretarBusqueda`): `304` (solo apto;
   también prefijo: `30` -> 301..309; con torre también es prefijo: `T2 30` -> 301, 304...), `T2 304`, `t2-304`, `2-304`, `2 304`,
   `2/304`, `Torre 2 apto 304`, y nombre libre (`ana`, `Ana Gó`, `gomez`).
 - Orden: apto exacto primero, luego torre y apto.
-- Torre guardada hoy: `"TORRE N"` (registro, en mayúsculas); se compara por
-  token, así `TORRE 2`, `T2` y `2` son la misma torre. Apto: solo dígitos.
+- Torre/apto se guardan en forma canónica (`torre` = token: `TORRE 2`, `T2` y `2` son `2`;
+  `apto` solo dígitos; `''` si faltan). Ver DEPLOY.md, migración `add_domicilio`.
 - Tildes: el nombre se compara en memoria sin tildes ni mayúsculas (sin
   `unaccent` ni SQL crudo, invariante 3) sobre una lectura acotada (solo
-  `RESIDENT`, 4 columnas, tope 3000).
+  domicilios activos, pocas columnas, tope 3000).
+
+### Cuenta de la persona, dirección de entrega y "Mis paquetes" multi-conjunto (S1.1/S1.2)
+
+La cuenta (`User`) es de la persona y sirve en cualquier conjunto; conjunto + torre + apto +
+quien recibe + teléfono van en un `Domicilio` por persona y conjunto (se pide una vez y se
+reutiliza). El registro crea la cuenta y su primer `Domicilio`. La recepción
+(`POST /packages/recepcion`) y `PATCH /packages/:id/asignar` aceptan `domicilioId` (o
+`residenteId`, que resuelve el domicilio más reciente de esa persona en el conjunto del
+operador); una dirección o persona de otro conjunto da 404. `GET /api/packages/mine` junta los
+paquetes de la persona en **todos** sus conjuntos (una consulta por conjunto, cada una en su
+contexto de tenant) y cada paquete trae `conjunto: { slug, nombre }`. Invariantes 10 y 11 de
+CLAUDE.md.
 
 ### Recepción sin pre-alerta, asignar e idempotencia (T2.3)
 

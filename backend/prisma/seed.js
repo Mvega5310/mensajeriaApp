@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/db.js';
-import { crearOperador } from '../src/services/usuario.service.js';
+import { crearOperador as crearCuentaOperador } from '../src/services/usuario.service.js';
 import { buscarUsuarioPorEmailSinTenant } from '../src/controllers/auth.controller.js';
 import { generarCodigoInvitacion } from '../src/services/invitacion.service.js';
 
@@ -66,7 +66,7 @@ async function crearOperador(conjunto) {
 
   const passwordHash = await bcrypt.hash(password, 10);
   // El operador queda ligado a SU conjunto (services/usuario.service.js).
-  await crearOperador({
+  await crearCuentaOperador({
     conjuntoId: conjunto.id,
     email,
     passwordHash,

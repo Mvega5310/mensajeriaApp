@@ -3,7 +3,8 @@
 App de recepción/custodia/entrega de paquetes para conjuntos residenciales.
 Repo: `Mvega5310/mensajeriaApp`. Nació monoconjunto (Ipanema, operado por
 Francisco Caro Yances) y ahora soporta **multi-conjunto**: cada conjunto tiene
-sus residentes, su operador y sus paquetes, aislados entre sí (KAN-8).
+su operador, sus direcciones de entrega y sus paquetes, aislados entre sí (KAN-8; la cuenta
+del residente es de la persona y sirve en cualquier conjunto, ver invariantes 10 y 11).
 
 > **Estado del multi-conjunto (KAN-8):** **desplegado en producción desde el
 > 28-oct-2026** (corte Fase F ejecutado; detalle en DEPLOY.md y en
@@ -138,11 +139,57 @@ sostienen. Cada una tiene una prueba automatizada; si tu cambio rompe una,
 7. **Nunca se pasa `conjuntoId` en `data`.** El conjunto de toda escritura sale
    del contexto; un `conjuntoId` en `data` se rechaza. El llamador jamás decide el
    tenant. — *Prueba:* `tenantExtension.helpers.test.js` / `*.interceptor.test.js`.
-8. **`Conjunto` y `PasswordResetToken` son los ÚNICOS modelos sin tenant.** El
-   resto (`User`, `Package`, `Bono`, `Comentario`) lleva `conjuntoId` y está en
-   `MODELOS_CON_TENANT` (`config/tenantModels.js`). Un modelo nuevo entra ahí a
-   propósito, o queda fuera del aislamiento. — *Prueba:* cubierto por las de la
-   extensión.
+8. **Modelos sin tenant: `Conjunto`, `PasswordResetToken`, `User` y `UsuarioConjunto`
+   (y solo esos).** El resto (`Package`, `Domicilio`, `Bono`, `Comentario`,
+   `PaqueteEvento`, `ClaveIdempotencia`, `PaqueteFoto`, `CortesiaApartamento`) lleva
+   `conjuntoId` y está en `MODELOS_CON_TENANT` (`config/tenantModels.js`). Un modelo
+   nuevo entra ahí a propósito, o queda fuera del aislamiento. — *Prueba:* cubierto
+   por las de la extensión y por `auditoriaInvariantes.test.js` (E7.6: todo modelo con
+   `conjuntoId` está en la lista salvo `User`/`UsuarioConjunto`).
+9. **Nada de datos, montos ni nombres de conjunto fijos en el frontend.** Ni
+   "Ipanema", ni tarifas, ni domicilio/WhatsApp del operador: todo viene de
+   `GET /conjunto/config` (con sesión) o `GET /conjuntos/config-publica?c=`
+   (registro/Términos sin sesión). — *Prueba:* `frontendSinFijos.test.js`.
+10. **`User` solo se toca desde `services/usuario.service.js`.** (PLAN-conjunto S1.1)
+    La cuenta del RESIDENT es **de la persona y sirve en cualquier conjunto**, así que
+    `User` salió de `MODELOS_CON_TENANT` y la extensión ya no la filtra. Se eligió un
+    servicio único (y no una regla especial en la extensión) porque el contexto de un
+    residente es "el conjunto de la solicitud" —ya no coincide con `User.conjuntoId`— y su
+    aislamiento correcto es por **id de la sesión**, no por conjunto. Reglas: el OPERATOR
+    siempre se filtra por el conjunto del contexto (`operadorDelConjuntoActual`); un
+    RESIDENT solo lee su propia cuenta, por el `sub` de la sesión; **un operador nunca lee
+    cuentas de residentes** (de la persona solo ve su `Domicilio`). Nada de `prisma.user.*`
+    fuera de ese servicio y de `buscarUsuarioPorEmailSinTenant` (login/forgot); no agregues
+    funciones genéricas con `where` libre. `User.conjuntoId` sigue NOT NULL: para un OPERATOR
+    es SU conjunto; para un RESIDENT es solo el "último conjunto usado" (abre el contexto de
+    sus requests hasta que S1.3 lo resuelva por solicitud) y **no aísla nada**. —
+    *Prueba:* `auditoriaInvariantes.test.js` (E7.4: falla si aparece `prisma.user`/`tx.user`
+    fuera de esos sitios).
+11. **Dirección de entrega (`Domicilio`) y "Mis paquetes" multi-conjunto.** (S1.1/S1.2)
+    El conjunto, la torre, el apto, quién recibe y el teléfono viven en `Domicilio`, una por
+    persona y conjunto (`@@unique [conjuntoId, usuarioId, torre, apto]`), con tenant: el
+    operador de un conjunto lee solo los `Domicilio`/`Package` del suyo y, de la persona,
+    únicamente lo que hay en el `Domicilio` (nombre de quien recibe, teléfono, torre, apto;
+    nunca correo ni otros conjuntos). **Forma canónica:** `torre = tokenTorre(torre) ?? ''`,
+    `apto` = solo dígitos (`''` si falta), sin NULL (`canonicalizarDireccion` en
+    `services/domicilio.service.js`; la migración aplica la misma regla en SQL). La
+    **cortesía y el lote de entrega siguen siendo por apartamento físico del conjunto**, no
+    por persona (`claveApartamento` sin cambios; se agrupa por los `Domicilio` del mismo
+    torre/apto). Un paquete o una recepción se dirige a un `Domicilio` (`domicilioId`;
+    `residenteId` se conserva por compatibilidad y resuelve el domicilio más reciente de esa
+    persona *en este conjunto*): un domicilio o una persona de otro conjunto "no existe"
+    (404), que es lo que hoy sustituye al filtro de tenant sobre `User`. **"Mis paquetes"**
+    junta los de la persona en todos sus conjuntos corriendo **una consulta por conjunto
+    DENTRO de `runWithTenant` de ese conjunto** (`porCadaConjuntoDePersona`), sin
+    `GLOBAL_LOOKUP` nuevo ni SQL crudo. "En qué conjuntos tiene domicilio" sale de la tabla
+    índice `UsuarioConjunto` (solo `usuarioId` + `conjuntoId`, sin datos personales), que
+    **únicamente** lee/escribe `services/domicilio.service.js` y siempre por el id de la
+    sesión (se escribe antes de crear el `Domicilio`: un índice de más es inofensivo).
+    — *Pruebas:* `domicilio.integration.test.js` (persona con paquetes en A y B ve todos;
+    el operador de A no ve nada de B por búsqueda, listados, `/packages/:id`, entrega por PIN
+    ni CSV; el `Domicilio` de B no le aparece; un RESIDENT no lee otra cuenta),
+    `migracionDomicilio.integration.test.js`, `auditoriaInvariantes.test.js` (E7.5).
+
 9. **Nada de datos, montos ni nombres de conjunto fijos en el frontend.** Ni
    "Ipanema", ni tarifas, ni domicilio/WhatsApp del operador: todo viene de
    `GET /conjunto/config` (con sesión) o `GET /conjuntos/config-publica?c=`
