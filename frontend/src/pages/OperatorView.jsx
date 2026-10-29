@@ -357,7 +357,7 @@ export default function OperatorView() {
         <div className="stat"><div className="n">{entregado}</div><div className="l">Entregados Hoy</div></div>
       </div>
 
-      <button className="btn btn-secondary" style={{ marginBottom: 14 }} onClick={openQr}>
+      <button className="btn btn-secondary stack-gap" onClick={openQr}>
         🔗 Invitar residentes (QR de registro)
       </button>
 
@@ -458,20 +458,22 @@ export default function OperatorView() {
 
       {tab === 'log' && (
         <>
-          <button className="btn btn-secondary" style={{ marginBottom: 12 }} onClick={handleExportCsv}>
+          <button className="btn btn-secondary stack-gap" onClick={handleExportCsv}>
             ⬇️ Exportar historial (CSV)
           </button>
           <div className="field">
             <input placeholder="Buscar por residente, torre, apto o proveedor…"
               value={logSearch} onChange={(e) => setLogSearch(e.target.value)} />
           </div>
-          <div className="field field-inline">
-            <label>Desde</label>
-            <input type="date" value={logDesde} onChange={(e) => setLogDesde(e.target.value)} />
-          </div>
-          <div className="field field-inline">
-            <label>Hasta</label>
-            <input type="date" value={logHasta} onChange={(e) => setLogHasta(e.target.value)} />
+          <div className="field-dates">
+            <div className="field">
+              <label>Desde</label>
+              <input type="date" value={logDesde} onChange={(e) => setLogDesde(e.target.value)} />
+            </div>
+            <div className="field">
+              <label>Hasta</label>
+              <input type="date" value={logHasta} onChange={(e) => setLogHasta(e.target.value)} />
+            </div>
           </div>
           <div className="field">
             <label>Estado</label>
@@ -480,7 +482,7 @@ export default function OperatorView() {
             </select>
           </div>
           {(logSearch || logDesde || logHasta || logEstado !== 'TODOS') && (
-            <button className="btn btn-secondary" style={{ marginBottom: 12 }}
+            <button className="btn btn-secondary stack-gap"
               onClick={() => { setLogSearch(''); setLogDesde(''); setLogHasta(''); setLogEstado('TODOS'); }}>
               ✕ Limpiar filtros
             </button>

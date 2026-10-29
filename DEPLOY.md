@@ -108,24 +108,65 @@ ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\id_ed25519" -N '""'
 railway ssh keys add
 ```
 
+### Rotar la contraseña de Postgres (Railway)
+
+**Editar a mano la variable de contraseña NO cambia la contraseña real** del rol
+en la base: solo desalinea lo que creen los servicios. La contraseña se rota con
+el botón **"Regenerar contraseña"** del servicio **`Postgres`**, que cambia la
+contraseña real, actualiza sus variables y redespliega. Para que el backend la
+tome solo, `DATABASE_URL` del servicio **`mensajeriaApp`** debe ser la
+**referencia** `${{Postgres.DATABASE_URL}}`, no un texto literal (así quedó el
+28-oct-2026).
+
+Orden:
+1. **Dejar la referencia:** en `mensajeriaApp` → Variables, `DATABASE_URL` =
+   `${{Postgres.DATABASE_URL}}`.
+2. **Comprobar** antes de rotar: `railway status` (`astonishing-truth`, ambos
+   servicios en línea) y que la app responde.
+3. **Regenerar** desde el panel del servicio `Postgres`.
+4. **Redesplegar** `mensajeriaApp` si Railway no lo hace solo, para que tome la
+   variable nueva.
+5. **Verificar:**
+   - `railway status`: ambos en línea.
+   - Logs de `Postgres`: `database system is ready to accept connections`. Tras
+     el reinicio puede aparecer `database system was not properly shut down;
+     automatic recovery in progress`: es normal (Railway detiene el contenedor sin
+     apagado limpio) y la recuperación tarda menos de un segundo.
+   - Logs de `mensajeriaApp`: `No pending migrations to apply.` y
+     `API escuchando`, sin `P1000` ni `authentication failed`.
+   - Sin crear datos: login con un correo inexistente → **401** (un 500 indicaría
+     que no conecta a la base) y `GET /api/packages` sin token → **401**.
+   - Un túnel nuevo (`railway connect` ya entrega la contraseña nueva) y un
+     `SELECT` de lectura.
+
+La contraseña nunca se pega en chats, tickets ni archivos (ver la nota del túnel
+arriba). La rotación del 28-oct-2026 se hizo así, porque la anterior había
+aparecido en una conversación.
+
 6. Crea la cuenta de operador en la base real (una sola vez, por el mismo túnel):
    ```
    node prisma/seed.js
    ```
    (con `DATABASE_URL` apuntando al túnel y `OPERATOR_*` en el entorno o en `.env`).
-   > **Tras el corte multi-conjunto (KAN-8), esto cambia:** `prisma/seed.js` deja
-   > de usarse en producción. El alta de un conjunto y su operador pasa a ser el
-   > procedimiento operativo por conjunto (ver "Procedimientos operativos por
-   > conjunto" más abajo; el script de alta se construye en la Fase F).
+   > **Desde el corte multi-conjunto (KAN-8, 28-oct-2026), esto cambió:**
+   > `prisma/seed.js` ya no se usa en producción. El alta de un conjunto y su
+   > operador es el procedimiento operativo por conjunto (`npm run alta-conjunto`;
+   > ver "Procedimientos operativos por conjunto" más abajo).
 7. **Settings → Networking → Generate Domain** para obtener la URL pública del backend.
 
 ### Corte a producción del multi-conjunto (KAN-8) — orden obligatorio
 
-> **Estado:** el multi-conjunto está implementado y validado en la rama
-> `feature/kan-8-multiconjunto`, **NO desplegado**. Esta sección fija el ORDEN del
-> corte. El procedimiento ejecutable paso a paso está en
+> **Estado: corte EJECUTADO el 28-oct-2026.** El multi-conjunto está desplegado
+> en producción (`main`), con un solo conjunto, `ipanema` (`bonosHabilitados=false`).
+> Resultados reales: 4 usuarios y 0 paquetes al cortar; P0 16,8 s; contract
+> 2,86 s. El *contract* está aplicado y registrado, pero falta el paso 4 (su
+> carpeta de migración aún no está en el repo; ver notas abajo y "Pendiente").
+> Desviaciones del runbook: `docs/runbook-corte-ipanema.md` §6.
+>
+> Lo que sigue documenta el ORDEN del corte y su porqué (sirve de referencia para
+> un corte futuro). El procedimiento ejecutable paso a paso está en
 > [`docs/runbook-corte-ipanema.md`](docs/runbook-corte-ipanema.md); se ensaya
-> contra una copia antes de tocar producción. **No ejecutar nada de esto todavía.**
+> contra una copia antes de tocar producción.
 
 #### Por qué cambió el orden (ventana de fallo del orden ingenuo)
 
@@ -172,17 +213,34 @@ Notas:
   C5, se registra en `migrations/` en un commit posterior y se marca como aplicado
   con `npx prisma migrate resolve --applied <nombre>`, para que los `migrate deploy`
   futuros no intenten re-aplicarlo.
-- **Revertir el contract después del `resolve --applied`** no es solo correr el SQL
-  de rollback. `_prisma_migrations` seguiría marcándolo como aplicado con el
-  esquema ya nullable. Y `prisma migrate resolve --rolled-back` **no sirve**: solo
-  acepta migraciones fallidas (`P3012`, verificado con Prisma 5.22). Orden
-  verificado:
-  1. SQL de rollback.
-  2. Commit que quite la carpeta de `migrations/` y vuelva `schema.prisma` a
-     `conjuntoId String?`, ya desplegado.
-  3. `DELETE` de esa fila en `_prisma_migrations`.
-  4. `migrate status` + `is_nullable`.
+- **Estado real del contract (28-oct-2026):** aplicado en producción y registrado
+  en `_prisma_migrations` como **`20261028165010_contract_conjunto`**, pero **su
+  carpeta sigue fuera del repo** (el `resolve` se hizo con `--schema` apuntando a
+  una copia del árbol de Prisma fuera del repo). Mientras no esté en el repo,
+  `prisma migrate deploy` en producción no hace nada ("No pending migrations").
+  Al volver al repo (paso 4, ver "Pendiente"):
+  - la carpeta `backend/prisma/migrations/20261028165010_contract_conjunto/`
+    debe ser **byte a byte idéntica**: SHA-256 de su `migration.sql` =
+    `0241507B1C1B8E674AD5848893F81BEE03A98B0593490EF4ADBC37DF8DCED0FA` (es el
+    `checksum` que Prisma guardó);
+  - `schema.prisma` pasa a `conjuntoId String` (y relación `Conjunto` obligatoria)
+    en `User`, `Package`, `Bono` y `Comentario`;
+  - las pruebas de integración del backfill (y la del contract), que insertan
+    filas con `conjuntoId` NULL, **deberán adaptarse o retirarse**: con la carpeta
+    en el repo, toda base de pruebas nueva nace con NOT NULL.
+- **Revertir el contract (versión final, con la carpeta fuera del repo, que es el
+  estado actual):**
+  1. `rollback_contract_conjunto.sql` por el túnel con `psql -v ON_ERROR_STOP=1`
+     (esquema a nullable / FK `SET NULL`).
+  2. `DELETE FROM _prisma_migrations WHERE migration_name = '20261028165010_contract_conjunto';`
+     (por archivo `.sql`). Aquí **`prisma migrate resolve --rolled-back` no sirve:**
+     solo acepta migraciones fallidas y responde `P3012` (verificado con Prisma 5.22).
+  3. Verificar: `npx prisma migrate status` ("up to date") e `is_nullable = YES`
+     en las 4 columnas `conjuntoId`.
 
+  **Si la carpeta ya hubiera vuelto al repo (paso 4 hecho), retírala ANTES del
+  `DELETE`** (commit que la quite y devuelva `schema.prisma` a `String?`, ya
+  desplegado). Si no, cualquier arranque del backend re-aplicaría el contract.
   Detalle y porqué del orden: runbook, paso C5 → "Abortar/rollback".
 - **Ensayo del 28-oct-2026** (copia real, PostgreSQL 18.6): todo el corte en
   verde, con C1 ≈ 62 ms (lock ≈ 49 ms) y contract ≈ 0,35 s. Con el volumen de
@@ -250,8 +308,7 @@ colgada (consulta en el runbook) y se reintenta.
 
 ### Procedimientos operativos por conjunto
 
-> El multi-conjunto aún no está en producción; estos procedimientos aplican una
-> vez ejecutado el corte anterior.
+> Vigentes desde el corte del 28-oct-2026 (el multi-conjunto está en producción).
 
 **Alta de un conjunto nuevo.** Se hace con el script interactivo
 `npm run alta-conjunto` (en `backend/`). Da de alta el `Conjunto` (identidad,
@@ -289,7 +346,7 @@ Flujo recomendado:
 `bonosHabilitados` no se pregunta: queda `false` siempre (los bonos se activan
 por una acción deliberada aparte, nunca en el alta).
 
-**Registro sin código con un solo conjunto.** Mientras la base tenga
+**Registro sin código con un solo conjunto** (hotfix `20a46b4`). Mientras la base tenga
 **exactamente un** `Conjunto` con la invitación activa, `/registro` sin `?c=`
 crea al residente en ese conjunto (los folletos/QR antiguos sin código siguen
 sirviendo; ver README). **Dar de alta un segundo conjunto apaga esto en el acto:**
@@ -377,7 +434,15 @@ Si algo no conecta, lo primero a revisar es `CORS_ORIGIN` en Railway y
 - WhatsApp automático (Twilio u otro proveedor) — decisión consciente de
   dejarlo fuera por el costo; el botón manual de WhatsApp sigue funcionando.
 - Mover fotos de custodia a almacenamiento de objetos en vez de base64 en Postgres.
-- Soporte multi-conjunto: **implementado y validado** en la rama
-  `feature/kan-8-multiconjunto` (KAN-8). Pendiente en producción: ejecutar el
-  corte (backfill + fase *contract* + despliegue del código con aislamiento) —
-  ver "Corte a producción del multi-conjunto" arriba.
+
+Tras el corte multi-conjunto (28-oct-2026):
+- **Paso 4 del contract:** devolver la carpeta `20261028165010_contract_conjunto`
+  al repo (idéntica, SHA-256 en "Estado real del contract"), `schema.prisma` a
+  `conjuntoId String`, adaptar o retirar las pruebas del backfill que insertan
+  NULL, `npm test` en verde; recién entonces commit (vía `develop`) y merge a
+  `main` con el OK explícito del usuario.
+- **Arreglo del PWA:** la app se recarga en la primera visita.
+- **Pantalla de residentes para el operador:** hoy no existe (no hay endpoint
+  que liste usuarios); el operador solo ve residentes a través de sus paquetes.
+- **Revisión legal de los Términos** (en especial la versión genérica).
+- **Jira KAN-8:** actualizar el ticket con el estado post-corte.

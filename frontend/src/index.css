@@ -6,6 +6,9 @@
 @import "./puertaya-brand/tokens.css";
 
 :root{
+  /* Separación vertical única entre secciones de una pantalla (contadores,
+     botones, campos, tarjetas). No depende del tema. */
+  --space-section: 12px;
   --brand: #1E63C9;
   --brand-dark: #13294B;
   --brand-hover: #0C2E73;
@@ -142,7 +145,7 @@ button, input, select { font: inherit; }
   /* padding-top extra: en la PWA instalada (status bar
      "black-translucent" en iOS) el contenido dibuja detrás del reloj/
      batería si no se le deja ese espacio a propósito. */
-  padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+  padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -152,7 +155,15 @@ button, input, select { font: inherit; }
   z-index: 20;
 }
 .topbar-brand{ display:flex; align-items:center; gap:8px; min-width:0; }
-.topbar-user{ color: var(--ink-soft); font-size: 13px; }
+/* Encabezado compacto, compartido por operador y residente: conjunto
+   arriba (hasta 2 líneas, "…" solo si no cabe en dos) y usuario (rol)
+   debajo en una línea. El texto completo queda en title. */
+.topbar-text{ display:flex; flex-direction:column; min-width:0; line-height:1.2; }
+.topbar-title{
+  font-size:14px; overflow:hidden; overflow-wrap:anywhere;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2;
+}
+.topbar-user{ display:block; color: var(--ink-soft); font-size: 12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .topbar-actions{ display:flex; align-items:center; gap:12px; flex-shrink:0; }
 .btn-link{
   background: none; border: none; color: var(--brand-dark);
@@ -194,7 +205,7 @@ button, input, select { font: inherit; }
 
 .card{
   background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
-  padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  padding: 16px; margin-bottom: var(--space-section); box-shadow: 0 1px 2px rgba(15,23,42,.04);
 }
 
 .card-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
@@ -208,7 +219,7 @@ button, input, select { font: inherit; }
 .badge-PROGRAMADO{ background:var(--badge-warn-bg); color:var(--badge-warn-fg); }
 .badge-ENTREGADO{ background:var(--badge-success-bg); color:var(--badge-success-fg); }
 
-.stat-row{ display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom:16px; }
+.stat-row{ display:grid; grid-template-columns: repeat(3,1fr); gap:8px; margin-bottom: var(--space-section); }
 .stat{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center; }
 .stat .n{ font-size:18px; font-weight:800; }
 .stat .l{ font-size:10.5px; color: var(--ink-soft); }
@@ -241,7 +252,9 @@ button, input, select { font: inherit; }
   font-size:12.5px; color:var(--gold); font-weight:700; margin-top:10px;
 }
 
-.field{ margin-bottom:12px; }
+.field{ margin-bottom: var(--space-section); }
+/* Botón u otro bloque suelto entre secciones: misma separación que .field. */
+.stack-gap{ margin-bottom: var(--space-section); }
 .field label{ display:block; font-size:12.5px; font-weight:600; margin-bottom:4px; }
 .field input, .field select, .field textarea{
   width:100%; padding:10px 11px; border:1px solid var(--line); border-radius:10px;
@@ -250,17 +263,28 @@ button, input, select { font: inherit; }
 .field textarea{ resize:vertical; }
 .field input:focus, .field select:focus, .field textarea:focus{ outline:2px solid var(--brand); outline-offset:1px; }
 
-/* Desde/Hasta de Bitácora: la etiqueta y la fecha van en la misma
-   fila (mucho más compacto que etiqueta arriba + input abajo) y cada
-   una ocupa toda la fila para sí sola — nada de dos <input type="date">
-   nativos peleando por la mitad del ancho, que es justo lo que hacía
-   que uno se saliera de la pantalla en iOS Safari. flex + min-width:0
-   sí deja que el control nativo se encoja si hiciera falta (a
-   diferencia de CSS Grid, que WebKit no siempre respeta igual con
-   estos controles). */
-.field-inline{ display:flex; align-items:center; gap:10px; }
-.field-inline label{ margin-bottom:0; flex-shrink:0; white-space:nowrap; }
-.field-inline input{ flex:1; min-width:0; width:auto; }
+/* Desde/Hasta de Bitácora en dos columnas iguales, etiqueta arriba.
+   Ya falló dos veces en iOS Safari (commits 44417b5 y 302d93f): un
+   <input type="date"> con valor no se deja comprimir por debajo de su
+   ancho intrínseco y "Hasta" se salía de la pantalla. Lo que faltaba
+   entonces es quitarle la apariencia nativa (appearance:none), que es lo
+   que fija ese ancho mínimo en iOS; el selector de fecha sigue siendo el
+   nativo. flex + min-width:0 (no grid: WebKit lo respeta mejor con estos
+   controles). Validar siempre en un iPhone real: Chromium/WebKit de
+   escritorio no reproducen el problema. */
+/* La separación con la sección siguiente la pone la FILA, no cada campo:
+   así hay un solo --space-section entre las fechas y "Estado" (en iOS se
+   veía doble). */
+.field-dates{ display:flex; gap:10px; align-items:flex-start; margin-bottom: var(--space-section); }
+.field-dates > .field{ flex:1 1 0; min-width:0; margin-bottom:0; }
+.field-dates input[type="date"]{
+  -webkit-appearance:none; appearance:none;
+  display:block; width:100%; min-width:0; max-width:100%;
+  /* Alto fijo = el de los demás inputs: sin apariencia nativa, iOS lo
+     colapsa si está vacío o lo dibuja más alto que su contenido. */
+  height:46px;
+}
+.field-dates input[type="date"]::-webkit-date-and-time-value{ text-align:left; }
 .field-hint{ font-size:11px; color:var(--ink-soft); margin:4px 0 0; }
 
 .password-wrap{ position:relative; }

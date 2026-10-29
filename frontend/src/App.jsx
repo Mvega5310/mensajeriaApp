@@ -49,10 +49,12 @@ function Home() {
     <>
       <header className="topbar">
         <div className="topbar-brand">
-          <Logo variant="icono" size={30} mode={theme} />
-          <div>
-            <strong>Puertaya{conjuntoNombre ? ` · ${conjuntoNombre}` : ''}</strong>
-            {me && <span className="topbar-user"> — {me.nombre} ({role === 'OPERATOR' ? 'Operador' : 'Residente'})</span>}
+          <Logo variant="icono" size={24} mode={theme} />
+          <div className="topbar-text">
+            <strong className="topbar-title" title={`Puertaya${conjuntoNombre ? ` · ${conjuntoNombre}` : ''}`}>
+              Puertaya{conjuntoNombre ? ` · ${conjuntoNombre}` : ''}
+            </strong>
+            {me && <span className="topbar-user">{me.nombre} ({role === 'OPERATOR' ? 'Operador' : 'Residente'})</span>}
           </div>
         </div>
         <div className="topbar-actions">
