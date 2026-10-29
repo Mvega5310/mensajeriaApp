@@ -10,7 +10,7 @@ import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 import { resolverConjuntoPublico } from '../services/conjunto.service.js';
 import { crearResidente, actualizarPassword, obtenerCuentaPropia, obtenerPerfilPropio } from '../services/usuario.service.js';
-import { crearOReutilizarDomicilio } from '../services/domicilio.service.js';
+import { crearOReutilizarDomicilio, direccionDeCuerpo } from '../services/domicilio.service.js';
 
 // ÚNICO punto del código autorizado a abrir el scope GLOBAL_LOOKUP
 // (invariante design.md §2.3.1). Resuelve un usuario por email SIN filtro de
@@ -40,10 +40,19 @@ const ENLACE_TTL_MS = 15 * 60 * 1000; // enlace de acceso (T3.2): 15 min, un sol
 // body de la petición. La cuenta de operador se crea aparte (ver
 // prisma/seed.js), para que nadie pueda auto-asignarse ese rol.
 export async function register(req, res) {
-  const { email, password, nombre, telefono, torre, apto, acceptedTerms, codigoInvitacion } = req.body;
+  const { email, password, nombre, telefono, acceptedTerms, codigoInvitacion } = req.body;
   if (!email || !password || !nombre || !telefono) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Faltan datos obligatorios. Completa correo, contraseña, nombre y teléfono.', 400);
   }
+  // Tipos y largos (revisión S3.2): nada de objetos/números donde va texto (antes un 500).
+  const textoValido = (v, max) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+  if (!textoValido(email, 254) || !textoValido(password, 200) || !textoValido(nombre, 80) || !textoValido(telefono, 20)) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Revisa tus datos: correo, contraseña, nombre y teléfono deben ser texto y no muy largos.', 400);
+  }
+  if (codigoInvitacion != null && typeof codigoInvitacion !== 'string') {
+    throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
+  }
+
   if (!PASSWORD_POLICY.test(password)) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, PASSWORD_POLICY_MSG, 400);
   }
@@ -61,6 +70,8 @@ export async function register(req, res) {
   // activo (QR viejos). Con varios activos y sin slug ni código -> 400 CONJUNTO_REQUERIDO.
   // Conjunto es un modelo SIN tenant, así que esta lectura no requiere contexto.
   const conjunto = await resolverConjuntoPublico({ slug: req.body.conjunto, codigo: codigoInvitacion });
+  // Dirección: mismas reglas que POST /domicilios (largos máximos, tipos, apartamento obligatorio).
+  const { torre, apto } = direccionDeCuerpo(req.body);
 
   // 2) ¿Correo ya registrado? email es @unique GLOBAL; el lookup sin sesión
   //    pasa por el único punto autorizado a resolver por email sin contexto.

@@ -10,15 +10,16 @@ import { tokenTorre } from '../domain/apartamento.js';
 // "T1" a "Torre 1" — eso requeriría una lista fija de torres válidas
 // del conjunto, fuera de alcance por ahora.
 export function normalizarTorre(torre) {
-  if (!torre) return null;
-  const limpio = torre.trim().toUpperCase();
+  if (torre == null || torre === '') return null;
+  // Un número u otro tipo no-texto (p. ej. torre: 2 en el JSON) no debe tumbar con un 500.
+  const limpio = String(torre).trim().toUpperCase();
   return limpio || null;
 }
 
 // trim + solo dígitos: "302", "Apto 302", "apto-302" → todos "302".
 export function normalizarApto(apto) {
-  if (!apto) return null;
-  const soloDigitos = apto.replace(/\D/g, '');
+  if (apto == null || apto === '') return null;
+  const soloDigitos = String(apto).replace(/\D/g, '');
   return soloDigitos || null;
 }
 

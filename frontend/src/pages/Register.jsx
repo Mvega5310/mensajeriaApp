@@ -38,6 +38,21 @@ export default function Register() {
   }, []);
   useEffect(() => { cargarConjuntos(); }, [cargarConjuntos]);
 
+  // Un `?c=<codigo>` antiguo (sin `?conjunto=`) se convierte en el conjunto elegido: se consulta
+  // config-publica?c= (que devuelve el slug) y se preselecciona. Si el código no sirve, se
+  // ignora en silencio: la persona elige el conjunto (o el único activo queda puesto) y el
+  // registro sigue. El código solo viaja si no hay conjunto elegido (ver handleSubmit).
+  const [resolviendoCodigo, setResolviendoCodigo] = useState(Boolean(codigoDeUrl && !slugDeUrl));
+  useEffect(() => {
+    if (!codigoDeUrl || slugDeUrl) return undefined;
+    let vigente = true;
+    getConfigPublica(codigoDeUrl)
+      .then((cfg) => { if (vigente && cfg?.slug) setSlug((s) => s || cfg.slug); })
+      .catch(() => {})
+      .finally(() => { if (vigente) setResolviendoCodigo(false); });
+    return () => { vigente = false; };
+  }, [codigoDeUrl, slugDeUrl]);
+
   useEffect(() => {
     let vigente = true;
     setConjunto(null);
@@ -127,7 +142,7 @@ export default function Register() {
           </label>
 
           {error && <Toast tipo="error">{error}</Toast>}
-          <Button type="submit" disabled={loading || !fields.acceptedTerms} aria-busy={loading}>{loading ? 'Creando…' : 'Crear cuenta'}</Button>
+          <Button type="submit" disabled={loading || !fields.acceptedTerms || cargandoConjuntos || resolviendoCodigo} aria-busy={loading}>{loading ? 'Creando…' : 'Crear cuenta'}</Button>
         </form>
       )}
 

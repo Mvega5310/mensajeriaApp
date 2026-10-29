@@ -12,6 +12,7 @@ export default function Buzon() {
   const [enviados, setEnviados] = useState([]);
   const [error, setError] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const variosConjuntos = new Set(enviados.map((c) => c.conjunto?.slug)).size > 1;
 
   const cargar = () => api('/comments/mine').then(setEnviados).catch((e) => setError(e.message));
   useEffect(() => { cargar(); }, []);
@@ -57,7 +58,7 @@ export default function Buzon() {
           {enviados.map((c) => (
             <div key={c.id} className="res-hist" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
               <span>{c.mensaje}</span>
-              <span className="res-hist__fecha">{fecha(c.createdAt)}</span>
+              <span className="res-hist__fecha">{fecha(c.createdAt)}{variosConjuntos && c.conjunto ? ` · ${c.conjunto.nombre}` : ''}</span>
             </div>
           ))}
         </div>

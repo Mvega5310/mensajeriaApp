@@ -141,7 +141,7 @@ async function bcryptHash(pwd) {
 test('register -> login -> GET /packages/mine con el token (flujo completo)', { skip: omitir && razonSkip }, async () => {
   const r = await api('/api/auth/register', {
     method: 'POST',
-    body: { email: 'res-a@itesth.local', password: PWD, nombre: 'ResA', telefono: '1', acceptedTerms: true, codigoInvitacion: COD_A },
+    body: { email: 'res-a@itesth.local', password: PWD, nombre: 'ResA', telefono: '1', torre: 'Torre 1', apto: '101', acceptedTerms: true, codigoInvitacion: COD_A },
   });
   assert.equal(r.status, 201);
 

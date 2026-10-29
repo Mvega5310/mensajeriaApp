@@ -59,7 +59,8 @@ export async function conjuntoActivoPorSlug(slug) {
  * Resuelve el conjunto de una solicitud SIN sesión (registro y config-publica), en este
  * orden: código de invitación (opcional, compatibilidad con los QR/enlaces `?c=`), slug
  * (`conjunto`) o, sin ninguno de los dos, el único conjunto activo (QR viejos sin `?c=`).
- * Con código y slug a la vez deben apuntar al mismo conjunto. Con varios conjuntos activos
+ * Con código y slug a la vez: un código INVÁLIDO se ignora (gana el slug); un código VÁLIDO de
+ * otro conjunto es 400 CONJUNTO_INVALIDO. Con varios conjuntos activos
  * y sin slug ni código -> 400 CONJUNTO_REQUERIDO; sin ninguno activo -> 400 INVITACION_INVALIDA.
  */
 export async function resolverConjuntoPublico({ slug, codigo } = {}) {
@@ -69,7 +70,12 @@ export async function resolverConjuntoPublico({ slug, codigo } = {}) {
   if (hayCodigo) {
     porCodigo = await prisma.conjunto.findUnique({ where: { codigoInvitacion: normalizarCodigoInvitacion(codigo) } });
     if (!porCodigo || !porCodigo.invitacionActiva) {
-      throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
+      // Con un conjunto elegido (slug) un código viejo, inválido o vencido NO frena nada: gana
+      // el slug y el código se ignora. Sin slug, el código es lo único que identifica el conjunto.
+      if (!haySlug) {
+        throw new AppError(CODIGOS.INVITACION_INVALIDA, 'El enlace de invitación no es válido o ya venció. Pide uno nuevo a la administración.', 400);
+      }
+      porCodigo = null;
     }
   }
   if (haySlug) {

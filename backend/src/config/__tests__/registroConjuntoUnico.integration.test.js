@@ -76,7 +76,8 @@ function cuerpoRegistro(email, extra = {}) {
   };
 }
 
-const CAMPOS_PUBLICOS = ['nombre', 'operadorDomicilio', 'operadorNombre', 'operadorWhatsapp', 'puntoRecepcion'];
+// Los 5 presentacionales + `slug` (S3.2: para preseleccionar el conjunto con un ?c= antiguo).
+const CAMPOS_PUBLICOS = ['nombre', 'operadorDomicilio', 'operadorNombre', 'operadorWhatsapp', 'puntoRecepcion', 'slug'];
 
 test('setup: exactamente 1 conjunto en toda la base', { skip: omitir && razonSkip }, async () => {
   ({ prisma } = await import('../db.js'));
@@ -115,7 +116,7 @@ test('1 conjunto: código válido -> 201; código inexistente -> 400 sin crear n
   assert.equal(await usuariosEn(ctx.U), antes);
 });
 
-test('1 conjunto: config-publica sin código -> 200 con solo los 5 campos públicos', { skip: omitir && razonSkip }, async () => {
+test('1 conjunto: config-publica sin código -> 200 con solo los campos públicos', { skip: omitir && razonSkip }, async () => {
   const res = await api('/api/conjuntos/config-publica');
   assert.equal(res.status, 200);
   const body = await res.json();

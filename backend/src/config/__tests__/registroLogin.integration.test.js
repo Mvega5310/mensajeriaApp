@@ -122,6 +122,8 @@ function reqRegistro(extra) {
       password: PWD,
       nombre: 'X',
       telefono: '1',
+      torre: 'Torre 1',
+      apto: '101', // el apartamento es obligatorio (S3.2)
       acceptedTerms: true,
       ...extra,
     },

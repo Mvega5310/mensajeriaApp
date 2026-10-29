@@ -110,8 +110,10 @@ test('config-publica con código válido devuelve solo presentacionales', { skip
   const body = await res.json();
   assert.equal(body.nombre, 'Config itestd-a');
   assert.ok('operadorWhatsapp' in body && 'operadorDomicilio' in body);
-  // No expone tarifas ni flags ni código ni slug (mínima exposición pública).
-  assert.ok(!('tarifas' in body) && !('bonosHabilitados' in body) && !('codigoInvitacion' in body) && !('slug' in body));
+  // No expone tarifas ni flags ni código (mínima exposición pública). Sí el `slug` (S3.2: deja
+  // preseleccionar el conjunto en el registro con un `?c=` antiguo).
+  assert.ok(!('tarifas' in body) && !('bonosHabilitados' in body) && !('codigoInvitacion' in body));
+  assert.equal(body.slug, 'itestd-a');
 });
 
 test('config-publica con código inexistente -> 400 INVITACION_INVALIDA', { skip: omitir && razonSkip }, async () => {

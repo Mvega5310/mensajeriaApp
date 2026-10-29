@@ -2,7 +2,7 @@ import { AppError, CODIGOS } from '../domain/errores.js';
 import { prisma } from '../config/db.js';
 import { esCategoriaValida } from '../services/tariff.service.js';
 import { conjuntoDelContexto } from '../services/conjunto.service.js';
-import { domicilioDePersona } from '../services/domicilio.service.js';
+import { domicilioDePersona, porCadaConjuntoDePersona } from '../services/domicilio.service.js';
 
 // Operador: registra que un residente pagó por adelantado un lote de
 // entregas en una categoría de peso — monto y cantidad libres, el
@@ -58,11 +58,20 @@ export async function listForResident(req, res) {
   res.json(bonos);
 }
 
-// Residente: sus propios bonos, para saber cuántas entregas prepagas le quedan.
+// Residente: sus propios bonos, para saber cuántas entregas prepagas le quedan. Revisión S3.2:
+// sin `?conjunto=<slug>` junta los de TODOS sus conjuntos (como /packages/mine: una consulta por
+// conjunto dentro de su runWithTenant) y cada bono trae su `conjunto` ({ slug, nombre }); con
+// `?conjunto=` (conjuntoDeSolicitud ya abrió ese contexto) solo los de ese conjunto.
 export async function listMine(req, res) {
-  const bonos = await prisma.bono.findMany({
-    where: { residenteId: req.user.sub },
-    orderBy: { createdAt: 'desc' },
+  const uno = req.query?.conjunto !== undefined && req.query.conjunto !== '';
+  if (uno) {
+    res.json(await prisma.bono.findMany({ where: { residenteId: req.user.sub }, orderBy: { createdAt: 'desc' } }));
+    return;
+  }
+  const filas = await porCadaConjuntoDePersona(req.user.sub, async (c) => {
+    const bonos = await prisma.bono.findMany({ where: { residenteId: req.user.sub }, orderBy: { createdAt: 'desc' } });
+    return bonos.map((b) => ({ ...b, conjunto: { slug: c.slug, nombre: c.nombre } }));
   });
-  res.json(bonos);
+  filas.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(filas);
 }

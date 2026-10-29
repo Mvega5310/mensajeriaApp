@@ -25,8 +25,16 @@ export async function listarPublicos(req, res) {
 // Mismo criterio que el registro (resolverConjuntoPublico): `conjunto` (slug) o `c` (código
 // antiguo); sin ninguno, solo si hay UN ÚNICO conjunto activo; con varios, 400 CONJUNTO_REQUERIDO.
 export async function configPublica(req, res) {
+  // Límite por IP (revisión S3.2): el endpoint es público y resuelve por código/slug; se
+  // comparte el limitador de la lista pública con su propia clave por IP.
+  const intento = req.app.locals.limitadorConjuntos.intentar(`config-publica:${req.ip}`);
+  if (!intento.permitido) {
+    res.set('Retry-After', String(intento.segundosRestantes));
+    throw new AppError(CODIGOS.DEMASIADOS_INTENTOS, 'Demasiadas consultas. Espera un momento e inténtalo de nuevo.', 429);
+  }
   const conjunto = await resolverConjuntoPublico({ slug: req.query.conjunto, codigo: req.query.c });
-  return res.json(soloPresentacionales(conjunto));
+  // `slug` (presentacional) deja a Registrar/Términos con `?c=<codigo>` preseleccionar el conjunto.
+  return res.json({ ...soloPresentacionales(conjunto), slug: conjunto.slug });
 }
 
 // GET /api/conjunto/config  (requireAuth + requireTenant)

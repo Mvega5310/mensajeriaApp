@@ -6,6 +6,7 @@ import Pantalla from './Pantalla.jsx';
 /** Mis bonos: entregas prepagas que te quedan por categoría (solo si el conjunto tiene bonos). */
 export default function MisBonos() {
   const { saldos, error } = useMisBonos();
+  const variosConjuntos = new Set((saldos ?? []).map((s) => s.conjunto)).size > 1;
   return (
     <Pantalla>
       <div style={{ display: 'flex', alignItems: 'center', padding: '12px var(--sp-1) 0' }}>
@@ -19,9 +20,9 @@ export default function MisBonos() {
       {saldos && saldos.length === 0 && <p className="res-nota">Todavía no tienes bonos. Pídelos en portería.</p>}
       <ul className="res-lista" style={{ listStyle: 'none', margin: 0 }}>
         {(saldos ?? []).map((s) => (
-          <li key={s.categoria} className="res-hist">
+          <li key={s.clave} className="res-hist">
             <div className="res-card__txt" style={{ flex: 1 }}>
-              <span className="res-linea">{s.nombre}</span>
+              <span className="res-linea">{s.nombre}{variosConjuntos && s.conjunto ? ` · ${s.conjunto}` : ''}</span>
               <span className="res-hist__fecha">de {s.total} entregas</span>
             </div>
             <b className="mono">{s.restantes}</b>

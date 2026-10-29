@@ -1,6 +1,6 @@
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { prisma } from '../config/db.js';
-import { nulaSiVacia } from '../services/domicilio.service.js';
+import { nulaSiVacia, porCadaConjuntoDePersona } from '../services/domicilio.service.js';
 
 const MAX_LENGTH = 1000;
 
@@ -17,13 +17,21 @@ export async function create(req, res) {
   res.status(201).json(comentario);
 }
 
-// Residente: solo sus propios comentarios.
+// Residente: solo sus propios comentarios. Revisión S3.2: sin `?conjunto=<slug>` junta los de
+// TODOS sus conjuntos (una consulta por conjunto dentro de su runWithTenant, como
+// /packages/mine), cada uno con su `conjunto` ({ slug, nombre }); con `?conjunto=` solo ese.
 export async function listMine(req, res) {
-  const comentarios = await prisma.comentario.findMany({
-    where: { residenteId: req.user.sub },
-    orderBy: { createdAt: 'desc' },
+  const uno = req.query?.conjunto !== undefined && req.query.conjunto !== '';
+  if (uno) {
+    res.json(await prisma.comentario.findMany({ where: { residenteId: req.user.sub }, orderBy: { createdAt: 'desc' } }));
+    return;
+  }
+  const filas = await porCadaConjuntoDePersona(req.user.sub, async (c) => {
+    const comentarios = await prisma.comentario.findMany({ where: { residenteId: req.user.sub }, orderBy: { createdAt: 'desc' } });
+    return comentarios.map((m) => ({ ...m, conjunto: { slug: c.slug, nombre: c.nombre } }));
   });
-  res.json(comentarios);
+  filas.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(filas);
 }
 
 // Operador: todos los del conjunto, con los datos del residente para poder ubicarlo. De la
