@@ -1,150 +1,164 @@
-# Plan: elegir el conjunto con un selector
+# Plan: el conjunto se elige en cada solicitud
 
-Fecha: 2026-10-29. Rama de trabajo: `refactor/mobile-first`. A `develop` solo cuando esté validado; a `main` solo por PR y con el OK explícito del usuario (regla de `CLAUDE.md` en `main`).
+Fecha: 2026-10-29 (v2, con la definición del usuario). Rama de trabajo: `refactor/mobile-first`. A `develop` solo cuando esté validado; a `main` solo por PR y con el OK explícito del usuario.
 
-## Objetivo
+## Qué quiere el usuario
 
-Simplificar cómo una persona queda en su conjunto. **El código de invitación deja de ser la puerta de entrada.** En su lugar hay un **selector "Conjunto"**:
+**Simpleza, facilidad y rapidez para el cliente.** La persona no "pertenece" a un conjunto: en cada solicitud elige **conjunto, torre y apartamento**. Hoy puede pedir algo para su casa y mañana para un amigo que vive en otro conjunto. **El conjunto elegido separa los datos**, y el sistema le avisa al **operador de ese conjunto**.
 
-- **Al registrarse**, el residente elige su conjunto de una lista.
-- **Al hacer una solicitud** (avisar un paquete o pedir una entrega), el selector se muestra con su conjunto actual. Si se mudó, puede cambiarlo.
-- **Con un solo conjunto activo**, que es el caso de hoy (Ipanema), el selector aparece **preseleccionado y deshabilitado**: se ve, pero no se puede tocar.
-- **El operador no elige conjunto:** siempre opera en el suyo.
+- **Selector "Conjunto"** en el registro y en cada solicitud (Avisar un paquete, Pedir entrega).
+- **Con un solo conjunto activo, que es el caso de hoy:** el selector sale **preseleccionado y deshabilitado**.
+- **Sin código de invitación** como requisito. Los enlaces viejos con `?c=` siguen funcionando: llegan con el conjunto ya elegido.
+- **Sin aprobaciones previas:** nada frena al cliente.
+- **El operador** no elige conjunto: opera en el suyo y ve solo lo de su conjunto.
 
-## Punto de partida (qué hay hoy)
+## El modelo nuevo, en palabras simples
 
-- **`main` (producción, desde el 28-oct):**
-  - Multi-conjunto desplegado (KAN-8), con un solo conjunto, `ipanema`.
-  - El *contract* (`conjuntoId` NOT NULL) está **aplicado en la base**, pero su carpeta `20261028165010_contract_conjunto` **todavía no está en el repo** (paso 4 pendiente; SHA-256 en DEPLOY.md).
-  - Hotfix `20a46b4`: mientras exista un único conjunto activo, el registro funciona sin código (`conjuntoUnicoActivo()`, `config-publica` sin `?c=`).
-  - Ajustes de estilo del operador y de la barra superior en `OperatorView.jsx` e `index.css`.
+| Hoy (KAN-8) | Nuevo |
+|---|---|
+| El residente *es* de un conjunto (`User.conjuntoId`) | La **cuenta** es de la persona y sirve en cualquier conjunto |
+| Torre y apartamento están en la cuenta | Torre y apartamento van en una **dirección de entrega** (`Domicilio`: conjunto + torre + apto + nombre de quien recibe + teléfono), elegida o creada en cada solicitud |
+| El operador busca *residentes* del conjunto | El operador busca **direcciones de entrega** de su conjunto ("304" muestra a quienes han pedido o recibido allí) |
+| "Mis paquetes" muestra los de un conjunto | "Mis paquetes" muestra **todos los de la persona**, cada uno con el nombre de su conjunto |
+
+**El aislamiento entre conjuntos no se debilita:** `Package`, `Domicilio`, `Bono` y `Comentario` siguen llevando `conjuntoId`. La extensión de Prisma los sigue filtrando por el conjunto del contexto. Lo único que cambia es que **la cuenta de la persona deja de ser un dato de un conjunto**.
+
+**El selector recuerda la última dirección usada,** para que la siguiente solicitud salga con 0 toques extra.
+
+## Punto de partida (igual que en la v1)
+
+- **`main` en producción desde el 28-oct:**
+  - Hay un solo conjunto, `ipanema`.
+  - El *contract* está aplicado en la base, pero su carpeta `20261028165010_contract_conjunto` no está en el repo.
+  - Hay un hotfix de registro sin código.
+  - Hay estilos nuevos en `OperatorView.jsx` e `index.css`.
 - **`refactor/mobile-first`:**
-  - Salió de `kan-8` **antes** del corte. Va 94 commits por delante y 17 por detrás de `main`.
-  - Tiene 9 migraciones nuevas. **Tres llevan fecha anterior al contract de producción:** `20261027120000`, `20261027130000` y `20261028120000`.
-  - `OperatorView.jsx` e `index.css` ya no existen en esta rama: los reemplazan las pantallas nuevas.
-- **`hotfix/sw-recarga-primera-visita`:** listo, sin PR todavía.
+  - Va 94 commits por delante y 17 por detrás de `main`.
+  - Tres de sus migraciones tienen fecha anterior al contract.
+- **`hotfix/sw-recarga-primera-visita`:** listo, sin PR.
 
-## Decisiones que necesito del usuario
+## Decisiones (ya tomadas por el usuario o con valor por defecto)
 
-El valor por defecto aplica si el usuario no dice nada.
-
-| Id | Decisión | Recomendación |
+| Id | Decisión | Estado |
 |---|---|---|
-| C1 | **Qué significa "cambiar al hacer una solicitud".** (a) El selector en Avisar y Pedir entrega cambia el conjunto **del residente**, es decir, una mudanza: sus solicitudes desde ese momento van al conjunto nuevo. (b) Cada solicitud lleva su propio conjunto y el residente puede tener paquetes en varios a la vez. | **(a) Mudanza.** (b) rompe el modelo, en el que un residente pertenece a un conjunto, y obliga a rehacer el aislamiento. |
-| C2 | **¿Mudarse o registrarse en otro conjunto requiere aprobación** del operador de ese conjunto? | **Sí, cuando haya 2 o más conjuntos:** la persona queda "pendiente" hasta que el operador la acepte. Sin código de invitación, nada impide que alguien se inscriba en un conjunto ajeno. Con 1 solo conjunto no aplica. |
-| C3 | **El código de invitación y los QR viejos `?c=`.** | Siguen funcionando: si el enlace trae `?c=` o `?conjunto=`, el selector llega con ese conjunto ya elegido. El QR nuevo del operador usa `?conjunto=<slug>`. |
-| C4 | **¿Qué pasa con los paquetes pendientes al mudarse?** | Se quedan en el conjunto anterior, con su operador, y el residente los sigue viendo en "Mis paquetes". Lo nuevo va al conjunto nuevo. |
+| C1 | El conjunto y el apartamento son **por solicitud**, no por cuenta | **Decidido por el usuario** |
+| C2 | Sin aprobación del operador para pedir en cualquier conjunto | **Decidido por el usuario** (simpleza) |
+| C3 | Los enlaces y QR viejos `?c=` preseleccionan el conjunto; el QR nuevo usa `?conjunto=<slug>` | Por defecto: sí |
+| C4 | Los residentes actuales de Ipanema conservan su torre y apartamento como su primer `Domicilio` (migración de datos) | Por defecto: sí |
+| C5 | **Riesgo a vigilar, sin frenar al cliente:** cualquiera puede crear una dirección en "T2 · 304". Cuando llega un paquete *sin* pre-alerta, el operador ve **todos los nombres** registrados en ese apartamento y elige el que dice la etiqueta. Así el PIN le llega a quien de verdad va dirigido el paquete. Con pre-alerta, el paquete se vincula por número de guía a quien lo avisó. | Por defecto: así |
 
 ## Fases
 
-### S0 · Poner la rama al día con producción (bloqueante)
+### S0 · Poner la rama al día con producción (bloqueante, sin cambios respecto a la v1)
 
 **S0.1 · Sonnet.** Integrar `origin/main` en `refactor/mobile-first`.
-- **Conflictos esperados:** `Register.jsx`, `auth.controller.js#register`, `conjunto.controller.js`, `conjunto.service.js`, `services/conjunto.js`, `Terms.jsx` y `App.jsx`.
-- **Cómo resolverlos:** se conserva la lógica del hotfix (conjunto único). Los cambios de `OperatorView.jsx` e `index.css` se descartan porque esos archivos ya no existen; se revisa si algún ajuste visual aplica a las pantallas nuevas.
-- **Se acepta si:** `test:all`, el build y `npm run e2e` quedan en verde.
+- **Cómo resolver los conflictos:** se conserva la lógica del hotfix por ahora; S1 la reemplaza. Se descartan `OperatorView.jsx` e `index.css`, que ya no existen en esta rama.
+- **Se acepta si:** `test:all`, el build y `e2e` quedan en verde.
 
-**S0.2 · Sonnet.** Contract al repo (paso 4 pendiente de producción).
-- Agregar la carpeta `20261028165010_contract_conjunto/`, **byte a byte idéntica**, y verificar su SHA-256 contra DEPLOY.md.
-- En `schema.prisma`, `conjuntoId` pasa a obligatorio en `User`, `Package`, `Bono` y `Comentario`.
-- Adaptar o retirar las pruebas de backfill y contract que insertan `conjuntoId` NULL.
+**S0.2 · Sonnet.** Contract al repo.
+- Agregar la carpeta `20261028165010_contract_conjunto/` **byte a byte idéntica** y verificar su SHA-256 contra DEPLOY.md.
+- En `schema.prisma`, `conjuntoId` pasa a obligatorio.
+- Adaptar las pruebas de backfill y contract.
 - **Se acepta si:** `migrate diff` queda sin drift contra una copia del esquema de producción.
 
-**S0.3 · Sonnet.** Reordenar las migraciones del refactor.
-- Las 9 migraciones pasan a llevar fecha posterior a `20261028165010`. Las de producción no se tocan.
-- La base del entorno Railway `puertaya-refactor` se **recrea**: tiene las migraciones con los nombres viejos y solo contiene datos DEMO.
-- **Se acepta si:** `prisma migrate deploy` sobre una copia del esquema de producción aplica las 9 en orden y sin errores, y el rollback de cada una sigue funcionando.
+**S0.3 · Sonnet.** Las 9 migraciones del refactor pasan a llevar fecha posterior a `20261028165010`. La base de `puertaya-refactor` se recrea (solo tiene datos DEMO).
+- **Se acepta si:** `migrate deploy` sobre una copia del esquema de producción aplica las 9 en orden.
 
-**S0.4 · Orquestador.** Integrar `hotfix/sw-recarga-primera-visita` en la rama del refactor, si no entró antes a `main`.
+**S0.4 · Orquestador.** Incluir el hotfix del service worker.
 
-### S1 · Backend del selector
+### S1 · Modelo: cuenta de la persona + dirección de entrega por conjunto
 
-**S1.1 · Sonnet.** Lista pública de conjuntos.
-- `GET /api/conjuntos` (público, en `RUTAS_SIN_SESION` con justificación) devuelve `[{ slug, nombre, ciudad? }]` de los conjuntos con la invitación activa.
-- Nunca devuelve tarifas, código, datos del operador ni IDs internos.
-- Lleva caché corta y límite de peticiones.
-- **Se acepta si** las pruebas cubren: 0, 1 y N conjuntos; un conjunto inactivo queda fuera; la respuesta no trae ningún campo sensible.
+**S1.1 · Sonnet.** Esquema (*expand*: primero agrega, después migra datos).
+- **Modelo nuevo `Domicilio`, con tenant** (entra en `MODELOS_CON_TENANT`). Campos: `id`, `conjuntoId`, `usuarioId` (FK a User), `torre`, `apto`, `nombreRecibe`, `telefono`, `ultimoUsoEn` y `activo`. Clave única: `[conjuntoId, usuarioId, torre, apto]`.
+- **En `Package`:** se agrega `domicilioId` (FK a Domicilio). Se conserva `residenteId` como "quién lo pidió o a quién va".
+- **En `User`:**
+  - Para RESIDENT, `conjuntoId` pasa a significar solo "último conjunto usado". Deja de servir para aislar y se puede quedar NOT NULL, así no se toca el contract.
+  - Para OPERATOR, sigue siendo **su** conjunto.
+  - Los residentes salen del filtro de tenant. Para eso `User` deja `MODELOS_CON_TENANT` y las lecturas de operadores se filtran explícitamente. **El aislamiento de las lecturas de operadores se hace a mano, en un servicio único, con prueba de auditoría.**
+- **Migración de datos (C4):** por cada residente actual se crea su `Domicilio` en su conjunto, con su torre y apartamento. Se enlaza cada `Package` existente con su `Domicilio`.
+- Se escriben la migración aditiva, su rollback y el ensayo sobre una copia de producción.
+- **Se acepta si** las pruebas contra Postgres muestran que:
+  - los datos legados quedan con su `Domicilio`;
+  - el aislamiento de `Package` y `Domicilio` sigue intacto;
+  - `migrate diff` no tiene drift.
 
-**S1.2 · Sonnet.** Registro por conjunto elegido.
-- `POST /api/auth/register` acepta `conjunto` (slug).
-- El backend resuelve el slug a su id y crea al usuario con `runWithTenant`. El cliente nunca manda `conjuntoId` (invariante 7 intacta).
-- `codigoInvitacion` sigue aceptándose, para compatibilidad con los QR viejos.
-- Se **retira el caso especial `conjuntoUnicoActivo()`**: con un conjunto, el frontend manda su slug igual que con varios.
-- Si hay 2 o más conjuntos y C2 = sí: el residente nuevo queda `estado: PENDIENTE_APROBACION` y no puede entrar hasta que lo apruebe el operador. Mensaje: "Tu cuenta está esperando que el operador de X la apruebe."
-- **Se acepta si** las pruebas cubren: slug válido, slug inexistente (400), conjunto inactivo (400), y el código viejo sigue funcionando.
+**S1.2 · Sonnet.** Reglas de aislamiento nuevas y documentadas en `CLAUDE.md`.
+- **"Mis paquetes" de una persona:** junta los paquetes de todos los conjuntos donde tiene un `Domicilio`. Lo hace corriendo **una consulta por conjunto, dentro de `runWithTenant` de cada uno**. Así la extensión no se salta y no hace falta `GLOBAL_LOOKUP` nuevo ni SQL crudo.
+- **El operador** solo lee `Domicilio` y `Package` de su conjunto, como hoy. De la persona ve solo lo que guarda el `Domicilio` (nombre de quien recibe y teléfono), nunca su correo ni sus otros conjuntos.
+- **En las escrituras, el conjunto sale del slug elegido.** El backend lo valida (conjunto activo) y abre el contexto. El cliente nunca manda `conjuntoId` crudo, así que la invariante 7 se mantiene, adaptada a la lectura del slug.
+- **Pruebas de invariantes nuevas:**
+  - una persona con paquetes en A y en B ve los suyos en ambos;
+  - el operador de A no ve nada de B, ni el `Domicilio` que esa persona tiene en B;
+  - un slug inactivo o inexistente da 400.
 
-**S1.3 · Sonnet.** Mudanza de conjunto (C1 = a).
-- `POST /api/residente/mudanza { conjunto, torre, apto }` (solo RESIDENT con sesión normal; la sesión del enlace de WhatsApp no puede).
-- Cambia `User.conjuntoId` en una operación **única y auditada**: evento `MUDANZA` en una bitácora nueva, de solo inserción y sin tenant (como `Conjunto`), con conjunto de origen y de destino.
-- Es la **única excepción documentada** a "el tenant no lo decide el cliente". Va concentrada en un servicio y cubierta por una prueba de auditoría, como `GLOBAL_LOOKUP`.
-- Si hay varios conjuntos y C2 = sí, la mudanza queda pendiente hasta que el operador destino la apruebe.
-- Los paquetes abiertos se quedan en el conjunto anterior (C4). "Mis paquetes" los muestra con el nombre de su conjunto.
-- **Se acepta si** las pruebas cubren:
-  - el aislamiento sigue intacto: el operador anterior deja de ver al residente en la búsqueda y el operador nuevo lo ve;
-  - no se puede mudar a un conjunto inactivo;
-  - no se puede pasar un `conjuntoId` crudo;
-  - la sesión de enlace recibe 403.
-- Se actualiza `CLAUDE.md` con la invariante nueva.
-
-**S1.4 · Haiku.** `GET /api/conjunto/config` y `/api/p/abrir` devuelven `conjunto: { slug, nombre }` para que el selector muestre el actual.
+**S1.3 · Sonnet.** API.
+- `GET /api/conjuntos` (público, en `RUTAS_SIN_SESION`): devuelve `[{ slug, nombre }]` de los conjuntos activos. Nada sensible.
+- `GET /api/domicilios` (persona con sesión): sus direcciones guardadas, ordenadas por último uso.
+- **Registro:** pide `conjunto` (slug), torre y apartamento para crear el primer `Domicilio`. El código de invitación sigue siendo opcional, por compatibilidad. Se retira el caso especial `conjuntoUnicoActivo()`.
+- **Pre-alerta:** `POST /api/packages` recibe `{ domicilioId }` o `{ conjunto, torre, apto, nombreRecibe?, telefono? }`. Si es nueva, crea o reutiliza el `Domicilio`. Corre en el contexto de ese conjunto y **avisa al operador de ese conjunto** con `avisarNuevaPrealerta`.
+- **Pedir entrega** (`schedule`): el paquete ya tiene su conjunto, así que se resuelve en su contexto.
+- **Enlace de WhatsApp (`/p/abrir`):** el token ya trae el conjunto, así que no cambia.
+- **Recepción del operador:**
+  - `GET /api/residentes/buscar` pasa a buscar en `Domicilio` y muestra todos los nombres del apartamento (C5).
+  - `POST /packages/recepcion` recibe `domicilioId`. Se mantiene `residenteId` por compatibilidad.
+- **Se acepta si:** hay pruebas de integración de cada ruta, incluido el escenario "ayudar a un amigo": una persona de A pide en B, el operador de B recibe el aviso y la persona ve el paquete en "Mis paquetes".
 
 ### S2 · Frontend
 
-**S2.1 · Sonnet.** Componente `SelectorConjunto` en `frontend/src/design/`.
-- Es un `<select>` nativo accesible, de 56 px, con etiqueta "Conjunto".
-- **Con 1 conjunto:** preseleccionado, `disabled`, y con la ayuda "Por ahora Puertayá funciona solo en {nombre}." El valor se envía igual, porque los campos `disabled` no viajan en un formulario.
-- **Con varios:** se puede elegir, y la opción vacía dice "Elige tu conjunto".
-- Usa los tokens del diseño, sin hex. Contraste y foco correctos.
-- **Se acepta si** se muestra en la página `/_ds` en sus 3 estados: 1 conjunto, varios, y cargando o con error.
+**S2.1 · Sonnet.** Componente `SelectorConjunto` (en `design/`).
+- Es un `<select>` nativo, de 56 px, con la etiqueta "Conjunto".
+- **Con 1 conjunto:** preseleccionado, `disabled`, con la ayuda "Por ahora Puertayá funciona solo en {nombre}". El valor viaja igual.
+- **Con varios:** se puede elegir.
+- Va en la página `/_ds` con sus 3 estados.
 
-**S2.2 · Sonnet.** Registro.
-- `Register.jsx` reemplaza el campo "Código de invitación" por `SelectorConjunto`, cargado desde `GET /api/conjuntos`.
-- Si el enlace trae `?conjunto=` o `?c=`, llega preseleccionado.
-- El texto "Te estás registrando en X" se mantiene.
-- **Se acepta si:** con 1 conjunto el selector sale deshabilitado y el registro funciona; con 2, hay que elegir.
+**S2.2 · Sonnet.** Componente `DireccionEntrega`, con dos vistas:
+- **Vista corta (por defecto):** muestra la última dirección, por ejemplo "Ipanema · T2 · 304 · Ana", con un enlace **"Cambiar"**.
+- **Vista abierta:** lista de direcciones guardadas, más la opción **"Otra dirección"** con el selector de conjunto, torre, apartamento, nombre de quien recibe y teléfono. Cada campo se precarga con lo del usuario.
 
-**S2.3 · Sonnet.** Solicitudes del residente.
-- En **Avisar** y **Pedir entrega** se muestra `SelectorConjunto` con el conjunto actual.
-- Con 1 conjunto sale deshabilitado y no cambia nada del recorrido: los toques siguen siendo los mismos.
-- Con varios, al cambiarlo se abre una hoja de confirmación: "¿Te mudaste a {nuevo}? Tus paquetes pendientes en {anterior} siguen allí." Luego pide torre y apartamento y hace la mudanza (S1.3). Después se envía la solicitud.
-- **Se acepta si:** el E2E cubre la mudanza con 2 conjuntos y el recorrido sin cambios con 1.
+**S2.3 · Sonnet.** Pantallas que lo usan.
+- **Registro:** selector de conjunto, torre y apartamento. Con 1 conjunto el selector sale deshabilitado.
+- **Avisar un paquete:** `DireccionEntrega` va arriba en vista corta. **El recorrido de hoy no gana toques.**
+- **Mis paquetes:** cada tarjeta muestra el conjunto si la persona tiene más de uno.
+- **Se acepta si:** con 1 conjunto los toques son los mismos que hoy, y el E2E "ayudar a un amigo" pasa con 2 conjuntos.
 
 **S2.4 · Haiku.** Operador.
-- El QR y el enlace de "Invitar residentes" apuntan a `/registro?conjunto=<slug>`.
-- Si C2 = sí, aparece la sección **"Por aprobar"** en Pendientes, con los botones Aprobar y Rechazar.
+- Recibir muestra los resultados por dirección, por ejemplo "T2 · 304 · Ana" y "T2 · 304 · Luis".
+- El QR de invitación apunta a `/registro?conjunto=<slug>`.
 
-### S3 · Pruebas y verificación
+### S3 · Pruebas y revisión
 
 **S3.1 · Sonnet.** E2E.
-- Escenarios nuevos con 1 y con 2 conjuntos: registro, solicitud y mudanza; y aprobación, si aplica C2.
-- Integrar la auditoría de accesibilidad para el selector.
-- **Se acepta si:** local y Railway en verde.
+- Con 1 conjunto: el recorrido de hoy sigue igual y el selector sale deshabilitado.
+- Con 2 conjuntos: registro en A, aviso para un amigo en B, aviso al operador de B, recepción en B, entrega con PIN y "Mis paquetes" con los paquetes de A y de B.
+- La auditoría de accesibilidad de los componentes nuevos da verde.
 
-**S3.2 · Sonnet (revisor).** Revisión de la fase:
-- aislamiento: la mudanza no filtra datos entre conjuntos;
-- que la lista pública no exponga nada sensible;
-- invariantes de `CLAUDE.md`.
+**S3.2 · Sonnet (revisor).** Revisión centrada en el aislamiento:
+- el operador de A no puede ver nada de B por ninguna ruta;
+- la lista pública no expone datos;
+- las lecturas por conjunto de "Mis paquetes" no tienen fugas;
+- el escenario de C5.
 
 ### S4 · Despliegue
 
 **S4.1 · Orquestador.**
-- Recrear la base del entorno `puertaya-refactor` (por S0.3).
-- Desplegar la rama, sembrar 2 conjuntos DEMO para probar el caso de varios, y luego dejar 1 para probar el caso de hoy.
+- Recrear la base de `puertaya-refactor`.
+- Sembrar 2 conjuntos DEMO, probar, dejar 1 y volver a probar.
 - E2E contra Railway.
 
-**S4.2 · Orquestador.** Cuando el usuario lo pida: PR `refactor/mobile-first → develop`, y después `develop → main` con su OK explícito. Antes, se cargan en producción las variables obligatorias del refactor (`ENLACE_SECRET`, `NODE_ENV`, `FOTOS_S3_*`).
+**S4.2 · Orquestador.** Cuando lo pida el usuario:
+1. PR a `develop`, y luego `develop → main` con su OK.
+2. Ensayo de la migración de datos de S1.1 sobre una copia de producción, siguiendo el estilo del runbook de KAN-8.
+3. Cargar en producción las variables obligatorias del refactor.
 
-## Orden y paralelismo
+## Orden
 
 ```
 S0.1 → S0.2 → S0.3   (S0.4 en cualquier momento)
-S1.1 ∥ S1.4 → S1.2 → S1.3
-S2.1 (puede arrancar con S1.1) → S2.2 ∥ S2.3 ∥ S2.4
+S1.1 → S1.2 → S1.3
+S2.1 ∥ S2.2 (pueden arrancar con S1.1) → S2.3 ∥ S2.4
 S3.1 → S3.2 → S4.1 → (decisión del usuario) S4.2
 ```
 
-## Riesgos
+## Qué no cambia para el cliente de Ipanema hoy
 
-- **Sin código de invitación, cualquiera puede registrarse en cualquier conjunto que aparezca en la lista.** Con 1 conjunto es lo mismo que pasa hoy con el hotfix. Con varios, se mitiga con C2.
-- **Que la mudanza cambie `conjuntoId` es delicado** frente al aislamiento. Por eso es un solo servicio, auditado y con su prueba, igual que las otras excepciones.
-- **Reordenar las migraciones** obliga a recrear la base del entorno de prueba. En producción no hay riesgo: allí nunca se aplicaron.
+Ve un campo "Conjunto: Ipanema" que no se puede tocar y su dirección ya llena. Todo lo demás es igual de rápido.
