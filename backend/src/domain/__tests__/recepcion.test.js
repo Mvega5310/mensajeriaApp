@@ -10,7 +10,7 @@ const lanza = (fn, code = 'DATOS_INVALIDOS') => assert.throws(fn, (e) => e.code 
 
 test('validarRecepcion: con residente normaliza opcionales a null y fotos a []', () => {
   assert.deepEqual(validarRecepcion(ok, { maxFotos: 3 }), {
-    residenteId: 'r1', etiquetaNombre: null, categoriaPeso: 'ESTANDAR', guia: null, transportadora: null, fotos: [],
+    residenteId: 'r1', domicilioId: null, etiquetaNombre: null, categoriaPeso: 'ESTANDAR', guia: null, transportadora: null, fotos: [],
   });
 });
 

@@ -3,8 +3,9 @@
 // Resolución del tenant SIN GLOBAL_LOOKUP ni SQL crudo: el token firmado ya trae
 // el conjuntoId, y la firma (HMAC) garantiza que lo emitimos nosotros. Con él se
 // abre un contexto TENANT normal (runWithTenant). Si el conjuntoId no coincidiera
-// con el del residente, la extensión de Prisma filtra por ese conjunto y el
-// residente simplemente "no existe" ahí (404): no hay fuga entre conjuntos.
+// con alguno donde el residente tiene Domicilio, la extensión de Prisma filtra por ese
+// conjunto, el Domicilio no existe ahí y el residente "no existe" (404): no hay fuga
+// entre conjuntos (la cuenta ya no está aislada por tenant; el Domicilio sí).
 
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db.js';
@@ -18,6 +19,8 @@ import { franjasDe } from '../domain/conjuntoConfig.js';
 import { METODOS_PAGO } from '../domain/pago.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
 import { motivosDeCobro } from './paquete.service.js';
+import { obtenerResumenPropio } from './usuario.service.js';
+import { domicilioDePersona } from './domicilio.service.js';
 
 export const SCOPE_ENLACE = 'enlace';
 export const VIGENCIA_SESION_ENLACE = '2h';
@@ -44,16 +47,18 @@ export function urlMisPaquetes({ residenteId, conjuntoId }) {
 
 /** Vista "Mis paquetes". Debe correr DENTRO de un contexto de tenant. Sin email ni teléfono. */
 export async function vistaMisPaquetes(residenteId) {
-  const residente = await prisma.user.findFirst({
-    where: { id: residenteId, role: 'RESIDENT' },
-    select: { id: true, nombre: true, torre: true, apto: true },
-  });
+  const cuenta = await obtenerResumenPropio(residenteId);
+  // La persona "existe" en este conjunto solo si tiene un Domicilio aquí (aislado por tenant).
+  const domicilio = cuenta ? await domicilioDePersona(residenteId) : null;
+  const residente = cuenta && domicilio
+    ? { nombre: domicilio.nombreRecibe || cuenta.nombre, torre: domicilio.torre, apto: domicilio.apto }
+    : null;
   if (!residente) {
     throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos tu cuenta. Pide a la portería que te reenvíe el aviso.', 404);
   }
   const conjunto = await conjuntoDelContexto();
   const paquetes = await prisma.package.findMany({
-    where: { residenteId: residente.id, estado: { in: ESTADOS_ACTIVOS } },
+    where: { residenteId, estado: { in: ESTADOS_ACTIVOS } },
     select: {
       id: true, estado: true, pin: true, costoServicio: true, categoriaPeso: true, proveedor: true,
       transportadora: true, guia: true, recibidoEn: true, franjaHoraria: true, metodoPagoServicio: true, modalidadEntrega: true,

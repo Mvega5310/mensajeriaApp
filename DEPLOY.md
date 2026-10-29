@@ -357,6 +357,45 @@ Agrega el índice `Package(conjuntoId, residenteId, estado)`: lo usan `GET /pack
 - **Rollback:** `backend/prisma/manual/rollback_add_paquete_residente_idx.sql` (con `psql`). Solo
   quita el índice (el código sigue funcionando, más lento) y la fila de `_prisma_migrations`.
 
+### Migración `add_domicilio` (PLAN-conjunto S1.1: cuenta de la persona + dirección de entrega por conjunto)
+
+La cuenta del residente deja de pertenecer a un conjunto: **conjunto + torre + apto + quién recibe +
+teléfono** pasan a una dirección de entrega (`Domicilio`), una por persona y conjunto.
+
+- Migración **aditiva** (`20261029110000_add_domicilio`, posterior a `20261029100800`; `prisma
+  migrate deploy` normal). Crea las tablas `Domicilio` y `UsuarioConjunto` (índice persona → conjunto,
+  sin datos personales, para "Mis paquetes" multi-conjunto), la columna `Package.domicilioId` (FK
+  `RESTRICT`, nullable) y sus índices; **no borra ni modifica nada existente** (`User.torre/apto/nombre/
+  telefono` y `Package.residenteId` se quedan).
+- **Migración de datos (C4), dentro del mismo `migration.sql`:** por cada `User` `RESIDENT` crea su
+  `Domicilio` en su `conjuntoId` (torre/apto **canónicos**, `nombreRecibe = nombre`, mismo teléfono) y su
+  fila en `UsuarioConjunto`; luego enlaza cada `Package` con `residenteId` al `Domicilio` de ese residente
+  **en el conjunto del paquete**. Los operadores no reciben `Domicilio`. Es idempotente (ids
+  deterministas `dom…`, `ON CONFLICT DO NOTHING`, `WHERE domicilioId IS NULL`).
+- **Forma canónica de torre/apto** (igual en SQL y en `services/domicilio.service.js#canonicalizarDireccion`,
+  con prueba de paridad en el ensayo): `torre = tokenTorre(torre) ?? ''` ("TORRE 2" | "T2" | "2" → `2`;
+  "Torre A" → `A`; sin torre → `''`), `apto` = solo dígitos (`''` si falta). Sin NULL, así el único
+  `[conjuntoId, usuarioId, torre, apto]` deduplica de verdad. Las filas de `CortesiaApartamento` siguen
+  valiendo: su `claveApto` (`torre|apto`) no cambia.
+- **Ensayo** (base con las 16 migraciones previas + 2 conjuntos, 2 operadores, 8 residentes con torres/aptos
+  sucios —"TORRE 2", "t2", "Torre 02", `NULL`, "Torre Ñandú", " Torre A ", "apto-502"—, 10 paquetes con y
+  sin residente): `migrate deploy` aplica; 8 `Domicilio` y 8 `UsuarioConjunto` (uno por residente), 0
+  residentes sin domicilio, 0 operadores con domicilio, 0 paquetes con residente sin `domicilioId`, 0
+  paquetes sin residente con `domicilioId`, 0 enlaces cruzados, `User=10`/`Package=10` intactos; torre/apto
+  SQL = JS en 8/8; `migrate diff` sin drift. Rollback → tablas y columna fuera, fila de `_prisma_migrations`
+  borrada, datos intactos; re-aplicar → mismos conteos y sin drift; correr de nuevo el SQL de datos no
+  duplica nada.
+- **Qué mirar en producción tras aplicarla** (hoy: un solo conjunto, `ipanema`): `SELECT count(*) FROM
+  "Domicilio"` = número de residentes; `SELECT count(*) FROM "Package" WHERE "residenteId" IS NOT NULL AND
+  "domicilioId" IS NULL` = 0 (un valor mayor indicaría un paquete cuyo conjunto no es el de su residente,
+  imposible antes de esta migración).
+- **Rollback:** `backend/prisma/manual/rollback_add_domicilio.sql` (con `psql -v ON_ERROR_STOP=1 -f`).
+  Quita `Package.domicilioId`, `UsuarioConjunto` y `Domicilio` y borra la fila de `_prisma_migrations`.
+  Solo se pierde lo escrito después de la migración en esas tablas; el código anterior (que usa
+  `residenteId` y los datos de `User`) sigue funcionando.
+- **Código:** `User` sale de `MODELOS_CON_TENANT` (todo acceso pasa por `services/usuario.service.js`,
+  vigilado por `auditoriaInvariantes.test.js`); `Domicilio` entra. Ver CLAUDE.md, invariantes 8–11.
+
 ### Orden de las migraciones del refactor (S0.3)
 
 Producción ya tiene aplicadas las migraciones de `main` hasta

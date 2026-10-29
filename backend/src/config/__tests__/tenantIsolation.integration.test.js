@@ -21,6 +21,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 // GUARDA DE SEGURIDAD: esta prueba CREA y BORRA datos. db.js carga dotenv, así
 // que sin protección podría correr contra la base configurada en .env (incluida
@@ -98,7 +99,8 @@ async function limpiar() {
       await prisma.package.deleteMany({});
       await prisma.bono.deleteMany({});
       await prisma.comentario.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -115,7 +117,7 @@ test('crear dos conjuntos, cada uno con su usuario y su paquete', { skip: omitir
 
   // Usuario y paquete de A, dentro del contexto de A.
   await runWithTenant({ conjuntoId: A.id, role: 'OPERATOR' }, async () => {
-    const uA = await prisma.user.create({
+    const uA = await crearUsuarioDeContexto(prisma, {
       data: {
         email: 'a@itest.local',
         passwordHash: 'x',
@@ -137,7 +139,7 @@ test('crear dos conjuntos, cada uno con su usuario y su paquete', { skip: omitir
 
   // Usuario y paquete de B, dentro del contexto de B.
   await runWithTenant({ conjuntoId: B.id, role: 'OPERATOR' }, async () => {
-    const uB = await prisma.user.create({
+    const uB = await crearUsuarioDeContexto(prisma, {
       data: {
         email: 'b@itest.local',
         passwordHash: 'x',
@@ -205,21 +207,18 @@ test('findMany solo devuelve los paquetes del conjunto activo', { skip: omitir &
   });
 });
 
-test('operación sobre User SIN contexto -> lanza (falla cerrado)', { skip: omitir && razonSkip }, async () => {
-  await assert.rejects(prisma.user.findMany({}), /sin contexto de conjunto/);
-  await assert.rejects(
-    prisma.user.create({
-      data: {
-        email: 'z@itest.local',
-        passwordHash: 'x',
-        role: 'RESIDENT',
-        nombre: 'Z',
-        telefono: '1',
-        termsAcceptedAt: new Date(),
-      },
-    }),
-    /sin contexto de conjunto/
-  );
+test('operación sobre un modelo con tenant (Package, Domicilio) SIN contexto -> lanza (falla cerrado)', { skip: omitir && razonSkip }, async () => {
+  await assert.rejects(prisma.package.findMany({}), /sin contexto de conjunto/);
+  await assert.rejects(prisma.domicilio.findMany({}), /sin contexto de conjunto/);
+  await assert.rejects(prisma.domicilio.create({
+    data: { usuarioId: ctx.uA, torre: '1', apto: '1', nombreRecibe: 'Z', telefono: '1' },
+  }), /sin contexto de conjunto/);
+});
+
+test('User ya NO está bajo la extensión (S1.1): se accede por services/usuario.service.js', { skip: omitir && razonSkip }, async () => {
+  const { esModeloConTenant } = await import('../tenantModels.js');
+  assert.equal(esModeloConTenant('user'), false);
+  assert.equal(esModeloConTenant('domicilio'), true);
 });
 
 test('buscarUsuarioPorEmailSinTenant encuentra usuarios de cualquier conjunto', { skip: omitir && razonSkip }, async () => {

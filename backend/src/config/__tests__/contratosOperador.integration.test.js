@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -32,7 +33,8 @@ async function limpiar() {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.package.deleteMany({});
       await prisma.bono.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: SLUGS } } });
@@ -67,7 +69,7 @@ test('setup', { skip }, async () => {
   ctx.A = (await mk(SLUGS[0])).id;
   ctx.B = (await mk(SLUGS[1])).id;
   const user = (conjuntoId, email, role, nombre, torre, apto) => runWithTenant({ conjuntoId, role: 'OPERATOR' }, () =>
-    prisma.user.create({
+    crearUsuarioDeContexto(prisma, {
       data: { email, passwordHash: hash, role, nombre, telefono: '3001112222', torre, apto, termsAcceptedAt: new Date() },
     }));
   ctx.op = await user(ctx.A, 'op@rc-a.local', 'OPERATOR', 'Operador', null, null);

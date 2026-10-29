@@ -73,6 +73,8 @@ model Conjunto {
   clavesIdempotencia ClaveIdempotencia[]
   paqueteFotos       PaqueteFoto[]
   cortesias          CortesiaApartamento[]
+  domicilios         Domicilio[]
+  usuariosConjunto   UsuarioConjunto[]
 }
 
 model User {
@@ -89,10 +91,15 @@ model User {
   termsAcceptedAt DateTime
   createdAt    DateTime @default(now())
 
-  // Tenant (KAN-8). Obligatorio desde el CONTRACT (paso 4 del corte): NOT NULL +
+  // Conjunto de la cuenta. Obligatorio desde el CONTRACT (paso 4 del corte): NOT NULL +
   // FK RESTRICT, migración 20261028165010_contract_conjunto (ya aplicada en
   // producción; su SQL de origen está en prisma/manual/contract_conjunto_not_null.sql).
   // email se mantiene @unique GLOBAL, sin cambios (requirements, nota R5).
+  // PLAN-conjunto S1.1: para un OPERATOR sigue siendo SU conjunto (aísla). Para un
+  // RESIDENT la cuenta es de la persona y sirve en cualquier conjunto: aquí solo
+  // queda el "último conjunto usado" (el que abre el contexto de sus requests hasta
+  // que S1.3 lo resuelva por solicitud); NO aísla nada. `User` ya no está en
+  // MODELOS_CON_TENANT: toda lectura/escritura pasa por services/usuario.service.js.
   conjunto     Conjunto @relation(fields: [conjuntoId], references: [id])
   conjuntoId   String
 
@@ -102,6 +109,8 @@ model User {
   bonos        Bono[]
   eventosActor PaqueteEvento[]
   clavesIdempotencia ClaveIdempotencia[]
+  domicilios         Domicilio[]
+  conjuntos          UsuarioConjunto[]
 
   // Indice de tenant (A3). El compuesto sirve tambien para las consultas que
   // filtran solo por conjuntoId (Postgres usa la primera columna), asi que no
@@ -183,6 +192,12 @@ model Package {
   // Tenant (KAN-8). Obligatorio desde el "contract" (design.md 5.2).
   conjunto  Conjunto @relation(fields: [conjuntoId], references: [id])
   conjuntoId String
+
+  // Dirección de entrega a la que va el paquete (PLAN-conjunto S1.1). Opcional:
+  // los SIN_ASIGNAR no tienen. `residenteId` se conserva como "quién lo pidió / a quién
+  // va". RESTRICT: un Domicilio con paquetes no se borra.
+  domicilio   Domicilio? @relation(fields: [domicilioId], references: [id], onDelete: Restrict)
+  domicilioId String?
 
   // datos del paquete
   // proveedor = tienda/plataforma que vende (Amazon, Mercado Libre); es la
@@ -267,6 +282,8 @@ model Package {
   // Paquetes de un residente por estado: listMine, /api/p/paquetes (sondeo cada 20 s),
   // schedule y la cuenta de pendientes (M5, revisión final T8.1).
   @@index([conjuntoId, residenteId, estado])
+  // Paquetes de un Domicilio (cortesía por apartamento, lote de entrega, ficha del operador).
+  @@index([conjuntoId, domicilioId])
 }
 
 // Bitácora auditable de cambios de estado del paquete (T1.3). SOLO INSERCIÓN:
@@ -349,4 +366,57 @@ model CortesiaApartamento {
   creadoEn   DateTime @default(now())
 
   @@unique([conjuntoId, claveApto])
+}
+
+// Dirección de entrega de una persona EN un conjunto (PLAN-conjunto S1.1): conjunto +
+// torre + apto + quién recibe + teléfono. La cuenta (User) es de la persona y sirve en
+// cualquier conjunto; el Domicilio es lo que pertenece a un conjunto, por eso lleva
+// `conjuntoId` y está en MODELOS_CON_TENANT: el operador de un conjunto solo lee los
+// del suyo, y de la persona solo ve lo que hay aquí (nunca email ni otros conjuntos).
+//
+// FORMA CANÓNICA (services/domicilio.service.js#canonicalizarDireccion), para que el
+// índice único deduplique de verdad y no haya NULL (Postgres trata los NULL como
+// distintos en un único):
+//   torre = tokenTorre(torre) ?? ''   "TORRE 2" | "Torre 2" | "T2" | "2" -> "2"; "Torre A" -> "A"; sin torre -> ''
+//   apto  = solo dígitos ?? ''        "Apto 302" -> "302"; sin apto -> ''
+// `ultimoUsoEn` ordena "la última usada" (la que viene puesta en cada solicitud).
+// `activo=false` la oculta de las propias listas sin perder el historial.
+// onDelete RESTRICT en el usuario: un Domicilio nunca se borra en cascada.
+model Domicilio {
+  id           String   @id @default(cuid())
+  conjunto     Conjunto @relation(fields: [conjuntoId], references: [id])
+  conjuntoId   String
+  usuario      User     @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  usuarioId    String
+  torre        String   @default("")
+  apto         String   @default("")
+  nombreRecibe String
+  telefono     String
+  ultimoUsoEn  DateTime @default(now())
+  activo       Boolean  @default(true)
+  creadoEn     DateTime @default(now())
+
+  paquetes Package[]
+
+  @@unique([conjuntoId, usuarioId, torre, apto])
+  // Búsqueda del operador por apartamento dentro de su conjunto.
+  @@index([conjuntoId, apto])
+}
+
+// Índice "en qué conjuntos tiene domicilio esta persona" (PLAN-conjunto S1.2). Es la
+// vía segura para "Mis paquetes" multi-conjunto: Domicilio está bajo tenant y no se
+// puede barrer entre conjuntos, así que se lee ESTA tabla (sin datos personales: solo
+// dos ids) y luego se consulta cada conjunto dentro de su propio runWithTenant.
+// NO lleva tenant a propósito (como Conjunto): la lee únicamente
+// services/domicilio.service.js (la auditoría lo vigila) y siempre por usuarioId de la
+// sesión; el operador nunca la consulta. Se escribe en crearOReutilizarDomicilio()
+// ANTES de crear el Domicilio (un índice de más es inofensivo: devuelve un conjunto sin paquetes).
+model UsuarioConjunto {
+  usuario    User     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  conjunto   Conjunto @relation(fields: [conjuntoId], references: [id])
+  conjuntoId String
+  creadoEn   DateTime @default(now())
+
+  @@id([usuarioId, conjuntoId])
 }

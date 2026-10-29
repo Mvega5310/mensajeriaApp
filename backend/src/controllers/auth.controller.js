@@ -4,13 +4,14 @@ import jwt from 'jsonwebtoken';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { tenantStore, SCOPE, runWithTenant } from '../config/tenantContext.js';
-import { resolverConjuntoIdPorUsuario } from '../config/tenantBootstrap.js';
 import { normalizarCodigoInvitacion } from '../services/invitacion.service.js';
 import { PASSWORD_POLICY, PASSWORD_POLICY_MSG } from '../services/password.service.js';
 import { enSegundoPlano } from '../services/avisos.service.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
 import { normalizarTorre, normalizarApto } from '../services/apartamento.service.js';
 import { conjuntoUnicoActivo } from '../services/conjunto.service.js';
+import { crearResidente, actualizarPassword, obtenerCuentaPropia, obtenerPerfilPropio } from '../services/usuario.service.js';
+import { crearOReutilizarDomicilio } from '../services/domicilio.service.js';
 
 // ÚNICO punto del código autorizado a abrir el scope GLOBAL_LOOKUP
 // (invariante design.md §2.3.1). Resuelve un usuario por email SIN filtro de
@@ -85,24 +86,21 @@ export async function register(req, res) {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  // 3) Crear el usuario DENTRO del contexto del conjunto validado. La extensión
-  //    fija conjuntoId desde el contexto; NO se pasa conjuntoId en data. El rol
-  //    es SIEMPRE RESIDENT (nunca sale del body).
+  // 3) Crear la cuenta (de la persona, no aislada por tenant: services/usuario.service.js)
+  //    y su primer Domicilio DENTRO del contexto del conjunto validado (la extensión
+  //    fija conjuntoId desde el contexto; NO se pasa conjuntoId en data del Domicilio).
+  //    El rol es SIEMPRE RESIDENT (nunca sale del body). `User.conjuntoId` queda como
+  //    "último conjunto usado".
   try {
-    const user = await runWithTenant({ conjuntoId: conjunto.id, role: 'RESIDENT' }, () =>
-      prisma.user.create({
-        data: {
-          email, passwordHash, role: 'RESIDENT', nombre, telefono,
-          // Normalizado server-side (no basta con que el frontend ya mande
-          // el valor "limpio" — cualquiera puede pegar directo contra la
-          // API): así la cortesía de primera entrega por apartamento (ver
-          // packages.controller.js) puede agrupar cuentas distintas del
-          // mismo apto sin que la inconsistencia de escritura lo impida.
-          torre: normalizarTorre(torre),
-          apto: normalizarApto(apto),
-          termsAcceptedAt: new Date(),
-        },
-      })
+    // Normalizado server-side (no basta con que el frontend ya mande el valor
+    // "limpio" — cualquiera puede pegar directo contra la API).
+    const user = await crearResidente({
+      conjuntoId: conjunto.id, email, passwordHash, nombre, telefono,
+      torre: normalizarTorre(torre),
+      apto: normalizarApto(apto),
+    });
+    await runWithTenant({ conjuntoId: conjunto.id, role: 'RESIDENT' }, () =>
+      crearOReutilizarDomicilio({ usuarioId: user.id, torre, apto, nombreRecibe: nombre, telefono })
     );
     return res.status(201).json({ id: user.id, email: user.email, role: user.role });
   } catch (err) {
@@ -215,24 +213,21 @@ export async function resetPassword(req, res) {
     throw new AppError(CODIGOS.ENLACE_INVALIDO, 'El enlace no es válido o ya venció. Pide uno nuevo desde "Olvidé mi contraseña".', 400);
   }
 
-  // Flujo sin sesión: no hay JWT, así que resolvemos el conjunto del dueño del
-  // token por su id (bootstrap del tenant) y ejecutamos la actualización de
-  // User dentro de ese contexto. user.update es un modelo con tenant y sin
-  // contexto la extensión lanzaría (falla cerrado).
-  const conjuntoId = await resolverConjuntoIdPorUsuario(record.userId);
-  if (!conjuntoId) {
-    throw new AppError(CODIGOS.ENLACE_INVALIDO, 'El enlace no es válido o ya venció. Pide uno nuevo desde "Olvidé mi contraseña".', 400);
-  }
-
+  // Flujo sin sesión: la cuenta es de la persona (no está aislada por tenant), así que se
+  // actualiza por el id del token ya validado, vía services/usuario.service.js.
   const passwordHash = await bcrypt.hash(password, 10);
-  await runWithTenant({ conjuntoId, role: 'RESIDENT' }, () =>
-    prisma.$transaction([
-      prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
-      // invalida también cualquier otro enlace pendiente de esta cuenta
-      // (PasswordResetToken es sin tenant; el deleteMany pasa sin filtrar).
-      prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } }),
-    ])
-  );
+  try {
+    await actualizarPassword(record.userId, passwordHash);
+  } catch (err) {
+    // La cuenta del token ya no existe.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new AppError(CODIGOS.ENLACE_INVALIDO, 'El enlace no es válido o ya venció. Pide uno nuevo desde "Olvidé mi contraseña".', 400);
+    }
+    throw err;
+  }
+  // invalida también cualquier otro enlace pendiente de esta cuenta
+  // (PasswordResetToken es sin tenant; el deleteMany pasa sin filtrar).
+  await prisma.passwordResetToken.deleteMany({ where: { userId: record.userId } });
 
   res.json({ message: 'Contraseña actualizada' });
 }
@@ -288,19 +283,15 @@ export async function canjearEnlace(req, res) {
   if (count !== 1) throw invalido();
 
   const record = await prisma.passwordResetToken.findFirst({ where: { tokenHash, proposito: 'ACCESO' } });
-  // El usuario se lee por id dentro de su propio conjunto (bootstrap del tenant).
-  const conjuntoId = record ? await resolverConjuntoIdPorUsuario(record.userId) : null;
-  const user = conjuntoId
-    ? await runWithTenant({ conjuntoId, role: 'RESIDENT' }, () => prisma.user.findUnique({ where: { id: record.userId } }))
-    : null;
+  // La cuenta se lee por el id del token (es de la persona; ver usuario.service.js).
+  const user = record ? await obtenerCuentaPropia(record.userId) : null;
   if (!user) throw invalido();
 
   res.json(sesionDe(user));
 }
 
 export async function me(req, res) {
-  const user = await prisma.user.findUnique({ where: { id: req.user.sub } });
-  if (!user) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos tu usuario. Inicia sesión de nuevo.', 404);
-  const { passwordHash, ...profile } = user;
+  const profile = await obtenerPerfilPropio(req.user.sub);
+  if (!profile) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos tu usuario. Inicia sesión de nuevo.', 404);
   res.json(profile);
 }

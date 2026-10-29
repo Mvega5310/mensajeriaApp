@@ -14,14 +14,26 @@ import { registrarIntentoPin } from './pin.service.js';
 import { aplicarEvento, selectSinFoto } from './paquete.service.js';
 import { enSegundoPlano } from './avisos.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
+import { vistaResidente, SELECT_DOMICILIO_PAQUETE, filtroPaquetePorApto } from './domicilio.service.js';
+import { contactoParaNotificar } from './usuario.service.js';
 
 // Secreto dedicado si existe; si no, JWT_SECRET (el HMAC lleva prefijo de dominio).
 const secretoEntrega = () => process.env.ENTREGA_SECRET || process.env.JWT_SECRET;
 
 const SELECT_ENTREGABLE = {
   ...selectSinFoto({ conPin: true }),
+  // La dirección (lo que ve el operador) sale del Domicilio; la cuenta enlazada solo es
+  // el respaldo de paquetes anteriores a PLAN-conjunto S1.1.
+  domicilio: SELECT_DOMICILIO_PAQUETE,
   residente: { select: { id: true, nombre: true, torre: true, apto: true } },
 };
+
+// Lee paquetes entregables y los deja con la forma `residente` {id, nombre, torre, apto}
+// que usa el dominio del lote (desde el Domicilio del paquete).
+async function leerEntregables(where) {
+  const filas = await prisma.package.findMany({ where, select: SELECT_ENTREGABLE });
+  return filas.map(({ domicilio, residente, ...p }) => ({ ...p, domicilio, residente: vistaResidente({ ...p, domicilio, residente }) }));
+}
 const ENTREGABLES = { estado: { in: [...ESTADOS_ENTREGABLES] }, residenteId: { not: null } };
 
 // Filtro de residente según lo que indicó el operador (residenteId y/o apto). El
@@ -33,7 +45,8 @@ function filtroApuntado({ residenteId, apto }) {
   if (apto) {
     const q = interpretarBusqueda(apto);
     // Sin dígitos de apto, coincideApto nunca acierta: no hay candidatos.
-    f.residente = { is: q.apto ? { apto: { contains: q.apto } } : { id: { in: [] } } };
+    if (q.apto) Object.assign(f, filtroPaquetePorApto(q.apto));
+    else f.id = { in: [] };
   }
   return f;
 }
@@ -41,10 +54,7 @@ function filtroApuntado({ residenteId, apto }) {
 /** Paquetes entregables que el operador apuntó (sin mirar el PIN), para contar el fallo por paquete. */
 async function entregablesApuntados({ residenteId, apto }) {
   if (!residenteId && !apto) return [];
-  return prisma.package.findMany({
-    where: { ...ENTREGABLES, ...filtroApuntado({ residenteId, apto }) },
-    select: SELECT_ENTREGABLE,
-  });
+  return leerEntregables({ ...ENTREGABLES, ...filtroApuntado({ residenteId, apto }) });
 }
 
 /**
@@ -52,28 +62,20 @@ async function entregablesApuntados({ residenteId, apto }) {
  * los demás entregables de sus apartamentos (para armar el lote).
  */
 async function entregablesParaPin({ pin, residenteId, apto }) {
-  const coincidentes = await prisma.package.findMany({
-    where: { ...ENTREGABLES, pin, ...filtroApuntado({ residenteId, apto }) },
-    select: SELECT_ENTREGABLE,
-  });
+  const coincidentes = await leerEntregables({ ...ENTREGABLES, pin, ...filtroApuntado({ residenteId, apto }) });
   if (!coincidentes.length) return [];
   // Un solo apartamento coincide en el caso normal; si hay varios es AMBIGUO y no se arma lote.
   const claves = new Set(coincidentes.map((p) => claveDeApartamento(p.residente)));
   if (claves.size > 1) return coincidentes;
   const aptos = [...new Set(coincidentes.map((p) => normalizarApto(p.residente.apto)).filter(Boolean))];
   const mismoApto = aptos.length
-    ? await prisma.package.findMany({
-      where: { ...ENTREGABLES, residente: { is: { OR: aptos.map((a) => ({ apto: { contains: a } })) } } },
-      select: SELECT_ENTREGABLE,
-    })
+    ? await leerEntregables({ ...ENTREGABLES, OR: aptos.flatMap((a) => filtroPaquetePorApto(a).OR) })
     : [];
   const porId = new Map([...coincidentes, ...mismoApto].map((p) => [p.id, p]));
   // Cuentas con torre/apto incompletos: su "apartamento" es la cuenta sola.
   const faltan = coincidentes.filter((p) => !normalizarApto(p.residente.apto)).map((p) => p.residenteId);
   if (faltan.length) {
-    for (const p of await prisma.package.findMany({
-      where: { ...ENTREGABLES, residenteId: { in: faltan } }, select: SELECT_ENTREGABLE,
-    })) porId.set(p.id, p);
+    for (const p of await leerEntregables({ ...ENTREGABLES, residenteId: { in: faltan } })) porId.set(p.id, p);
   }
   return [...porId.values()];
 }
@@ -236,10 +238,8 @@ export async function confirmarLote({ operadorId, conjuntoId, tokenEntrega, paqu
 async function despuesDeEntregarLote({ notificador, residenteId, paqueteIds }) {
   if (!notificador) return;
   try {
-    const residente = await prisma.user.findUnique({
-      where: { id: residenteId },
-      select: { nombre: true, email: true },
-    });
+    // Correo de la cuenta (uso interno; el id viene del token de entrega firmado).
+    const residente = await contactoParaNotificar(residenteId);
     if (!residente?.email) return;
     const [paquetes, conjunto] = await Promise.all([
       // Solo lo que usa el correo: nada de fotoUrl (puede pesar cientos de KB) ni PIN.

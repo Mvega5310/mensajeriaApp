@@ -48,7 +48,8 @@ async function limpiar() {
   const c = await prisma.conjunto.findUnique({ where: { slug: SLUG } });
   if (c) {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
     await prisma.conjunto.deleteMany({ where: { slug: SLUG } });
   }
@@ -119,7 +120,7 @@ test('alta con email ya existente lanza y NO deja el conjunto creado (atomicidad
   // Limpieza previa del slug_dup y del email.
   const prev = await prisma.conjunto.findUnique({ where: { slug: SLUG_DUP } });
   if (prev) {
-    await runWithTenant({ conjuntoId: prev.id, role: 'OPERATOR' }, () => prisma.user.deleteMany({}));
+    await runWithTenant({ conjuntoId: prev.id, role: 'OPERATOR' }, () => prisma.user.deleteMany({ where: { conjuntoId: prev.id } }));
     await prisma.conjunto.deleteMany({ where: { slug: SLUG_DUP } });
   }
 
@@ -135,7 +136,7 @@ test('alta con email ya existente lanza y NO deja el conjunto creado (atomicidad
     const existe = await prisma.user.findFirst({ where: { email: EMAIL_EXISTENTE } });
     if (!existe) {
       await prisma.user.create({
-        data: { email: EMAIL_EXISTENTE, passwordHash: 'x', role: 'RESIDENT', nombre: 'Existente', telefono: '1', termsAcceptedAt: new Date() },
+        data: { conjuntoId: base.id, email: EMAIL_EXISTENTE, passwordHash: 'x', role: 'RESIDENT', nombre: 'Existente', telefono: '1', termsAcceptedAt: new Date() },
       });
     }
   });
@@ -155,7 +156,7 @@ test('teardown', { skip: omitir && razonSkip }, async () => {
   await limpiar();
   const dup = await prisma.conjunto.findUnique({ where: { slug: SLUG_DUP } });
   if (dup) {
-    await runWithTenant({ conjuntoId: dup.id, role: 'OPERATOR' }, () => prisma.user.deleteMany({}));
+    await runWithTenant({ conjuntoId: dup.id, role: 'OPERATOR' }, () => prisma.user.deleteMany({ where: { conjuntoId: dup.id } }));
     await prisma.conjunto.deleteMany({ where: { slug: SLUG_DUP } });
   }
   await prisma.$disconnect();

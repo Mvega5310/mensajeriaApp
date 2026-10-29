@@ -58,7 +58,7 @@ export function validarFotos(fotos, maxFotos) {
 
 /**
  * Valida y normaliza el body de POST /packages/recepcion.
- * @returns {{residenteId:string|null, etiquetaNombre:string|null, categoriaPeso:string,
+ * @returns {{residenteId:string|null, domicilioId:string|null, etiquetaNombre:string|null, categoriaPeso:string,
  *   guia:string|null, transportadora:string|null, fotos:string[]}}
  */
 export function validarRecepcion(body, { maxFotos }) {
@@ -68,8 +68,15 @@ export function validarRecepcion(body, { maxFotos }) {
   if (residenteId !== null && typeof residenteId !== 'string') {
     throw invalido('El residente no es válido. Búscalo de nuevo e intenta otra vez.', { campo: 'residenteId' });
   }
+  // PLAN-conjunto S1.2: el destino es una dirección de entrega (`domicilioId`); `residenteId`
+  // se conserva por compatibilidad (S1.3 cambia el contrato público).
+  const domicilioId = b.domicilioId === undefined || b.domicilioId === null || b.domicilioId === ''
+    ? null : b.domicilioId;
+  if (domicilioId !== null && typeof domicilioId !== 'string') {
+    throw invalido('La dirección no es válida. Búscala de nuevo e intenta otra vez.', { campo: 'domicilioId' });
+  }
   const etiquetaNombre = textoOpcional(b.etiquetaNombre, 'etiquetaNombre', 'El nombre de la etiqueta');
-  if (residenteId === null && !etiquetaNombre) {
+  if (residenteId === null && domicilioId === null && !etiquetaNombre) {
     throw invalido('Escribe el nombre que dice la etiqueta o elige un residente.', { campo: 'etiquetaNombre' });
   }
   if (!esCategoriaValida(b.categoriaPeso)) {
@@ -77,6 +84,7 @@ export function validarRecepcion(body, { maxFotos }) {
   }
   return {
     residenteId,
+    domicilioId,
     etiquetaNombre,
     categoriaPeso: b.categoriaPeso,
     guia: textoOpcional(b.guia, 'guia', 'La guía'),

@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -35,7 +36,8 @@ async function limpiar() {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.bono.deleteMany({});
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -80,7 +82,7 @@ test('setup', { skip: omitir && razonSkip }, async () => {
   ctx.A = (await mk(SLUG_A)).id;
   ctx.B = (await mk(SLUG_B, { prefijoPais: '52', maxFotos: 5, custodiaMaxDias: 10, franjasEntrega: ['8:00 - 10:00'] })).id;
   const user = (conjuntoId, email, role, apto) => runWithTenant({ conjuntoId, role: 'OPERATOR' }, () =>
-    prisma.user.create({ data: { email, passwordHash: hash, role, nombre: email, telefono: '1', torre: 'T1', apto, termsAcceptedAt: new Date() } }));
+    crearUsuarioDeContexto(prisma, { data: { email, passwordHash: hash, role, nombre: email, telefono: '1', torre: 'T1', apto, termsAcceptedAt: new Date() } }));
   ctx.opA = await user(ctx.A, 'op@ra.local', 'OPERATOR', null);
   ctx.resA = await user(ctx.A, 'res@ra.local', 'RESIDENT', '101');
   ctx.opB = await user(ctx.B, 'op@rb.local', 'OPERATOR', null);

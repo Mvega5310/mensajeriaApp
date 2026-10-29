@@ -51,7 +51,8 @@ async function limpiar() {
   const conjuntos = await prisma.conjunto.findMany({ where: { slug: { in: [SLUG_U, SLUG_V] } } });
   for (const c of conjuntos) {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_U, SLUG_V] } } });

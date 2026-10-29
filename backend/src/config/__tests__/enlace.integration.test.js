@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -33,7 +34,8 @@ async function limpiar() {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.bono.deleteMany({});
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -95,7 +97,7 @@ test('setup', { skip }, async () => {
   ctx.A = (await mk(SLUG_A)).id;
   ctx.B = (await mk(SLUG_B)).id;
   const user = (conjuntoId, email, role, apto) => runWithTenant({ conjuntoId, role: 'OPERATOR' }, () =>
-    prisma.user.create({
+    crearUsuarioDeContexto(prisma, {
       data: {
         email, passwordHash: hash, role, nombre: `Ana ${apto ?? "Op"}`, telefono: '3001112233', torre: 'T1', apto,
         termsAcceptedAt: new Date(),
@@ -215,7 +217,11 @@ test('token con conjuntoId manipulado: re-firmado con otro secreto 401; firmado 
 test('residente borrado o que no es RESIDENT: 404', { skip }, async () => {
   const tk = enlaceDe(ctx.resBorrar.id, ctx.A);
   assert.equal((await abrir(tk)).status, 200);
-  await enA(() => prisma.user.delete({ where: { id: ctx.resBorrar.id } }));
+  await enA(async () => {
+    await prisma.package.deleteMany({ where: { residenteId: ctx.resBorrar.id } });
+    await prisma.domicilio.deleteMany({ where: { usuarioId: ctx.resBorrar.id } });
+    await prisma.user.delete({ where: { id: ctx.resBorrar.id } });
+  });
   assert.equal((await abrir(tk)).status, 404);
 
   const operador = await abrir(enlaceDe(ctx.opA.id, ctx.A));

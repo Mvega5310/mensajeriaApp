@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -34,7 +35,8 @@ async function limpiar() {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.bono.deleteMany({});
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -72,7 +74,7 @@ test('setup', { skip }, async () => {
   ctx.A = (await mk(SLUG_A)).id;
   ctx.B = (await mk(SLUG_B)).id;
   const user = (conjuntoId, email, role, nombre, torre, apto) => runWithTenant({ conjuntoId, role: 'OPERATOR' }, () =>
-    prisma.user.create({
+    crearUsuarioDeContexto(prisma, {
       data: { email, passwordHash: hash, role, nombre, telefono: '3001112222', torre, apto, termsAcceptedAt: new Date() },
     }));
   ctx.op = await user(ctx.A, 'op@rb-a.local', 'OPERATOR', 'Operador', null, null);
@@ -111,7 +113,7 @@ test('solo apto devuelve todas las torres, y el formato de respuesta no expone c
   assert.deepEqual(body.map((r) => r.id).sort(), [ctx.ana.id, ctx.luis.id].sort());
   assert.deepEqual(body.map((r) => r.etiqueta), ['T1 · 304', 'T2 · 304']);
   for (const r of body) {
-    assert.deepEqual(Object.keys(r).sort(), ['apto', 'etiqueta', 'id', 'nombre', 'pendientes', 'torre']);
+    assert.deepEqual(Object.keys(r).sort(), ['apto', 'domicilioId', 'etiqueta', 'id', 'nombre', 'pendientes', 'residenteId', 'torre']);
   }
 });
 

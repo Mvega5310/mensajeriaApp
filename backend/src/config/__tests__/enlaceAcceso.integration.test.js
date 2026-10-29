@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -33,11 +34,12 @@ async function limpiar() {
   const c = await prisma.conjunto.findUnique({ where: { slug: SLUG } });
   if (!c) return;
   await purgarEventos(prisma, c.id);
-  const users = await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, () => prisma.user.findMany({ select: { id: true } }));
+  const users = await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, () => prisma.user.findMany({ where: { conjuntoId: c.id }, select: { id: true } }));
   await prisma.passwordResetToken.deleteMany({ where: { userId: { in: users.map((u) => u.id) } } });
   await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
     await prisma.package.deleteMany({});
-    await prisma.user.deleteMany({});
+    await prisma.domicilio.deleteMany({});
+    await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
   });
   await prisma.conjunto.deleteMany({ where: { slug: SLUG } });
 }
@@ -80,10 +82,10 @@ test('setup', { skip }, async () => {
   });
   ctx.A = c.id;
   const passwordHash = await bcrypt.hash(PWD, 10);
-  ctx.res = await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () => prisma.user.create({
+  ctx.res = await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () => crearUsuarioDeContexto(prisma, {
     data: { email: 'ana@acceso.local', passwordHash, role: 'RESIDENT', nombre: 'Ana', telefono: '3001112233', torre: 'T1', apto: '101', termsAcceptedAt: new Date() },
   }));
-  ctx.op = await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () => prisma.user.create({
+  ctx.op = await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, () => crearUsuarioDeContexto(prisma, {
     data: { email: 'op@acceso.local', passwordHash, role: 'OPERATOR', nombre: 'Operador', telefono: '3001110000', termsAcceptedAt: new Date() },
   }));
   notificador = crearNotificadorFake();

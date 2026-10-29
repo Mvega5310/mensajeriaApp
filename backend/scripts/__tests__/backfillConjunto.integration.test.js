@@ -181,7 +181,7 @@ test('1+2: backfill feliz; luego la app ve los datos y están aislados', { skip:
     const { operadorDelConjuntoActual } = await import('../../src/services/conjunto.service.js');
     const operador = await operadorDelConjuntoActual();
     assert.equal(operador.id, op);
-    const users = await prisma.user.findMany({});
+    const users = await prisma.user.findMany({ where: { conjuntoId: conjId } });
     assert.equal(users.length, 3);
     const paquetes = await prisma.package.findMany({});
     assert.equal(paquetes.length, 2);
@@ -192,7 +192,7 @@ test('1+2: backfill feliz; luego la app ve los datos y están aislados', { skip:
     data: { nombre: 'Otro', slug: 'itestbf-otro', codigoInvitacion: 'itestbf-otro-X', operadorNombre: 'o', operadorWhatsapp: '1', operadorDomicilio: 'd', puntoRecepcion: 'r' },
   });
   await runWithTenant({ conjuntoId: otro.id, role: 'OPERATOR' }, async () => {
-    assert.equal((await prisma.user.findMany({})).length, 0);
+    assert.equal((await prisma.user.findMany({ where: { conjuntoId: otro.id } })).length, 0);
     assert.equal((await prisma.package.findMany({})).length, 0);
   });
 });

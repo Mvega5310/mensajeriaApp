@@ -80,7 +80,7 @@ test('modelo con tenant SIN contexto -> lanza (falla cerrado)', async () => {
 test('GLOBAL_LOOKUP exime: no inyecta filtro', async () => {
   const query = queryFake();
   await aplicarAislamiento({
-    model: 'User',
+    model: 'Package',
     operation: 'findUnique',
     args: { where: { email: 'a@b.c' } },
     query,
@@ -109,7 +109,7 @@ test('findUnique por id: conjuntoId en el primer nivel (sin AND, sin reescritura
 test('findUniqueOrThrow por id: spread plano', async () => {
   const query = queryFake();
   await aplicarAislamiento({
-    model: 'User',
+    model: 'Package',
     operation: 'findUniqueOrThrow',
     args: { where: { id: 'u1' } },
     query,

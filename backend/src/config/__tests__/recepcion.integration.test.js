@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -33,7 +34,8 @@ async function limpiar() {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.package.deleteMany({});
       await prisma.bono.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: SLUGS } } });
@@ -59,7 +61,7 @@ async function nuevoResidente({ conPrevio = false, telefono = '3001234567', enCo
   n += 1;
   const bcrypt = (await import('bcryptjs')).default;
   const passwordHash = await bcrypt.hash(PWD, 4);
-  const u = await enConjunto(() => prisma.user.create({
+  const u = await enConjunto(() => crearUsuarioDeContexto(prisma, {
     data: {
       email: `r${n}@itestr.local`, passwordHash, role: 'RESIDENT',
       nombre: nombre ?? `Ana Prueba ${n}`, telefono, torre: 'TORRE 1', apto: String(500 + n), termsAcceptedAt: new Date(),
@@ -89,7 +91,7 @@ test('setup', { skip }, async () => {
   });
   ctx.A = (await mk(SLUGS[0])).id;
   ctx.B = (await mk(SLUGS[1])).id;
-  const user = (run, email, role) => run(() => prisma.user.create({
+  const user = (run, email, role) => run(() => crearUsuarioDeContexto(prisma, {
     data: { email, passwordHash: hash, role, nombre: email, telefono: '3000000000', torre: 'TORRE 9', apto: role === 'OPERATOR' ? null : '900', termsAcceptedAt: new Date() },
   }));
   await user(enA, 'op@itestr.local', 'OPERATOR');

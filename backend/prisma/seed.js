@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/db.js';
-import { runWithTenant } from '../src/config/tenantContext.js';
+import { crearOperador } from '../src/services/usuario.service.js';
 import { buscarUsuarioPorEmailSinTenant } from '../src/controllers/auth.controller.js';
 import { generarCodigoInvitacion } from '../src/services/invitacion.service.js';
 
@@ -65,20 +65,14 @@ async function crearOperador(conjunto) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  // Creación dentro del contexto del conjunto: la extensión fija conjuntoId
-  // desde el contexto; NO se pasa conjuntoId en data.
-  await runWithTenant({ conjuntoId: conjunto.id, role: 'OPERATOR' }, () =>
-    prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        role: 'OPERATOR',
-        nombre: process.env.OPERATOR_NOMBRE || 'Operador',
-        telefono: process.env.OPERATOR_TELEFONO || '',
-        termsAcceptedAt: new Date(),
-      },
-    })
-  );
+  // El operador queda ligado a SU conjunto (services/usuario.service.js).
+  await crearOperador({
+    conjuntoId: conjunto.id,
+    email,
+    passwordHash,
+    nombre: process.env.OPERATOR_NOMBRE || 'Operador',
+    telefono: process.env.OPERATOR_TELEFONO || '',
+  });
 
   console.log('Cuenta de operador creada:', email);
 }

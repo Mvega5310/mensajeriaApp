@@ -14,6 +14,11 @@ import { subirFotos, registrarFotos, descartarSubidas, fotosDelPaquete } from '.
 import { decodificarDataUri } from '../services/almacen/index.js';
 import { rangoHoyBogota, parsearFiltroFecha } from '../domain/fechas.js';
 import { interpretarBusqueda } from '../domain/apartamento.js';
+import { contactoParaNotificar, obtenerCuentaPropia } from '../services/usuario.service.js';
+import {
+  crearOReutilizarDomicilio, domicilioDePersona, vistaResidente, nulaSiVacia,
+  SELECT_DOMICILIO_PAQUETE, porCadaConjuntoDePersona,
+} from '../services/domicilio.service.js';
 
 // Residente: crea una pre-alerta para sí mismo. Nombre/teléfono/torre/apto
 // ya no se piden en el formulario: salen del usuario autenticado, así que
@@ -57,10 +62,16 @@ export async function createPrealert(req, res) {
   }
   const costoServicio = await costoPara(categoriaPeso || 'ESTANDAR');
 
+  // Dirección de entrega (PLAN-conjunto S1.2): la indicada (`domicilioId`, solo una propia en
+  // ESTE conjunto) o, por compatibilidad, la más reciente de la persona aquí. Si es la primera
+  // vez en este conjunto se crea desde los datos de su cuenta (la dirección se pide UNA vez).
+  const domicilio = await domicilioParaPrealerta(req.user.sub, req.body?.domicilioId);
+
   const pkg = await prisma.$transaction((tx) => crearConEvento(tx, EVENTOS.PREALERTAR, {
     actorId: req.user.sub,
     data: {
       residenteId: req.user.sub,
+      domicilioId: domicilio.id,
       proveedor,
       transportadora: transportadora || null,
       guia: guia || 'Sin Guía',
@@ -78,18 +89,40 @@ export async function createPrealert(req, res) {
   }));
 
   // Avisos automáticos: no bloquean ni tumban la respuesta si falla el envío.
-  const residente = await prisma.user.findUnique({ where: { id: req.user.sub } });
+  // Correo del residente: de su cuenta (uso interno). El operador recibe solo la dirección.
+  const residente = await contactoParaNotificar(req.user.sub);
+  const residenteParaOperador = {
+    id: req.user.sub, nombre: domicilio.nombreRecibe, telefono: domicilio.telefono,
+    torre: nulaSiVacia(domicilio.torre), apto: nulaSiVacia(domicilio.apto),
+  };
   const conjunto = await conjuntoDelContexto();
   const { notificador } = req.app.locals;
   // Operador DEL CONJUNTO del residente (no el primero de la tabla). Si no hay
   // operador en el conjunto, no se envía correo y no se lanza error.
   const operador = await operadorDelConjuntoActual();
   if (operador) {
-    enSegundoPlano('nuevaPrealerta', () => notificador.avisarNuevaPrealerta({ operador, residente, paquete: pkg, conjunto }));
+    enSegundoPlano('nuevaPrealerta', () => notificador.avisarNuevaPrealerta({ operador, residente: residenteParaOperador, paquete: pkg, conjunto }));
   }
   enSegundoPlano('prealerta', () => notificador.confirmarPrealerta({ residente, paquete: pkg, conjunto }));
 
   res.status(201).json(pkg);
+}
+
+async function domicilioParaPrealerta(usuarioId, domicilioId) {
+  if (domicilioId !== undefined && domicilioId !== null && domicilioId !== '') {
+    const propio = typeof domicilioId === 'string'
+      ? await prisma.domicilio.findFirst({ where: { id: domicilioId, usuarioId, activo: true } })
+      : null;
+    if (!propio) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Elige una de tus direcciones guardadas.', 404);
+    return propio;
+  }
+  const existente = await domicilioDePersona(usuarioId);
+  if (existente) return existente;
+  const cuenta = await obtenerCuentaPropia(usuarioId);
+  if (!cuenta) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos tu usuario. Inicia sesión de nuevo.', 404);
+  return crearOReutilizarDomicilio({
+    usuarioId, torre: cuenta.torre, apto: cuenta.apto, nombreRecibe: cuenta.nombre, telefono: cuenta.telefono,
+  });
 }
 
 // Residente: solo ve sus propios paquetes (nunca los de otros) — e
@@ -100,15 +133,28 @@ export async function createPrealert(req, res) {
 // el servidor en producción. Se pide aparte, solo al abrir el detalle
 // de un paquete puntual (ver getFoto()).
 export async function listMine(req, res) {
-  const packages = await prisma.package.findMany({
-    where: { residenteId: req.user.sub },
-    select: selectSinFoto({ conPin: true }), // la foto ni se lee de la base
-    orderBy: { createdAt: 'desc' },
+  // PLAN-conjunto S1.2: los paquetes de la persona en TODOS sus conjuntos. Una consulta por
+  // conjunto, cada una dentro del runWithTenant de ese conjunto (la extensión filtra; no hay
+  // GLOBAL_LOOKUP ni SQL crudo). Cada paquete trae su conjunto ({ slug, nombre }).
+  const filas = await porCadaConjuntoDePersona(req.user.sub, async (c) => {
+    const packages = await prisma.package.findMany({
+      where: { residenteId: req.user.sub },
+      select: selectSinFoto({ conPin: true }), // la foto ni se lee de la base
+      orderBy: { createdAt: 'desc' },
+    });
+    // motivoCobro (CORTESIA/BONO/...) sale del último evento RECIBIR/ASIGNAR, igual que
+    // en listAll y en /api/p/paquetes: el historial no debe inferir "Gratis" por costo 0.
+    const motivos = await motivosDeCobro(packages.map((p) => p.id));
+    return packages.map((p) => ({ ...p, motivoCobro: motivos.get(p.id) ?? null, conjunto: { slug: c.slug, nombre: c.nombre } }));
   });
-  // motivoCobro (CORTESIA/BONO/...) sale del último evento RECIBIR/ASIGNAR, igual que
-  // en listAll y en /api/p/paquetes: el historial no debe inferir "Gratis" por costo 0.
-  const motivos = await motivosDeCobro(packages.map((p) => p.id));
-  res.json(packages.map((p) => ({ ...p, motivoCobro: motivos.get(p.id) ?? null })));
+  filas.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(filas);
+}
+
+// `residente` que ve el operador en listados/CSV: solo lo que hay en el Domicilio.
+function residenteParaOperador(p) {
+  const v = vistaResidente(p);
+  return v ? { nombre: v.nombre, telefono: v.telefono, torre: v.torre, apto: v.apto } : null;
 }
 
 const MODALIDADES_ENTREGA = ['DOMICILIO', 'RECOGER'];
@@ -156,16 +202,23 @@ function filtrosListado(query) {
   const texto = typeof q === 'string' ? q.trim() : '';
   if (texto) {
     const f = interpretarBusqueda(texto);
+    // El nombre/dirección que se busca es el del Domicilio (lo único de la persona que ve
+    // el operador); la cuenta enlazada solo vale para paquetes anteriores a S1.1 sin Domicilio.
     const o = [
       { guia: { contains: texto, mode: 'insensitive' } },
       { etiquetaNombre: { contains: texto, mode: 'insensitive' } },
-      { residente: { is: { nombre: { contains: texto, mode: 'insensitive' } } } },
+      { domicilio: { is: { nombreRecibe: { contains: texto, mode: 'insensitive' } } } },
+      { domicilioId: null, residente: { is: { nombre: { contains: texto, mode: 'insensitive' } } } },
     ];
     if (f.apto || f.torre) {
+      const d = {};
+      if (f.apto) d.apto = { startsWith: f.apto };
+      if (f.torre) d.torre = { in: [f.torre, `T${f.torre}`, `TORRE ${f.torre}`], mode: 'insensitive' };
+      o.push({ domicilio: { is: d } });
       const r = [{ role: 'RESIDENT' }];
       if (f.apto) r.push({ apto: { startsWith: f.apto } });
       if (f.torre) r.push({ torre: { in: [`TORRE ${f.torre}`, `T${f.torre}`, f.torre], mode: 'insensitive' } });
-      o.push({ residente: { is: { AND: r } } });
+      o.push({ domicilioId: null, residente: { is: { AND: r } } });
     }
     y.push({ OR: o });
   }
@@ -193,6 +246,8 @@ export async function listAll(req, res) {
       // Sin fotoUrl ni pin (ni bonoId) desde la consulta: no se leen de la base.
       select: {
         ...selectSinFoto({ quitar: ['bonoId'] }),
+        domicilio: SELECT_DOMICILIO_PAQUETE,
+        // Solo para paquetes anteriores a S1.1 sin Domicilio.
         residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
         bono: { select: { id: true, categoriaPeso: true, cantidadTotal: true, cantidadUsada: true } },
       },
@@ -205,10 +260,14 @@ export async function listAll(req, res) {
   // La cortesía es del PRIMER PAQUETE DEL APARTAMENTO QUE SE COBRA (no del más
   // antiguo en crearse; ver domain/cobro.js): se marca para que el operador vea
   // de un vistazo a quién no debe cobrarle. Coherente con resolverCobro().
-  const primeras = await idsPrimeraEntrega({ residenteIds: packages.map((p) => p.residenteId) });
+  const primeras = await idsPrimeraEntrega({
+    residenteIds: packages.map((p) => p.residenteId), domicilioIds: packages.map((p) => p.domicilioId),
+  });
 
-  const items = packages.map((p) => ({
+  const items = packages.map(({ domicilio, residente, ...p }) => ({
     ...p,
+    // Misma forma de siempre ({ nombre, telefono, torre, apto }), tomada del Domicilio.
+    residente: residenteParaOperador({ ...p, domicilio, residente }),
     // Sin residente no hay cortesía de primera entrega. `etiquetaNombre` ya
     // viaja en `p`: la vista lo muestra cuando `residente` es null.
     esPrimeraEntrega: primeras.has(p.id),
@@ -301,11 +360,15 @@ export async function checkin(req, res) {
   const actual = await prisma.package.findUnique({
     where: { id: req.params.id },
     select: {
-      residenteId: true, createdAt: true,
-      residente: { select: { id: true, torre: true, apto: true, nombre: true, email: true, telefono: true } },
+      residenteId: true, domicilioId: true, createdAt: true,
+      domicilio: SELECT_DOMICILIO_PAQUETE,
+      residente: { select: { id: true, torre: true, apto: true, nombre: true, telefono: true } },
     },
   });
   if (!actual) throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos ese paquete. Actualiza la lista e intenta de nuevo.', 404);
+  // Destino para el cobro: la dirección del paquete (cortesía por apartamento físico).
+  const vista = vistaResidente(actual);
+  const destino = vista && { ...vista, domicilioId: actual.domicilioId };
 
   // Se valida antes de consultar bonos (categoriaPeso es un enum en la base);
   // calcularCobro() la vuelve a validar como defensa.
@@ -329,7 +392,7 @@ export async function checkin(req, res) {
     transicionar(fresco.estado, EVENTOS.RECIBIR);
 
     const r = await resolverCobro(tx, {
-      conjunto, residente: actual.residente, categoria: categoriaPeso, paqueteId: fresco.id,
+      conjunto, residente: destino, categoria: categoriaPeso, paqueteId: fresco.id,
     });
     const pkg = await aplicarEvento(tx, fresco, EVENTOS.RECIBIR, {
       actorId: req.user.sub,
@@ -352,7 +415,7 @@ export async function checkin(req, res) {
   const { pkg, bono, esPrimera } = resultado;
 
   // Correo de llegada, ya confirmada la transacción (el aviso de WhatsApp sigue manual).
-  enviarAvisoLlegada(req.app.locals.notificador, { residente: actual.residente, paquete: pkg, conjunto });
+  enviarAvisoLlegada(req.app.locals.notificador, { residente: await contactoParaNotificar(actual.residenteId), paquete: pkg, conjunto });
 
   res.json({
     ...pkg,
@@ -382,6 +445,7 @@ export async function asignar(req, res) {
     operadorId: req.user.sub,
     paqueteId: req.params.id,
     residenteId: req.body?.residenteId,
+    domicilioId: req.body?.domicilioId,
     notificador: req.app.locals.notificador,
   }));
 }
@@ -424,10 +488,11 @@ export async function exportCsv(req, res) {
   const packages = await prisma.package.findMany({
     where,
     select: {
-      id: true, fechaIngreso: true, residenteId: true, etiquetaNombre: true, proveedor: true, guia: true,
+      id: true, fechaIngreso: true, residenteId: true, domicilioId: true, etiquetaNombre: true, proveedor: true, guia: true,
       pinProveedor: true, categoriaPeso: true, costoServicio: true, estado: true, franjaHoraria: true,
       metodoPagoServicio: true, esContraEntregaProveedor: true, valorProductoProveedor: true,
       valorDeclarado: true, notas: true, fechaEntrega: true,
+      domicilio: SELECT_DOMICILIO_PAQUETE,
       residente: { select: { nombre: true, telefono: true, torre: true, apto: true } },
       bono: { select: { id: true } },
     },
@@ -439,9 +504,12 @@ export async function exportCsv(req, res) {
   // cobró, sin tener que adivinar. Se calcula sobre TODO el historial de los
   // apartamentos exportados (sin el filtro desde/hasta), porque el primer paquete
   // cobrado de un apartamento puede quedar fuera del rango exportado.
-  const primeras = await idsPrimeraEntrega({ residenteIds: packages.map((p) => p.residenteId) });
+  const primeras = await idsPrimeraEntrega({
+    residenteIds: packages.map((p) => p.residenteId), domicilioIds: packages.map((p) => p.domicilioId),
+  });
 
-  const rows = packages.map((p) => {
+  const rows = packages.map((p0) => {
+    const p = { ...p0, residente: residenteParaOperador(p0) };
     const motivoGratis = primeras.has(p.id) ? 'Primera entrega' : p.bono ? 'Bono prepago' : '';
     return [
       p.id, p.fechaIngreso.toISOString(), p.residente?.torre ?? '', p.residente?.apto ?? '',
@@ -508,20 +576,17 @@ export async function confirmDelivery(req, res) {
       actorId: req.user.sub,
       cambios: { fechaEntrega: new Date() },
     });
-    return tx.package.findUnique({
-      where: { id: pkg.id },
-      select: { ...selectSinFoto(), residente: { select: { nombre: true, email: true } } },
-    });
+    return tx.package.findUnique({ where: { id: pkg.id }, select: selectSinFoto() });
   });
 
-  // Un paquete sin residente no tiene a quién agradecer.
-  if (updated.residente?.email) {
+  // Un paquete sin residente no tiene a quién agradecer. Correo de la cuenta (uso interno).
+  const contacto = await contactoParaNotificar(updated.residenteId);
+  if (contacto?.email) {
     const conjunto = await conjuntoDelContexto();
     enSegundoPlano('entrega', () => req.app.locals.notificador.agradecerEntrega({
-      residente: updated.residente, paquetes: [{ id: updated.id, proveedor: updated.proveedor, categoriaPeso: updated.categoriaPeso }], conjunto,
+      residente: contacto, paquetes: [{ id: updated.id, proveedor: updated.proveedor, categoriaPeso: updated.categoriaPeso }], conjunto,
     }));
   }
 
-  const { residente, ...pkgSinResidente } = updated;
-  res.json({ ...pkgSinResidente, pin: undefined });
+  res.json({ ...updated, pin: undefined });
 }

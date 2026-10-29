@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -32,7 +33,8 @@ async function limpiar() {
     await purgarEventos(prisma, c.id);
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: SLUG } });
@@ -50,7 +52,7 @@ const asignar = (id, residenteId) => api(`/api/packages/${id}/asignar`, { method
 let hash;
 async function residente({ torre, apto, nombre } = {}) {
   n += 1;
-  return enA(() => prisma.user.create({
+  return enA(() => crearUsuarioDeContexto(prisma, {
     data: {
       email: `r${n}@itestf2.local`, passwordHash: hash, role: 'RESIDENT', nombre: nombre ?? `Res F2 ${n}`,
       telefono: '3001234567', torre, apto, termsAcceptedAt: new Date(),
@@ -68,7 +70,7 @@ test('setup', { skip }, async () => {
   ctx.A = (await prisma.conjunto.create({
     data: { nombre: SLUG, slug: SLUG, codigoInvitacion: `${SLUG}-cod`, operadorNombre: 'Op', operadorWhatsapp: '573000000000', operadorDomicilio: 'Dir', puntoRecepcion: 'Recepción' },
   })).id;
-  await enA(() => prisma.user.create({
+  await enA(() => crearUsuarioDeContexto(prisma, {
     data: { email: 'op@itestf2.local', passwordHash: hash, role: 'OPERATOR', nombre: 'Op', telefono: '3000000000', termsAcceptedAt: new Date() },
   }));
   await new Promise((resolve) => { server = createApp().listen(0, () => { base = `http://127.0.0.1:${server.address().port}`; resolve(); }); });

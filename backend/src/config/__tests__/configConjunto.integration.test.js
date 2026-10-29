@@ -7,6 +7,7 @@ import { AppError } from '../../domain/errores.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 function hostDeDatabaseUrl(url) {
   if (!url) return null;
@@ -59,7 +60,8 @@ async function limpiar() {
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.bono.deleteMany({});
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -87,10 +89,10 @@ test('setup', { skip: omitir && razonSkip }, async () => {
 
   // Un operador en cada conjunto (para login y /conjunto/config).
   await runWithTenant({ conjuntoId: A.id, role: 'OPERATOR' }, async () => {
-    await prisma.user.create({ data: { email: 'opa@itestd.local', passwordHash: await bcryptHash(PWD), role: 'OPERATOR', nombre: 'OpA', telefono: '1', termsAcceptedAt: new Date() } });
+    await crearUsuarioDeContexto(prisma, { data: { email: 'opa@itestd.local', passwordHash: await bcryptHash(PWD), role: 'OPERATOR', nombre: 'OpA', telefono: '1', termsAcceptedAt: new Date() } });
   });
   await runWithTenant({ conjuntoId: B.id, role: 'OPERATOR' }, async () => {
-    const r = await prisma.user.create({ data: { email: 'resb@itestd.local', passwordHash: await bcryptHash(PWD), role: 'RESIDENT', nombre: 'ResB', telefono: '1', termsAcceptedAt: new Date() } });
+    const r = await crearUsuarioDeContexto(prisma, { data: { email: 'resb@itestd.local', passwordHash: await bcryptHash(PWD), role: 'RESIDENT', nombre: 'ResB', telefono: '1', termsAcceptedAt: new Date() } });
     ctx.resB = r.id;
   });
 

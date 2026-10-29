@@ -29,22 +29,21 @@ import { resolverCobro } from './cobro.service.js';
 import { conjuntoDelContexto } from './conjunto.service.js';
 import { armarAviso, enviarAvisoLlegada } from './avisos.service.js';
 import { subirFotos, registrarFotos, descartarSubidas } from './fotos.service.js';
+import { resolverDomicilio, vistaResidente, nulaSiVacia, SELECT_DOMICILIO_PAQUETE } from './domicilio.service.js';
+import { contactoParaNotificar } from './usuario.service.js';
 
 export const VENTANA_IDEMPOTENCIA_MS = 24 * 60 * 60 * 1000;
 
-const noEncontradoResidente = () => new AppError(
-  CODIGOS.NO_ENCONTRADO,
-  'No encontramos a ese residente. Búscalo de nuevo e intenta otra vez.',
-  404,
-);
-
-async function buscarResidente(tx, id) {
-  const residente = await tx.user.findFirst({
-    where: { id, role: 'RESIDENT' },
-    select: { id: true, nombre: true, telefono: true, torre: true, apto: true },
-  });
-  if (!residente) throw noEncontradoResidente();
-  return residente;
+// Destino del paquete: el Domicilio (en ESTE conjunto: uno de otro conjunto no existe aquí).
+// Devuelve la forma "residente" que consumen el cobro y el aviso, más `domicilioId`.
+// PLAN-conjunto S1.2: `domicilioId` preferido; `residenteId` (compatibilidad) resuelve el
+// domicilio más reciente de esa persona en este conjunto.
+async function buscarDestino(tx, { domicilioId, residenteId }) {
+  const d = await resolverDomicilio(tx, { domicilioId, residenteId });
+  return {
+    id: d.usuarioId, domicilioId: d.id, nombre: d.nombreRecibe, telefono: d.telefono,
+    torre: nulaSiVacia(d.torre), apto: nulaSiVacia(d.apto),
+  };
 }
 
 // Respuesta común de recepción y asignar. Lee el estado ya confirmado en la base,
@@ -54,8 +53,10 @@ export async function armarRespuesta(paqueteId, conjunto) {
   const p = await prisma.package.findUnique({
     where: { id: paqueteId },
     select: {
-      id: true, estado: true, residenteId: true, etiquetaNombre: true, categoriaPeso: true, costoServicio: true,
+      id: true, estado: true, residenteId: true, domicilioId: true, etiquetaNombre: true, categoriaPeso: true, costoServicio: true,
       guia: true, transportadora: true, recibidoEn: true,
+      domicilio: SELECT_DOMICILIO_PAQUETE,
+      // Solo para paquetes anteriores a S1.1 que aún no tengan Domicilio.
       residente: { select: { id: true, nombre: true, telefono: true, torre: true, apto: true } },
     },
   });
@@ -64,12 +65,13 @@ export async function armarRespuesta(paqueteId, conjunto) {
     where: { paqueteId, tipo: { in: [EVENTOS.RECIBIR, EVENTOS.ASIGNAR] } },
     orderBy: { creadoEn: 'desc' },
   });
-  const r = p.residente;
+  const r = vistaResidente(p);
   const motivoCobro = evento?.datos?.motivoCobro ?? null;
   const paquete = {
     id: p.id,
     estado: p.estado,
     residenteId: p.residenteId,
+    domicilioId: p.domicilioId,
     nombre: r?.nombre ?? p.etiquetaNombre ?? null,
     torre: r?.torre ?? null,
     apto: r?.apto ?? null,
@@ -122,8 +124,8 @@ export async function recibirPaquete({ operadorId, body, claveCabecera, notifica
       const ahora = new Date();
       let paquete;
 
-      if (datos.residenteId) {
-        const residente = await buscarResidente(tx, datos.residenteId);
+      if (datos.domicilioId || datos.residenteId) {
+        const residente = await buscarDestino(tx, datos);
         const abiertas = await tx.package.findMany({
           where: { residenteId: residente.id, estado: ESTADOS.PREALERTADO },
           select: { id: true, guia: true, createdAt: true },
@@ -151,6 +153,7 @@ export async function recibirPaquete({ operadorId, body, claveCabecera, notifica
           // Datos que trae el operador y la pre-alerta no tenía.
           if (datos.transportadora && !fresco.transportadora) cambios.transportadora = datos.transportadora;
           if (datos.guia && !normalizarGuia(fresco.guia)) cambios.guia = datos.guia;
+          if (!fresco.domicilioId) cambios.domicilioId = residente.domicilioId;
           paquete = await aplicarEvento(tx, fresco, EVENTOS.RECIBIR, {
             actorId: operadorId, datos: eventoDatos, cambios,
           });
@@ -161,6 +164,7 @@ export async function recibirPaquete({ operadorId, body, claveCabecera, notifica
             data: {
               id: nuevoId,
               residenteId: residente.id,
+              domicilioId: residente.domicilioId,
               etiquetaNombre: datos.etiquetaNombre,
               proveedor: datos.transportadora ?? PROVEEDOR_POR_DEFECTO,
               guia: datos.guia ?? GUIA_POR_DEFECTO,
@@ -226,12 +230,13 @@ async function avisarLlegadaDe(notificador, paqueteId, conjunto, aviso) {
   if (!notificador || !aviso) return; // sin dueño no hay a quién avisar
   try {
     // El correo de llegada lleva el PIN (solo para su dueño), pero nunca la foto.
-    const p = await prisma.package.findUnique({
+    const paquete = await prisma.package.findUnique({
       where: { id: paqueteId },
-      select: { ...selectSinFoto({ conPin: true }), residente: { select: { id: true, nombre: true, email: true, telefono: true } } },
+      select: selectSinFoto({ conPin: true }),
     });
-    if (!p?.residente?.email) return;
-    const { residente, ...paquete } = p;
+    // Correo de la cuenta (uso interno; el id sale del paquete ya filtrado por tenant).
+    const residente = await contactoParaNotificar(paquete?.residenteId);
+    if (!residente?.email) return;
     enviarAvisoLlegada(notificador, { residente, paquete, conjunto });
   } catch {
     console.error('[notificador] fallo al preparar "llegada"');
@@ -239,9 +244,10 @@ async function avisarLlegadaDe(notificador, paqueteId, conjunto, aviso) {
 }
 
 /** Asigna un residente a un paquete SIN_ASIGNAR y calcula su cobro (SIN_ASIGNAR -> EN_RECEPCION). */
-export async function asignarPaquete({ operadorId, paqueteId, residenteId, notificador }) {
-  if (typeof residenteId !== 'string' || !residenteId) {
-    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Elige el residente al que se le asigna el paquete.', 400, { campo: 'residenteId' });
+export async function asignarPaquete({ operadorId, paqueteId, residenteId, domicilioId, notificador }) {
+  const destinoId = domicilioId || residenteId;
+  if (typeof destinoId !== 'string' || !destinoId) {
+    throw new AppError(CODIGOS.DATOS_INVALIDOS, 'Elige el residente al que se le asigna el paquete.', 400, { campo: domicilioId ? 'domicilioId' : 'residenteId' });
   }
   const conjunto = await conjuntoDelContexto();
 
@@ -252,7 +258,7 @@ export async function asignarPaquete({ operadorId, paqueteId, residenteId, notif
     }
     // Transición primero: un paquete que no está sin asignar no debe gastar bono.
     transicionar(fresco.estado, EVENTOS.ASIGNAR);
-    const residente = await buscarResidente(tx, residenteId);
+    const residente = await buscarDestino(tx, domicilioId ? { domicilioId } : { residenteId });
     const r = await resolverCobro(tx, {
       conjunto, residente, categoria: fresco.categoriaPeso, paqueteId: fresco.id,
     });
@@ -262,7 +268,7 @@ export async function asignarPaquete({ operadorId, paqueteId, residenteId, notif
         residenteId: residente.id, categoriaPeso: fresco.categoriaPeso,
         motivoCobro: r.cobro.motivo, monto: r.cobro.monto, bonoId: r.bonoId,
       },
-      cambios: { residenteId: residente.id, costoServicio: r.cobro.monto, bonoId: r.bonoId },
+      cambios: { residenteId: residente.id, domicilioId: residente.domicilioId, costoServicio: r.cobro.monto, bonoId: r.bonoId },
     });
   });
 

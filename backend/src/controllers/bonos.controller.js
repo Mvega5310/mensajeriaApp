@@ -2,6 +2,7 @@ import { AppError, CODIGOS } from '../domain/errores.js';
 import { prisma } from '../config/db.js';
 import { esCategoriaValida } from '../services/tariff.service.js';
 import { conjuntoDelContexto } from '../services/conjunto.service.js';
+import { domicilioDePersona } from '../services/domicilio.service.js';
 
 // Operador: registra que un residente pagó por adelantado un lote de
 // entregas en una categoría de peso — monto y cantidad libres, el
@@ -29,8 +30,10 @@ export async function create(req, res) {
     throw new AppError(CODIGOS.DATOS_INVALIDOS, 'El precio pagado no es válido. Escribe un valor numérico.', 400);
   }
 
-  const residente = await prisma.user.findUnique({ where: { id: residenteId } });
-  if (!residente || residente.role !== 'RESIDENT') {
+  // "Residente de tu conjunto" = persona con Domicilio en el conjunto del contexto (la
+  // cuenta ya no pertenece a un conjunto; el Domicilio sí y está aislado por tenant).
+  const residente = typeof residenteId === 'string' ? await domicilioDePersona(residenteId) : null;
+  if (!residente) {
     throw new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos a ese residente en tu conjunto. Revisa e intenta de nuevo.', 404);
   }
 

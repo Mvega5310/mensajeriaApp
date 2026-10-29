@@ -13,19 +13,41 @@ import {
   esPrimeraEntrega, calcularCobro, primerasEntregas, MOTIVOS_COBRO, ESTADOS_COBRADOS,
 } from '../domain/cobro.js';
 import { EVENTOS } from '../domain/paquete.machine.js';
+import { vistaResidente } from './domicilio.service.js';
 
-// Cuentas (ids) del MISMO apartamento físico que `residente`. Torre/apto
-// incompletos => la cuenta sola. El filtro por apto en la base solo acota la
-// lectura; la igualdad real es por clave normalizada ("TORRE 2" = "T2").
-async function idsDelApartamento(tx, residente, clave) {
-  if (clave.startsWith('cuenta:')) return [residente.id];
-  const candidatos = await tx.user.findMany({
-    where: { role: 'RESIDENT', apto: { contains: normalizarApto(residente.apto) } },
-    select: { id: true, torre: true, apto: true },
+// Cobro por APARTAMENTO FÍSICO del conjunto (no por persona). Desde PLAN-conjunto S1.1 el
+// apartamento sale del Domicilio (no de la cuenta): dos personas con cuentas distintas y
+// Domicilios en el mismo torre/apto comparten cortesía y lote. La clave sigue siendo la
+// de `claveApartamento` (torre token | apto), así que las filas existentes de
+// CortesiaApartamento siguen valiendo sin migrarlas.
+
+const sinRepetidos = (xs) => [...new Set(xs.filter(Boolean))];
+
+// Domicilios (del conjunto del contexto) del MISMO apartamento físico que `residente`.
+// Torre/apto incompletos => solo su domicilio. El filtro por apto en la base solo acota
+// la lectura; la igualdad real es por clave normalizada ("TORRE 2" = "T2").
+async function domiciliosDelApartamento(tx, residente, clave) {
+  if (clave.startsWith('cuenta:')) {
+    return residente.domicilioId ? [{ id: residente.domicilioId, usuarioId: residente.id }] : [];
+  }
+  const candidatos = await tx.domicilio.findMany({
+    where: { apto: normalizarApto(residente.apto) },
+    select: { id: true, usuarioId: true, torre: true, apto: true },
   });
-  const ids = candidatos.filter((u) => claveDeResidente(u) === clave).map((u) => u.id);
-  return ids.includes(residente.id) ? ids : [...ids, residente.id];
+  const mismos = candidatos.filter((d) => claveDeResidente({ id: d.usuarioId, torre: d.torre, apto: d.apto }) === clave);
+  if (residente.domicilioId && !mismos.some((d) => d.id === residente.domicilioId)) {
+    mismos.push({ id: residente.domicilioId, usuarioId: residente.id });
+  }
+  return mismos;
 }
+
+// Paquetes de esos domicilios; los anteriores a S1.1 sin Domicilio se cuentan por su cuenta.
+const filtroDeDomicilios = (doms) => ({
+  OR: [
+    { domicilioId: { in: doms.map((d) => d.id) } },
+    { domicilioId: null, residenteId: { in: sinRepetidos(doms.map((d) => d.usuarioId)) } },
+  ],
+});
 
 // Reserva la cortesía del apartamento insertando su fila en CortesiaApartamento.
 // `createMany({ skipDuplicates })` es INSERT ... ON CONFLICT DO NOTHING (Prisma
@@ -60,9 +82,11 @@ export async function resolverCobro(tx, { conjunto, residente, categoria, paquet
   let primera = false;
   if (residente) {
     const clave = claveDeResidente(residente);
-    const ids = await idsDelApartamento(tx, residente, clave);
+    const doms = await domiciliosDelApartamento(tx, residente, clave);
+    // Sin ningún domicilio (residente legado sin Domicilio): la cuenta sola, como antes.
+    const filtro = doms.length ? filtroDeDomicilios(doms) : { residenteId: residente.id };
     const delApto = await tx.package.findMany({
-      where: { residenteId: { in: ids }, estado: { in: [...ESTADOS_COBRADOS] }, id: { not: paqueteId } },
+      where: { ...filtro, estado: { in: [...ESTADOS_COBRADOS] }, id: { not: paqueteId } },
       select: { id: true, estado: true, residenteId: true },
       take: 1,
     });
@@ -118,26 +142,27 @@ export async function resolverCobro(tx, { conjunto, residente, categoria, paquet
 }
 
 /**
- * Cuentas (ids) de los apartamentos físicos a los que pertenecen `residenteIds`,
- * en UNA lectura de usuarios (el filtro por apto en la base solo acota; la igualdad
- * real es por clave normalizada, igual que idsDelApartamento).
+ * Domicilios de los apartamentos físicos a los que pertenecen los paquetes que se
+ * muestran (por `domicilioIds` y/o por las cuentas `residenteIds`), en UNA lectura (el
+ * filtro por apto en la base solo acota; la igualdad real es por clave normalizada).
  */
-async function idsDeApartamentosDe(residenteIds) {
-  const base = await prisma.user.findMany({
-    where: { id: { in: residenteIds } },
-    select: { id: true, torre: true, apto: true },
+async function domiciliosDeApartamentosDe({ residenteIds, domicilioIds }) {
+  const base = await prisma.domicilio.findMany({
+    where: { OR: [{ id: { in: domicilioIds } }, { usuarioId: { in: residenteIds } }] },
+    select: { id: true, usuarioId: true, torre: true, apto: true },
   });
-  const claves = new Set(base.map((u) => claveDeResidente(u)));
-  const aptos = [...new Set(base.map((u) => normalizarApto(u.apto)).filter(Boolean))];
-  const ids = new Set(base.map((u) => u.id));
+  const clave = (d) => claveDeResidente({ id: d.usuarioId, torre: d.torre, apto: d.apto });
+  const claves = new Set(base.map(clave));
+  const aptos = sinRepetidos(base.map((d) => normalizarApto(d.apto)));
+  const doms = new Map(base.map((d) => [d.id, d]));
   if (aptos.length) {
-    const candidatos = await prisma.user.findMany({
-      where: { role: 'RESIDENT', OR: aptos.map((a) => ({ apto: { contains: a } })) },
-      select: { id: true, torre: true, apto: true },
+    const candidatos = await prisma.domicilio.findMany({
+      where: { apto: { in: aptos } },
+      select: { id: true, usuarioId: true, torre: true, apto: true },
     });
-    for (const u of candidatos) if (claves.has(claveDeResidente(u))) ids.add(u.id);
+    for (const d of candidatos) if (claves.has(clave(d))) doms.set(d.id, d);
   }
-  return [...ids];
+  return [...doms.values()];
 }
 
 /**
@@ -145,21 +170,24 @@ async function idsDeApartamentosDe(residenteIds) {
  * listado del operador y el CSV ("Primera vez"). La cortesía es del primer paquete
  * COBRADO del apartamento (que puede estar fuera de un filtro de estado o de
  * fechas), así que se lee el historial completo, pero SOLO de los apartamentos de
- * `residenteIds` (los que se están mostrando), no de todo el conjunto, y solo los
+ * los paquetes que se están mostrando, no de todo el conjunto, y solo los
  * eventos RECIBIR/ASIGNAR de esos paquetes. Nada de fotoUrl/pin. Fuera de
  * transacción; usa el contexto.
- * @param {{residenteIds: Array<string|null>}} p
+ * @param {{residenteIds?: Array<string|null>, domicilioIds?: Array<string|null>}} p
  * @returns {Promise<Set<string>>}
  */
-export async function idsPrimeraEntrega({ residenteIds }) {
-  const alcance = [...new Set((residenteIds ?? []).filter(Boolean))];
-  if (!alcance.length) return new Set();
-  const cuentas = await idsDeApartamentosDe(alcance);
+export async function idsPrimeraEntrega({ residenteIds, domicilioIds }) {
+  const ur = sinRepetidos(residenteIds ?? []);
+  const dm = sinRepetidos(domicilioIds ?? []);
+  if (!ur.length && !dm.length) return new Set();
+  const doms = await domiciliosDeApartamentosDe({ residenteIds: ur, domicilioIds: dm });
+  const filtro = doms.length ? filtroDeDomicilios(doms) : { residenteId: { in: ur } };
   const paquetes = await prisma.package.findMany({
-    where: { residenteId: { in: cuentas }, estado: { in: [...ESTADOS_COBRADOS] } },
+    where: { ...filtro, estado: { in: [...ESTADOS_COBRADOS] } },
     select: {
       id: true, estado: true, residenteId: true, createdAt: true, recibidoEn: true,
-      residente: { select: { id: true, torre: true, apto: true } },
+      domicilio: { select: { nombreRecibe: true, telefono: true, torre: true, apto: true } },
+      residente: { select: { id: true, nombre: true, telefono: true, torre: true, apto: true } },
     },
   });
   if (!paquetes.length) return new Set();
@@ -174,7 +202,7 @@ export async function idsPrimeraEntrega({ residenteIds }) {
     const e = porPaquete.get(p.id);
     return {
       id: p.id,
-      clave: claveDeResidente(p.residente),
+      clave: claveDeResidente(vistaResidente(p)),
       estado: p.estado,
       residenteId: p.residenteId,
       motivoCobro: e ? (e.datos?.motivoCobro ?? null) : null,

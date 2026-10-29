@@ -13,6 +13,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 const dbUrl = process.env.DATABASE_URL;
 let dbHost = null;
@@ -41,7 +42,8 @@ async function limpiar() {
   await purgarEventos(prisma, c.id);
   await enConjunto(c.id, async () => {
     await prisma.package.deleteMany({});
-    await prisma.user.deleteMany({});
+    await prisma.domicilio.deleteMany({});
+    await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
   });
   await prisma.conjunto.deleteMany({ where: { slug: SLUG } });
 }
@@ -93,7 +95,7 @@ test('setup', { skip }, async () => {
       operadorDomicilio: 'Dir', puntoRecepcion: 'Recepción',
     },
   })).id;
-  const user = (email, role, nombre, torre, apto) => enA(() => prisma.user.create({
+  const user = (email, role, nombre, torre, apto) => enA(() => crearUsuarioDeContexto(prisma, {
     data: { email, passwordHash: hash, role, nombre, telefono: '3001112222', torre, apto, termsAcceptedAt: new Date() },
   }));
   ctx.op = await user('op@f.local', 'OPERATOR', 'Operador', null, null);

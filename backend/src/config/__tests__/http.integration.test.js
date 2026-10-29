@@ -8,6 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 function hostDeDatabaseUrl(url) {
   if (!url) return null;
@@ -66,7 +67,8 @@ async function limpiar() {
     await purgarEventos(prisma, c.id);
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -107,7 +109,7 @@ test('setup: levantar app en puerto efímero y sembrar datos', { skip: omitir &&
   // Operador de cada conjunto + un paquete de cada uno (sembrados directo en su
   // contexto; register solo crea RESIDENT).
   await runWithTenant({ conjuntoId: A.id, role: 'OPERATOR' }, async () => {
-    const opA = await prisma.user.create({
+    const opA = await crearUsuarioDeContexto(prisma, {
       data: {
         email: 'opa@itesth.local', passwordHash: await bcryptHash(PWD),
         role: 'OPERATOR', nombre: 'OpA', telefono: '1', termsAcceptedAt: new Date(),
@@ -118,7 +120,7 @@ test('setup: levantar app en puerto efímero y sembrar datos', { skip: omitir &&
     ctx.pA = pA.id;
   });
   await runWithTenant({ conjuntoId: B.id, role: 'OPERATOR' }, async () => {
-    const opB = await prisma.user.create({
+    const opB = await crearUsuarioDeContexto(prisma, {
       data: {
         email: 'opb@itesth.local', passwordHash: await bcryptHash(PWD),
         role: 'OPERATOR', nombre: 'OpB', telefono: '1', termsAcceptedAt: new Date(),

@@ -8,7 +8,7 @@
 
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../src/config/db.js';
-import { runWithTenant } from '../../src/config/tenantContext.js';
+import { crearOperador } from '../../src/services/usuario.service.js';
 import { buscarUsuarioPorEmailSinTenant } from '../../src/controllers/auth.controller.js';
 import { generarCodigoInvitacion } from '../../src/services/invitacion.service.js';
 import { cumplePoliticaPassword, PASSWORD_POLICY_MSG } from '../../src/services/password.service.js';
@@ -93,9 +93,8 @@ export async function altaDeConjunto(datos) {
   //    dejar uno sin el otro. El operador necesita el conjuntoId, así que dentro
   //    de la txn se crea primero el conjunto (con `tx`) y ese id alimenta el
   //    contexto de tenant para crear el operador, también con `tx`.
-  //    Nota: la extensión de tenant se preserva en el cliente transaccional, así
-  //    que tx.user.create bajo runWithTenant fuerza el conjuntoId igual; y
-  //    tx.conjunto.create es modelo exento (pasa sin contexto).
+  //    Nota: `User` ya no está bajo la extensión de tenant (el operador se crea con su
+  //    conjuntoId explícito vía usuario.service.js); tx.conjunto.create es modelo exento.
   const { conjunto, operador } = await prisma.$transaction(async (tx) => {
     const conjuntoTx = await tx.conjunto.create({
       data: {
@@ -114,18 +113,9 @@ export async function altaDeConjunto(datos) {
       },
     });
 
-    const operadorTx = await runWithTenant({ conjuntoId: conjuntoTx.id, role: 'OPERATOR' }, () =>
-      tx.user.create({
-        data: {
-          email: operadorEmail,
-          passwordHash,
-          role: 'OPERATOR',
-          nombre: operadorNombre,
-          telefono: '',
-          termsAcceptedAt: new Date(),
-        },
-      })
-    );
+    const operadorTx = await crearOperador({
+      conjuntoId: conjuntoTx.id, email: operadorEmail, passwordHash, nombre: operadorNombre, telefono: '',
+    }, tx);
 
     return { conjunto: conjuntoTx, operador: operadorTx };
   });

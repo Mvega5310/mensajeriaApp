@@ -6,6 +6,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { purgarEventos } from '../../../test-support/purgarEventos.js';
+import { crearUsuarioDeContexto } from '../../../test-support/usuarios.js';
 
 function hostDeDatabaseUrl(url) {
   if (!url) return null;
@@ -51,7 +52,7 @@ async function crearConjunto(slug, codigo, extra) {
 // Crea un usuario dentro del contexto del conjunto (rol/torre/apto opcionales).
 async function crearUsuario(conjuntoId, { email, role = 'RESIDENT', torre = null, apto = null }) {
   return runWithTenant({ conjuntoId, role: 'OPERATOR' }, () =>
-    prisma.user.create({
+    crearUsuarioDeContexto(prisma, {
       data: { email, passwordHash: 'x', role, nombre: email, telefono: '1', torre, apto, termsAcceptedAt: new Date() },
     })
   );
@@ -65,7 +66,8 @@ async function limpiar() {
       await prisma.bono.deleteMany({});
       await prisma.comentario.deleteMany({});
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -99,10 +101,10 @@ test('setup', { skip: omitir && razonSkip }, async () => {
 
   // Operadores con hash real (para login), cada uno en su conjunto.
   await runWithTenant({ conjuntoId: A.id, role: 'OPERATOR' }, async () => {
-    await prisma.user.create({ data: { email: 'opa@e.local', passwordHash: await bcryptHash(PWD), role: 'OPERATOR', nombre: 'OpA', telefono: '1', termsAcceptedAt: new Date() } });
+    await crearUsuarioDeContexto(prisma, { data: { email: 'opa@e.local', passwordHash: await bcryptHash(PWD), role: 'OPERATOR', nombre: 'OpA', telefono: '1', termsAcceptedAt: new Date() } });
   });
   await runWithTenant({ conjuntoId: B.id, role: 'OPERATOR' }, async () => {
-    await prisma.user.create({ data: { email: 'opb@e.local', passwordHash: await bcryptHash(PWD), role: 'OPERATOR', nombre: 'OpB', telefono: '1', termsAcceptedAt: new Date() } });
+    await crearUsuarioDeContexto(prisma, { data: { email: 'opb@e.local', passwordHash: await bcryptHash(PWD), role: 'OPERATOR', nombre: 'OpB', telefono: '1', termsAcceptedAt: new Date() } });
   });
 
   const app = createApp();

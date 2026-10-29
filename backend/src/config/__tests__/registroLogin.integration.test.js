@@ -91,7 +91,8 @@ async function limpiar() {
     await purgarEventos(prisma, c.id);
     await runWithTenant({ conjuntoId: c.id, role: 'OPERATOR' }, async () => {
       await prisma.package.deleteMany({});
-      await prisma.user.deleteMany({});
+      await prisma.domicilio.deleteMany({});
+      await prisma.user.deleteMany({ where: { conjuntoId: c.id } });
     });
   }
   await prisma.conjunto.deleteMany({ where: { slug: { in: [SLUG_A, SLUG_B] } } });
@@ -133,17 +134,19 @@ test('register con código válido crea el usuario en el conjunto correcto', { s
   assert.equal(res.statusCode, 201);
   ctx.uA = res.body.id;
 
-  // Verificar que quedó en A (leyendo dentro del contexto de A).
+  // La cuenta es de la persona (S1.1): queda con A como "último conjunto usado".
+  const u = await prisma.user.findUnique({ where: { id: ctx.uA } });
+  assert.ok(u, 'la cuenta debe existir');
+  assert.equal(u.conjuntoId, ctx.A);
+  assert.equal(u.role, 'RESIDENT');
+  // Su Domicilio (conjunto + torre + apto) queda en A y NO se ve desde B.
   await runWithTenant({ conjuntoId: ctx.A, role: 'OPERATOR' }, async () => {
-    const u = await prisma.user.findUnique({ where: { id: ctx.uA } });
-    assert.ok(u, 'el usuario debe existir en A');
-    assert.equal(u.conjuntoId, ctx.A);
-    assert.equal(u.role, 'RESIDENT');
+    const ds = await prisma.domicilio.findMany({ where: { usuarioId: ctx.uA } });
+    assert.equal(ds.length, 1, 'el registro crea su primer Domicilio en A');
+    assert.equal(ds[0].conjuntoId, ctx.A);
   });
-  // Y que NO se ve desde B.
   await runWithTenant({ conjuntoId: ctx.B, role: 'OPERATOR' }, async () => {
-    const u = await prisma.user.findUnique({ where: { id: ctx.uA } });
-    assert.equal(u, null, 'el usuario de A no debe verse desde B');
+    assert.equal(await prisma.domicilio.count({ where: { usuarioId: ctx.uA } }), 0, 'el Domicilio de A no debe verse desde B');
   });
 });
 

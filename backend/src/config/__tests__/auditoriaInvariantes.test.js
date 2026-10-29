@@ -7,7 +7,12 @@
 //     (archivo controllers/auth.controller.js);
 //  2. aparece una consulta cruda ($queryRaw/$executeRaw/$queryRawUnsafe/
 //     $executeRawUnsafe) fuera de la LISTA BLANCA (ver ARCHIVOS_RAW_PERMITIDOS);
-//  3. hay más de un `new PrismaClient(` en el código de producción.
+//  3. hay más de un `new PrismaClient(` en el código de producción;
+//  4. (S1.1) se accede a `User` (`prisma.user`/`tx.user`/`cliente.user`) fuera de
+//     services/usuario.service.js (y de buscarUsuarioPorEmailSinTenant en auth.controller.js);
+//  5. (S1.2) se accede a `UsuarioConjunto` fuera de services/domicilio.service.js;
+//  6. (S1.1) un modelo de schema.prisma con `conjuntoId` no está en MODELOS_CON_TENANT
+//     salvo las dos excepciones documentadas (User y UsuarioConjunto), o al revés.
 //
 // ÁMBITO: se escanea backend/src, backend/prisma Y backend/scripts (Fase F: los
 // scripts de alta/backfill también son código de producción que puede escribir).
@@ -117,4 +122,55 @@ test('E7.3: existe exactamente un new PrismaClient( (en config/db.js)', () => {
   }
   assert.equal(hallazgos.length, 1, `se esperaba exactamente 1 new PrismaClient(, hay ${hallazgos.length}: ${hallazgos.join(', ')}`);
   assert.ok(hallazgos[0].includes(join('config', 'db.js')), `el único new PrismaClient debe estar en config/db.js, está en ${hallazgos[0]}`);
+});
+
+// --- Regla 4 (S1.1): `User` ya no está bajo la extensión de tenant; todo acceso pasa por
+// services/usuario.service.js. Excepciones: buscarUsuarioPorEmailSinTenant (login/forgot,
+// auth.controller.js: UNA sola aparición) y los tests. ---
+test('E7.4: `prisma.user` solo en usuario.service.js (y una vez en buscarUsuarioPorEmailSinTenant)', () => {
+  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false }), ...archivosJs(SCRIPTS, { incluirTests: false })];
+  const ACCESO_USER = /\b(prisma|tx|cliente|client)\.user\b/;
+  const servicio = join('src', 'services', 'usuario.service.js');
+  const auth = join('src', 'controllers', 'auth.controller.js');
+  const ofensores = [];
+  let enAuth = 0;
+  for (const f of archivos) {
+    readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(linea) || !ACCESO_USER.test(linea)) return;
+      if (f.endsWith(servicio)) return;
+      if (f.endsWith(auth)) { enAuth += 1; return; }
+      ofensores.push(`${rel(f)}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(ofensores, [], `acceso a User fuera de usuario.service.js: ${ofensores.join(', ')}`);
+  assert.equal(enAuth, 1, 'auth.controller.js solo puede tocar User en buscarUsuarioPorEmailSinTenant (1 aparición)');
+});
+
+// --- Regla 5 (S1.2): el índice persona -> conjunto solo lo lee/escribe domicilio.service.js ---
+test('E7.5: `usuarioConjunto` solo en domicilio.service.js', () => {
+  const archivos = [...archivosJs(SRC, { incluirTests: false }), ...archivosJs(PRISMA, { incluirTests: false }), ...archivosJs(SCRIPTS, { incluirTests: false })];
+  const permitido = join('src', 'services', 'domicilio.service.js');
+  const ofensores = [];
+  for (const f of archivos) {
+    readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+      if (/^\s*(\/\/|\*|\/\*)/.test(linea)) return;
+      if (/\.usuarioConjunto\b/.test(linea) && !f.endsWith(permitido)) ofensores.push(`${rel(f)}:${i + 1}`);
+    });
+  }
+  assert.deepEqual(ofensores, [], `acceso a UsuarioConjunto fuera de domicilio.service.js: ${ofensores.join(', ')}`);
+});
+
+// --- Regla 6 (S1.1): contrato de modelos con tenant == modelos con `conjuntoId` en el esquema ---
+test('E7.6: todo modelo con conjuntoId está en MODELOS_CON_TENANT, salvo User y UsuarioConjunto', async () => {
+  const { MODELOS_CON_TENANT } = await import('../tenantModels.js');
+  const esquema = readFileSync(join(PRISMA, 'schema.prisma'), 'utf8');
+  const conConjuntoId = [];
+  for (const m of esquema.matchAll(/^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm)) {
+    if (/^\s*conjuntoId\s+String/m.test(m[2])) conConjuntoId.push(m[1].toLowerCase());
+  }
+  const EXCEPCIONES = ['user', 'usuarioconjunto']; // ver comentarios en tenantModels.js
+  const esperados = conConjuntoId.filter((n) => !EXCEPCIONES.includes(n)).sort();
+  assert.deepEqual([...MODELOS_CON_TENANT].sort(), esperados);
+  for (const e of EXCEPCIONES) assert.ok(!MODELOS_CON_TENANT.includes(e), `${e} no debe estar en MODELOS_CON_TENANT`);
+  assert.ok(MODELOS_CON_TENANT.includes('domicilio'));
 });
