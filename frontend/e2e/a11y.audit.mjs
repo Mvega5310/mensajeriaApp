@@ -420,6 +420,7 @@ const PANTALLAS = [
   { id: 'op-mas', rol: 'op', async preparar(p) { await ir(p, '/op/recibir'); const m = p.locator('.op-mas').first(); const d = (await m.isVisible()) ? m : boton(p, 'Más'); await d.click(); await esperar(p, 500); return { hoja: d }; } },
   { id: 'op-mas-bitacora', rol: 'op', async preparar(p) { await abrirMas(p); await boton(p, 'Bitácora').click(); await esperar(p, 700); } },
   { id: 'op-mas-buzon', rol: 'op', async preparar(p) { await abrirMas(p); await boton(p, 'Abrir buzón').click(); await esperar(p, 700); } },
+  { id: 'op-mas-desactivadas', rol: 'op', async preparar(p) { await abrirMas(p); await boton(p, 'Direcciones desactivadas').click(); await esperar(p, 700); } },
   { id: 'op-mas-invitar', rol: 'op', async preparar(p) { await abrirMas(p); await boton(p, 'Invitar residentes').click(); await p.locator('.op-qr').waitFor(); await esperar(p, 400); } },
   { id: 'op-mas-salir-confirmar', rol: 'op', opcional: true, async preparar(p) {
     // Solo existe con la corrección de la cola (T4.6): con pendientes, "Salir" pide confirmación.

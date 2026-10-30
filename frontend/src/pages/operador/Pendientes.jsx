@@ -11,11 +11,17 @@ import DetalleSheet, { DetallePanel } from './DetalleSheet.jsx';
 
 const ESCRITORIO = '(min-width: 1024px)';
 
+/** "Más" de la cabecera móvil. Va como componente aparte: useAbrirMas debe llamarse DENTRO de
+ *  <Pantalla> (que provee el contexto); en Pendientes mismo devolvía la función vacía y no abría nada. */
+function BotonMas() {
+  const abrirMas = useAbrirMas();
+  return <button type="button" className="op-mas" onClick={abrirMas}>Más</button>;
+}
+
 export default function Pendientes() {
   const config = useConfig();
   const p = usePendientes();
   const esEscritorio = useMedia(ESCRITORIO);
-  const abrirMas = useAbrirMas();
   const [asignando, setAsignando] = useState(null);
   const [detalle, setDetalle] = useState(null); // { titulo, paquetes }
   const total = p.porEntregar.length;
@@ -30,7 +36,7 @@ export default function Pendientes() {
           <div className="op-tit" style={{ paddingTop: 20, gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h1>Pendientes</h1>
-              <button type="button" className="op-mas" onClick={abrirMas}>Más</button>
+              <BotonMas />
             </div>
             <label className="op-busca">
               <Icon nombre="lupa" size={20} trazo={2.5} />

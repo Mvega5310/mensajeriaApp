@@ -207,6 +207,47 @@ test.describe('Dos conjuntos', () => {
     expect(real.domicilioId).not.toBe(impostor.domicilioId);
   });
 
+  test('desactivar por error y reactivar: sale de la búsqueda, aparece en "Direcciones desactivadas" y al reactivar vuelve', async ({ page, context }) => {
+    const e = entorno();
+    const { apto } = await siguienteApto();
+    const nombre = `Eva ${sufijo()}`;
+    const eva = await personaEnB({ nombre, apto, telefono: '3005556789' });
+    await recibirEnB(eva.domicilioId); // con un paquete, para verla en Pendientes
+
+    await iniciarSesion(context, await sesionOperador(e.b.operador));
+    await page.goto('/op/pendientes');
+    await page.locator('.op-fila', { hasText: nombre }).first().click();
+    await page.getByRole('button', { name: 'Desactivar dirección' }).click();
+    await page.getByRole('button', { name: 'Sí, desactivar' }).click();
+    await expect(page.getByText('Dirección desactivada. No recibirá paquetes nuevos.')).toBeVisible();
+    // La residente ya no la ve.
+    const lista = await api('/domicilios', { token: eva.token });
+    expect(lista.datos.map((d) => d.id)).not.toContain(eva.domicilioId);
+
+    // Más -> Direcciones desactivadas -> Reactivar (con confirmación).
+    await page.goto('/op/pendientes');
+    await page.locator('.op-fila', { hasText: nombre }).first().waitFor();
+    await page.getByRole('button', { name: 'Más' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.getByRole('button', { name: 'Direcciones desactivadas' }).click();
+    await page.getByRole('textbox', { name: 'Buscar' }).fill(nombre);
+    const fila = page.getByRole('dialog').locator('.op-fila', { hasText: nombre });
+    await expect(fila).toHaveCount(1);
+    await sinScrollHorizontal(page, 'Direcciones desactivadas');
+    await fila.getByRole('button', { name: 'Reactivar' }).click();
+    await expect(page.getByText(`¿Reactivar la dirección de ${nombre} (•••• 6789)?`)).toBeVisible();
+    await page.getByRole('button', { name: 'Sí, reactivar' }).click();
+    await expect(page.getByText('Dirección reactivada')).toBeVisible();
+    await expect(page.getByRole('dialog').locator('.op-fila', { hasText: nombre })).toHaveCount(0);
+
+    // Vuelve a la residente y a la búsqueda del operador.
+    const otra = await api('/domicilios', { token: eva.token });
+    expect(otra.datos.map((d) => d.id)).toContain(eva.domicilioId);
+    await page.goto('/op/recibir');
+    for (const d of apto) await page.locator('.ds-key', { hasText: new RegExp(`^${d}$`) }).first().click();
+    await expect(page.locator('.op-sug', { hasText: '•••• 6789' })).toBeVisible();
+  });
+
   test('lote que mezcla personas del apto: aviso, nombre por paquete y solo se marcan los del dueño del PIN', async ({ page, context }) => {
     const e = entorno();
     const { apto } = await siguienteApto();

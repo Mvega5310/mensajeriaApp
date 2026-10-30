@@ -139,6 +139,7 @@ Qué cubre cada archivo (en `backend/src/**/__tests__/` y `backend/scripts/__tes
 | `frontendSinFijos.test.js` | estática | falla si aparece "Ipanema" o montos de tarifa fijos en `frontend/src`. |
 | `auditoriaInvariantes.test.js` | estática | un solo `PrismaClient`; `GLOBAL_LOOKUP` y consultas crudas solo en su función; **E7.4 con `acorn`** (analiza el árbol, no regex): `User` solo desde `usuario.service.js` aunque se acceda con alias, `x['user']`, `const { user } = x` o en un `$transaction`; el cliente de `db.js` solo en archivos autorizados y sin alias/re-export/`import()`; ningún `select`/`include` trae `email`/`passwordHash` de una relación a `User`. |
 | `auditoriaAst.test.js` | estática | Pruebas DE la auditoría: fixtures con cada evasión (alias, `['user']`, desestructuración, `$transaction`, acceso dinámico, `residente: true`, constantes con `email`…) que ahora FALLAN, y código legítimo que pasa. |
+| `reactivar.integration.test.js` | integración | Reactivar direcciones desactivadas: residente no la ve y el operador no la busca; listado `desactivados` sin email ni teléfono completo; 403/401/404 por rol y conjunto; reactivar la devuelve (evento `REACTIVAR`, idempotente, puede avisar); tope de 10 -> 409. |
 | `revisionS32.integration.test.js` | integración | Revisión S3.2 (C5, lote y spam): discriminador, `posibleDuplicado`, orden por guía/entregas/antigüedad, desactivar dirección (auditoría, 409, no se reactiva), lote que mezcla personas y entrega del subconjunto, tope de 10 y ráfaga en paralelo, límite por hora, **3100 domicilios de relleno y el legítimo se encuentra**, foto 404 y `tieneDomicilioEn` con Domicilio activo real. |
 | `revisionS32Bajas.integration.test.js` | integración | Revisión S3.2 (bajas): registro endurecido (tipos, largos, apartamento obligatorio), `config-publica` con `slug` y límite por IP, slug válido + código inválido (gana el slug) y slug A + código válido de B (400), `/bonos/mine` y `/comments/mine` de todos los conjuntos. |
 | `migracionBusquedaEvento.integration.test.js` | integración | Migración `add_domicilio_busqueda_evento` en base desechable: backfill de `nombreBusqueda` = `sinTildes` (JS), idempotencia, rollback y re-aplicar. |
@@ -493,6 +494,22 @@ que han pedido o recibido en ese apartamento:
   desactivada por el operador"); la persona puede crear otra dirección. Los paquetes que ya tenía
   se entregan igual. En la app: detalle del apartamento en Pendientes -> "Desactivar dirección" (con
   confirmación).
+- **Reactivar una dirección (deshacer un error):** `PATCH /api/domicilios/:id/reactivar` (OPERATOR,
+  solo de su conjunto; la de otro conjunto es 404) deja `activo = true` y un `DomicilioEvento`
+  `REACTIVAR` con el operador. Respuesta `200 { id, activo: true }`. **Idempotente:** reactivar una
+  ya activa es 200 y no duplica el evento. Si la persona ya tiene 10 direcciones activas en ese
+  conjunto -> `409 LIMITE_DIRECCIONES` ("Esta persona ya tiene 10 direcciones activas en el conjunto.
+  Desactiva otra antes de reactivar esta."); el conteo se serializa con el de las altas. Al
+  reactivarse, la persona recupera el acceso en ese conjunto (lista de direcciones, `tieneDomicilioEn`,
+  enlace de WhatsApp, `?conjunto=`) y sus paquetes vuelven a aparecer. Una dirección desactivada
+  **nunca** le aparece al residente (`GET /domicilios`, "Mis direcciones", `DireccionEntrega`); una
+  pestaña vieja que la use sigue recibiendo `409 DIRECCION_DESACTIVADA`.
+- **Direcciones desactivadas:** `GET /api/domicilios/desactivados?q=&limite=&pagina=` (OPERATOR, su
+  conjunto) -> `[{ domicilioId, nombre, etiqueta, telefonoFin, desactivadoEn }]` (`q` filtra por
+  apto/torre o nombre; `limite` 1..100, 50 por defecto; sin correo ni teléfono completo). En la app:
+  Más -> **"Direcciones desactivadas"**, cada fila con **"Reactivar"** -> "¿Reactivar la dirección de
+  {nombre} (•••• 1234)?" -> "Sí, reactivar" -> aviso "Dirección reactivada" y la fila desaparece.
+  Pruebas: `reactivar.integration.test.js` y el escenario E2E "desactivar por error y reactivar".
 - `q` vacío (o de más de 60 caracteres) -> 400 `DATOS_INVALIDOS`.
 - Formatos de `q` (`domain/apartamento.js#interpretarBusqueda`): `304` (solo apto;
   también prefijo: `30` -> 301..309; con torre también es prefijo: `T2 30` -> 301, 304...), `T2 304`, `t2-304`, `2-304`, `2 304`,
@@ -798,7 +815,7 @@ Métodos: `avisarLlegada({ residente, paquete, conjunto, aviso })`,
 | `/op/guardado/:id` | Guardado | Resumen, `motivoCobro` (sello de cortesía), vista previa del aviso y **Avisar por WhatsApp** (`aviso.waUrl`). |
 | `/op/entregar` | Entregar | PIN de 4 dígitos; verifica solo (`/entregas/verificar-pin`); `PIN_AMBIGUO` muestra chips de apartamento. |
 | `/op/entregar/lote` | Cobrar | Lote, total, Efectivo/Transferencia (de `metodosPago`) y **Entregar todo** (`/entregas/confirmar`; con paquetes de varias personas, casillas y **Entregar lo marcado**). El `tokenEntrega` vive solo en memoria del módulo. |
-| `/op/pendientes` | Pendientes | Buscador, "Sin asignar" (Asignar → `PATCH /packages/:id/asignar`), "Por entregar" por apartamento (detalle con fotos, bonos si `bonosHabilitados` y **Desactivar dirección**), avisos de residentes. "Más": tema, exportar CSV, buzón de comentarios, QR de invitación, salir. |
+| `/op/pendientes` | Pendientes | Buscador, "Sin asignar" (Asignar → `PATCH /packages/:id/asignar`), "Por entregar" por apartamento (detalle con fotos, bonos si `bonosHabilitados` y **Desactivar dirección**), avisos de residentes. "Más": tema, exportar CSV, bitácora, buzón de comentarios, QR de invitación, **Direcciones desactivadas (Reactivar)**, salir. |
 
 **Recibir en 4 toques (T8.1).** Cuando la búsqueda devuelve **una única** sugerencia y lo escrito
 tiene ≥ 3 dígitos de apartamento (o torre + el apto exacto del residente), Recibir muestra ya el

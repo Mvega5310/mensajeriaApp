@@ -17,7 +17,8 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/db.js';
 import { getContext, runWithTenant } from '../config/tenantContext.js';
 import { AppError, CODIGOS } from '../domain/errores.js';
-import { tokenTorre, sinTildes } from '../domain/apartamento.js';
+import { tokenTorre, sinTildes, interpretarBusqueda } from '../domain/apartamento.js';
+import { ultimos4 } from './residente.service.js';
 import { normalizarApto } from './apartamento.service.js';
 import { etiquetaApartamento } from '../domain/apartamento.js';
 import { obtenerCuentaPropia, marcarUltimoConjunto } from './usuario.service.js';
@@ -153,6 +154,88 @@ export async function desactivarDomicilio(domicilioId, actorId) {
     }
     return { id: d.id, activo: false };
   });
+}
+
+/**
+ * El operador deshace una desactivación hecha por error (una dirección de SU conjunto: la de
+ * otro no existe, 404). Queda `activo=true` y un DomicilioEvento REACTIVAR con el operador. Si
+ * la persona ya tiene 10 direcciones activas en este conjunto, 409 LIMITE_DIRECCIONES (hay que
+ * desactivar otra antes). Idempotente: reactivar una ya activa es 200 sin evento nuevo.
+ */
+export async function reactivarDomicilio(domicilioId, actorId) {
+  const noExiste = () => new AppError(CODIGOS.NO_ENCONTRADO, 'No encontramos esa dirección. Búscala de nuevo.', 404);
+  if (typeof domicilioId !== 'string' || !domicilioId) throw noExiste();
+  const conjuntoId = conjuntoDelContextoId();
+  return prisma.$transaction(async (tx) => {
+    const d = await tx.domicilio.findUnique({
+      where: { id: domicilioId }, select: { id: true, activo: true, usuarioId: true, torre: true, apto: true },
+    });
+    if (!d) throw noExiste();
+    if (!d.activo) {
+      // Misma serialización que el alta: tocar la fila del índice toma el bloqueo de la persona en
+      // este conjunto, así dos reactivaciones (o una alta) simultáneas no se saltan el tope.
+      await tx.usuarioConjunto.upsert({
+        where: { usuarioId_conjuntoId: { usuarioId: d.usuarioId, conjuntoId } },
+        create: { usuarioId: d.usuarioId, conjuntoId },
+        update: { creadoEn: new Date() },
+      });
+      const activas = await tx.domicilio.count({ where: { usuarioId: d.usuarioId, activo: true } });
+      if (activas >= MAX_DOMICILIOS_ACTIVOS) {
+        throw new AppError(
+          CODIGOS.LIMITE_DIRECCIONES,
+          `Esta persona ya tiene ${MAX_DOMICILIOS_ACTIVOS} direcciones activas en el conjunto. Desactiva otra antes de reactivar esta.`,
+          409,
+          { max: MAX_DOMICILIOS_ACTIVOS },
+        );
+      }
+      await tx.domicilio.update({ where: { id: d.id }, data: { activo: true } });
+      await tx.domicilioEvento.create({
+        data: { domicilioId: d.id, tipo: 'REACTIVAR', actorId, datos: { torre: d.torre, apto: d.apto } },
+      });
+    }
+    return { id: d.id, activo: true };
+  });
+}
+
+/**
+ * Direcciones desactivadas del conjunto del contexto, para que el operador reactive una por
+ * error. Sin correo ni teléfono completo. `q` (opcional) filtra por apto/torre o nombre.
+ * Orden estable (torre, apto, nombre); `limite` (1..100, 50 por defecto) y `pagina` (desde 1).
+ * @returns {Promise<{domicilioId:string, nombre:string, etiqueta:string, telefonoFin:string, desactivadoEn:Date|null}[]>}
+ */
+export async function listarDesactivados({ q, limite, pagina } = {}) {
+  const take = Math.min(Math.max(Number.parseInt(limite, 10) || 50, 1), 100);
+  const skip = (Math.max(Number.parseInt(pagina, 10) || 1, 1) - 1) * take;
+  const y = [{ activo: false }];
+  const texto = typeof q === 'string' ? q.trim().slice(0, 60) : '';
+  if (texto) {
+    const f = interpretarBusqueda(texto);
+    if (f.apto) y.push({ apto: { startsWith: f.apto } });
+    if (f.torre) y.push({ torre: f.torre });
+    if (f.texto) for (const p of f.texto.split(' ').filter(Boolean)) y.push({ nombreBusqueda: { contains: p } });
+  }
+  const filas = await prisma.domicilio.findMany({
+    where: { AND: y },
+    select: { id: true, torre: true, apto: true, nombreRecibe: true, telefono: true },
+    orderBy: [{ torre: 'asc' }, { apto: 'asc' }, { nombreBusqueda: 'asc' }, { id: 'asc' }],
+    skip,
+    take,
+  });
+  if (!filas.length) return [];
+  const eventos = await prisma.domicilioEvento.findMany({
+    where: { domicilioId: { in: filas.map((f) => f.id) }, tipo: 'DESACTIVAR' },
+    orderBy: { creadoEn: 'desc' },
+    select: { domicilioId: true, creadoEn: true },
+  });
+  const cuando = new Map();
+  for (const e of eventos) if (!cuando.has(e.domicilioId)) cuando.set(e.domicilioId, e.creadoEn);
+  return filas.map((f) => ({
+    domicilioId: f.id,
+    nombre: f.nombreRecibe,
+    etiqueta: etiquetaApartamento(f.torre, f.apto),
+    telefonoFin: ultimos4(f.telefono),
+    desactivadoEn: cuando.get(f.id) ?? null,
+  }));
 }
 
 /** Domicilio activo más reciente de la persona EN el conjunto del contexto (o null). */

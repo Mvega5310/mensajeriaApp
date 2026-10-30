@@ -411,8 +411,8 @@ model Domicilio {
   @@index([conjuntoId, apto])
 }
 
-// Bitácora de cambios sobre una dirección de entrega (revisión S3.2): hoy solo `DESACTIVAR`
-// (el operador desactiva un domicilio impostor o equivocado). Lleva tenant. No tiene trigger
+// Bitácora de cambios sobre una dirección de entrega (revisión S3.2): `DESACTIVAR` y `REACTIVAR`
+// (el operador desactiva un domicilio impostor o equivocado, o lo reactiva si fue un error). Lleva tenant. No tiene trigger
 // de solo inserción (la app nunca la actualiza ni borra); `actorId` queda NULL si se borra
 // la cuenta del operador.
 model DomicilioEvento {
@@ -421,7 +421,7 @@ model DomicilioEvento {
   conjuntoId  String
   domicilio   Domicilio @relation(fields: [domicilioId], references: [id], onDelete: Cascade)
   domicilioId String
-  tipo        String    // DESACTIVAR
+  tipo        String    // DESACTIVAR | REACTIVAR
   actor       User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
   actorId     String?
   datos       Json?

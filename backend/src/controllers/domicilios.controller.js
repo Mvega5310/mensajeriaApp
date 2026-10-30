@@ -6,6 +6,7 @@ import { AppError, CODIGOS } from '../domain/errores.js';
 import { conjuntoActivoPorSlug } from '../services/conjunto.service.js';
 import {
   listarDomiciliosDePersona, guardarDireccionDePersona, direccionDeCuerpo, vistaDomicilio, desactivarDomicilio,
+  reactivarDomicilio, listarDesactivados,
 } from '../services/domicilio.service.js';
 
 /**
@@ -49,4 +50,17 @@ export async function crear(req, res) {
 // auditado. Para el domicilio impostor o equivocado (revisión S3.2, C5).
 export async function desactivar(req, res) {
   res.json(await desactivarDomicilio(req.params.id, req.user.sub));
+}
+
+// PATCH /api/domicilios/:id/reactivar  (OPERATOR, de SU conjunto): deshace una desactivación por
+// error. activo=true + evento REACTIVAR. 409 LIMITE_DIRECCIONES si la persona ya tiene 10 activas;
+// ya activa -> 200 idempotente.
+export async function reactivar(req, res) {
+  res.json(await reactivarDomicilio(req.params.id, req.user.sub));
+}
+
+// GET /api/domicilios/desactivados?q=&limite=&pagina=  (OPERATOR, de SU conjunto):
+// [{ domicilioId, nombre, etiqueta, telefonoFin, desactivadoEn }], sin correo ni teléfono completo.
+export async function desactivados(req, res) {
+  res.json(await listarDesactivados({ q: req.query.q, limite: req.query.limite, pagina: req.query.pagina }));
 }
