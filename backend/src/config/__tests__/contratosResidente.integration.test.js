@@ -94,6 +94,22 @@ test('pre-alerta con solo transportadora: proveedor "Sin especificar" y transpor
   assert.equal(solo.transportadora, null);
 });
 
+test('pre-alerta sin categoriaPeso (Avisar ya no la manda): queda ESTANDAR; con detalles guarda contra entrega y PIN', { skip }, async () => {
+  const sin = await api('/api/packages', { method: 'POST', token: ctx.tRes1, body: { transportadora: 'Servientrega', guia: 'AV-1' } });
+  assert.equal(sin.status, 201);
+  const p = await sin.json();
+  assert.equal(p.categoriaPeso, 'ESTANDAR');
+  assert.equal(p.esContraEntregaProveedor, false);
+  assert.equal(p.pinProveedor, null);
+  const con = await (await api('/api/packages', { method: 'POST', token: ctx.tRes1, body: {
+    transportadora: 'Rappi', esContraEntregaProveedor: true, valorProductoProveedor: 45000, pinProveedor: '7788', valorDeclarado: 0,
+  } })).json();
+  assert.equal(con.categoriaPeso, 'ESTANDAR');
+  assert.equal(con.esContraEntregaProveedor, true);
+  assert.equal(con.valorProductoProveedor, 45000);
+  assert.equal(con.pinProveedor, '7788');
+});
+
 test('pre-alerta sin proveedor ni transportadora, o con transportadora inválida: 400', { skip }, async () => {
   assert.equal((await api('/api/packages', { method: 'POST', token: ctx.tRes1, body: {} })).status, 400);
   assert.equal((await api('/api/packages', { method: 'POST', token: ctx.tRes1, body: { transportadora: '   ' } })).status, 400);

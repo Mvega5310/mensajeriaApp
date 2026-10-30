@@ -37,6 +37,9 @@ function Tarjeta({ p, paraQuien }) {
       {p.modalidadEntrega === 'RECOGER'
         ? <span className="op-muted">Recoge en portería</span>
         : p.franjaHoraria && <span className="op-muted">Franja {p.franjaHoraria} · {etiquetaMetodoPago(p.metodoPagoServicio)}</span>}
+      {p.esContraEntregaProveedor && (
+        <span className="op-muted">Contra entrega: <b>{p.valorProductoProveedor > 0 ? `${formatCOP(p.valorProductoProveedor)} a pagar al transportador` : 'sí'}</b></span>
+      )}
       {p.pinProveedor && <span className="op-muted">PIN del proveedor: <b className="mono">{p.pinProveedor}</b></span>}
       {p.notas && <span className="op-muted">Nota: {p.notas}</span>}
       {!verFotos && <Button variante="secundario" icono="camara" onClick={() => setVerFotos(true)}>Ver fotos</Button>}

@@ -82,7 +82,7 @@ export default function Pendientes() {
             {p.prealertadosFiltrados.length > 0 && <h2 className="op-sec" style={{ marginTop: 10 }}>Avisados por residentes · {p.prealertadosFiltrados.length}</h2>}
             {p.prealertadosFiltrados.map((x) => (
               <button type="button" className="op-fila" key={x.id} onClick={() => setDetalle({ titulo: x.residente?.nombre ?? 'Aviso', paquetes: [x] })}>
-                <span className="op-fila__col"><b>{x.residente?.nombre}</b><span>{x.proveedor} · guía {x.guia}</span></span>
+                <span className="op-fila__col"><b>{x.residente?.nombre}</b><span>{quienTrajo(x)}{x.guia && x.guia !== 'Sin Guía' ? ` · guía ${x.guia}` : ''}</span></span>
                 <Badge estado="programado">En camino</Badge>
               </button>
             ))}

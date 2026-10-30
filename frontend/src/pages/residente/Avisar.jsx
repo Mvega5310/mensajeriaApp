@@ -8,7 +8,7 @@ import Pantalla from './Pantalla.jsx';
 
 const TRANSPORTADORAS = ['Servientrega', 'Interrapidísimo', 'Coordinadora', 'Envía', 'Rappi', 'Otra'];
 const VACIO = {
-  transportadora: '', guia: '', tienda: '', categoriaPeso: 'ESTANDAR', contraEntrega: false,
+  transportadora: '', guia: '', tienda: '', contraEntrega: false,
   valorProducto: '', valorDeclarado: '', pinProveedor: '', notas: '',
 };
 
@@ -31,17 +31,23 @@ export default function Avisar() {
     e.preventDefault();
     // `proveedor` = tienda; `transportadora` = quién lo trae. Van por separado ("Otra" no es un nombre).
     const quien = form.transportadora && form.transportadora !== 'Otra' ? form.transportadora : '';
-    const ok = await avisar({
-      ...(valor ? { domicilioId: valor } : {}),
+    // El tamaño no se manda: el operador lo elige al recogerlo en la portería (el servidor usa ESTANDAR).
+    // Los detalles solo viajan si se abrieron alguna vez (si no, `form` los tiene vacíos).
+    const extra = detalles ? {
       proveedor: form.tienda.trim() || undefined,
-      transportadora: quien || undefined,
-      guia: form.guia.trim() || undefined,
-      categoriaPeso: form.categoriaPeso,
       esContraEntregaProveedor: form.contraEntrega,
       valorProductoProveedor: form.contraEntrega ? Number(form.valorProducto) || 0 : 0,
       valorDeclarado: Number(form.valorDeclarado) || 0,
       pinProveedor: form.pinProveedor.trim() || undefined,
       notas: form.notas.trim() || undefined,
+    } : {};
+    const ok = await avisar({
+      ...(valor ? { domicilioId: valor } : {}),
+      transportadora: quien || undefined,
+      guia: form.guia.trim() || undefined,
+      // El servidor exige tienda o transportadora; con "Otra" y sin tienda va "Sin especificar".
+      ...(!quien && !extra.proveedor ? { proveedor: 'Sin especificar' } : {}),
+      ...extra,
     });
     if (ok) navigate('/paquetes', { replace: true });
   }
@@ -81,11 +87,13 @@ export default function Avisar() {
             </div>
           </div>
           <Field label="Número de guía (si lo tienes)" mono value={form.guia} onChange={(e) => set('guia', e.target.value)} maxLength={60} />
-          {detalles ? <DetallesAviso form={form} set={set} /> : (
-            <button type="button" className="res-link res-link--tinta" onClick={() => setDetalles(true)}>
-              Agregar detalles
-            </button>
-          )}
+          <button type="button" className="res-link res-link--tinta" aria-expanded={detalles}
+            aria-controls="aviso-detalles" onClick={() => setDetalles((v) => !v)}>
+            {detalles ? 'Ocultar detalles' : 'Agregar detalles'}
+          </button>
+          <div id="aviso-detalles" hidden={!detalles}>
+            <DetallesAviso form={form} set={set} />
+          </div>
         </div>
         {error && <div className="res-aviso"><Toast tipo="error">{error}</Toast></div>}
         <div className="res__relleno" />

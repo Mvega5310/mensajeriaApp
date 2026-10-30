@@ -243,6 +243,73 @@ test.describe('Operador: recibir', () => {
     await ctxRes.close();
   });
 
+  test('Avisar solo con transportadora y guía: sin abrir detalles, 2 toques y el operador lo ve', async ({ browser, page, context }, testInfo) => {
+    const res = await crearResidente();
+    const ctxRes = await contextoNuevo(browser, testInfo, entorno().baseUrl);
+    await iniciarSesion(ctxRes, res.token);
+    const pr = await ctxRes.newPage();
+    const c = contadorDeToques();
+    const guia = `AV${sufijo()}`.slice(0, 20);
+    await pr.goto('/paquetes/avisar');
+    const detalles = pr.getByRole('button', { name: 'Agregar detalles' });
+    await expect(detalles).toHaveAttribute('aria-expanded', 'false');
+    await expect(pr.getByText('Tamaño aproximado')).toHaveCount(0);
+    await expect(pr.getByLabel('PIN del proveedor')).toBeHidden();
+    await expect(pr.getByLabel('Es contra entrega')).toBeHidden();
+    await c.tocar(pr.getByRole('radio', { name: 'Servientrega' }));
+    await pr.getByLabel('Número de guía').fill(guia);
+    let cuerpo = null;
+    await pr.route('**/api/packages', (r) => { if (r.request().method() === 'POST') cuerpo = r.request().postDataJSON(); return r.continue(); });
+    await c.tocar(pr.getByRole('button', { name: 'Avisar', exact: true }));
+    await expect(pr).toHaveURL(/\/paquetes$/);
+    expect(c.n, 'toques de Avisar (transportadora + Avisar)').toBe(2);
+    testInfo.annotations.push({ type: 'toques-avisar-solo-transportadora-y-guia', description: String(c.n) });
+    expect(cuerpo).toMatchObject({ transportadora: 'Servientrega', guia });
+    for (const k of ['categoriaPeso', 'pinProveedor', 'notas', 'esContraEntregaProveedor', 'valorDeclarado']) expect(cuerpo, k).not.toHaveProperty(k);
+    const [p] = await misPaquetes(res);
+    expect(p.estado).toBe('PREALERTADO');
+    await ctxRes.close();
+
+    await iniciarSesion(context, await sesionOperador());
+    await page.goto('/op/pendientes');
+    await page.getByLabel('Buscar').fill(res.apto);
+    await page.locator('.op-fila', { hasText: 'En camino' }).filter({ hasText: guia }).click();
+    await expect(page.getByText(`guía ${guia}`).last()).toBeVisible();
+    await expect(page.getByText(/Contra entrega/)).toHaveCount(0);
+  });
+
+  test('Avisar con detalles: contra entrega y PIN del proveedor llegan al detalle del operador', async ({ browser, page, context }, testInfo) => {
+    const res = await crearResidente();
+    const ctxRes = await contextoNuevo(browser, testInfo, entorno().baseUrl);
+    await iniciarSesion(ctxRes, res.token);
+    const pr = await ctxRes.newPage();
+    const guia = `AD${sufijo()}`.slice(0, 20);
+    await pr.goto('/paquetes/avisar');
+    await pr.getByRole('radio', { name: 'Rappi' }).click();
+    await pr.getByLabel('Número de guía').fill(guia);
+    const boton = pr.getByRole('button', { name: 'Agregar detalles' });
+    await boton.click();
+    const ocultar = pr.getByRole('button', { name: 'Ocultar detalles' });
+    await expect(ocultar).toHaveAttribute('aria-expanded', 'true');
+    await expect(pr.getByText('Tamaño aproximado')).toHaveCount(0);
+    await expect(pr.getByLabel('Monto a pagar al transportista')).toHaveCount(0);
+    await pr.getByLabel('Es contra entrega').check();
+    await pr.getByLabel('Monto a pagar al transportista').fill('45000');
+    await pr.getByLabel('PIN del proveedor').fill('7788');
+    await pr.getByLabel('Nota para el operador').fill('Dejar en portería');
+    await pr.getByRole('button', { name: 'Avisar', exact: true }).click();
+    await expect(pr).toHaveURL(/\/paquetes$/);
+    await ctxRes.close();
+
+    await iniciarSesion(context, await sesionOperador());
+    await page.goto('/op/pendientes');
+    await page.getByLabel('Buscar').fill(res.apto);
+    await page.locator('.op-fila', { hasText: 'En camino' }).filter({ hasText: guia }).click();
+    await expect(page.getByText(/Contra entrega:.*45\.?000/).last()).toBeVisible();
+    await expect(page.getByText('PIN del proveedor:').last()).toContainText('7788');
+    await expect(page.getByText('Nota: Dejar en portería').last()).toBeVisible();
+  });
+
   test('cortesía: el primer paquete del apto sale gratis y el segundo con tarifa', async ({ page, context }) => {
     const res = await crearResidente();
     await iniciarSesion(context, await sesionOperador());
