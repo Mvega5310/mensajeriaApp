@@ -210,8 +210,11 @@ test('bitácora: filtros por estado, fecha (recibidoEn o createdAt) y q', { skip
   assert.equal((await api('/api/packages?estado=SIN_ASIGNAR,NOPE', { token: ctx.tOp })).status, 400);
 
   // Fecha efectiva: la pre-alerta de hace 10 días entra por createdAt, no los recibidos hoy.
+  // Las fechas del filtro son días de Bogotá (UTC-5): se calculan en esa zona para
+  // que la prueba no dependa de la hora UTC en que corre (falla entre 00:00 y 05:00 UTC).
+  const diaBogota = (d) => dia(new Date(d.getTime() - 5 * H));
   const hace10 = new Date(Date.now() - 10 * 24 * H);
-  assert.deepEqual(await ids(`desde=${dia(hace10)}&hasta=${dia(hace10)}`), [ctx.p5.id]);
+  assert.deepEqual(await ids(`desde=${diaBogota(hace10)}&hasta=${diaBogota(hace10)}`), [ctx.p5.id]);
   // "hasta" sin "desde" y todo el día incluido: hoy en Bogotá.
   const hoyBogota = new Date(Date.now() - 5 * H);
   const soloHoy = await ids(`desde=${dia(hoyBogota)}&hasta=${dia(hoyBogota)}`);
