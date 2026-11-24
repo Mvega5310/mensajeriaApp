@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import logoWhite from "../../frontend/src/puertaya-brand/logos/lockup/puertaya-lockup-3d-blanco.png";
+import logoWhite from "./assets/brand/puertaya-lockup-dark-new.png";
 
 const APP_URL = "https://mensajeria-app-iota.vercel.app";
 
