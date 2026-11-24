@@ -7,7 +7,7 @@
 | Backend + API | Railway, proyecto **astonishing-truth**, servicio **mensajeriaApp** | https://mensajeriaapp-production.up.railway.app |
 | Base de datos | Railway, mismo proyecto, servicio **Postgres** | Acceso solo interno/por túnel SSH — nunca se expuso públicamente |
 | Frontend | Vercel, proyecto **mensajeria-app** | https://mensajeria-app-iota.vercel.app |
-| Landing pública | Pendiente de desplegar — código en `landing/`, ver `landing/README.md` | Aún sin proyecto Vercel ni dominio asignado |
+| Landing pública | Pendiente de desplegar — código en `landing/`, ver `landing/README.md` | Dominio objetivo (por ahora): `proyects.com`; aún sin proyecto Vercel creado |
 | Correo transaccional | Resend, dominio verificado **prospect01.com** (DNS en Cloudflare) | `EMAIL_FROM="Puertaya Ipanema <notificaciones@prospect01.com>"` |
 | Repo | GitHub | https://github.com/Mvega5310/mensajeriaApp |
 
@@ -448,5 +448,6 @@ Tras el corte multi-conjunto (28-oct-2026):
 - **Revisión legal de los Términos** (en especial la versión genérica).
 - **Jira KAN-8:** actualizar el ticket con el estado post-corte.
 - **Landing pública (`landing/`):** falta crear el proyecto Vercel
-  independiente (Root Directory `landing/`, ver `landing/README.md`) y decidir
-  el dominio definitivo — por ahora se validó solo en local.
+  independiente (Root Directory `landing/`, dominio objetivo `proyects.com`
+  por ahora — pasos en `landing/README.md`) y apuntar su DNS. Por ahora solo
+  se validó en local.

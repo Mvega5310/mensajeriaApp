@@ -29,6 +29,13 @@ npm run preview
 4. Build Command: `npm run build`.
 5. Output Directory: `dist`.
 6. No cambies el proyecto de producción de la aplicación; la landing debe tener su propio proyecto y dominio.
+7. **Dominio: `proyects.com`** (por ahora). En el proyecto nuevo de Vercel →
+   **Settings → Domains** → agrega `proyects.com` (y opcionalmente
+   `www.proyects.com` con redirect). Vercel muestra los registros DNS exactos
+   a crear (normalmente un `A` a `76.76.21.21` y/o un `CNAME` a
+   `cname.vercel-dns.com`); se configuran donde esté administrado el DNS de
+   ese dominio (registrador o Cloudflare, como con `prospect01.com` para el
+   correo). Vercel emite el certificado SSL solo una vez el DNS propaga.
 
 Los CTA enlazan a la aplicación actual:
 - Inicio de sesión: `https://mensajeria-app-iota.vercel.app/login`
