@@ -4,7 +4,7 @@ Landing comercial independiente de la aplicación operativa de Puertayá.
 
 ## Estructura
 
-Esta carpeta se despliega como un proyecto Vercel independiente usando `landing/` como **Root Directory**. Los logotipos oficiales se importan desde `../frontend/src/puertaya-brand/logos/`; por eso, al desplegar desde el mismo repositorio, no se deben excluir esos archivos del checkout.
+Esta carpeta se despliega como un proyecto Vercel independiente usando `landing/` como **Root Directory**. Los logotipos viven en `src/assets/brand/` (ícono + lockups claro/oscuro, independientes de `frontend/src/puertaya-brand/`), así que la landing no depende de esa carpeta de la app.
 
 ## Desarrollo local
 
@@ -41,4 +41,4 @@ Los CTA enlazan a la aplicación actual:
 - Inicio de sesión: `https://mensajeria-app-iota.vercel.app/login`
 - Registro: `https://mensajeria-app-iota.vercel.app/registro`
 
-La tarjeta de seguimiento del hero es una representación visual ilustrativa, no una conexión a datos reales.
+El hero usa una foto de stock (generada, sin marca de ningún tercero) como fondo, no una conexión a datos reales; la notificación flotante sobre la foto también es ilustrativa.
