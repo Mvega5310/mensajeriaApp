@@ -83,13 +83,6 @@ function Header() {
   </header>;
 }
 
-function HeroVisual() {
-  return <div className="hero-visual">
-    <img className="hero-photo" src={heroPhoto} alt="Mensajero entregando un paquete a una residente en la puerta de su apartamento" />
-    <div className="float-note hero-float"><span className="float-check"><Icon name="check" size={15}/></span><div><strong>¡Tu paquete ya está disponible!</strong><small>Recógelo cuando quieras</small></div></div>
-  </div>;
-}
-
 function FeatureBar() {
   return <div className="feature-bar">
     {features.map(f => <div className="feature-item" key={f.icon}><span className="feature-icon"><Icon name={f.icon} size={21}/></span><small>{f.label}</small></div>)}
@@ -98,18 +91,20 @@ function FeatureBar() {
 
 function Hero() {
   return <section className="hero" id="inicio">
-    <div className="hero-grid">
-      <div className="hero-copy">
-        <div className="hero-kicker"><span className="kicker-dot"/> LOGÍSTICA RESIDENCIAL, MÁS SIMPLE</div>
-        <h1>De la portería <span>a tu puerta.</span><br/>Sin perder el hilo.</h1>
-        <p className="hero-lead">Recibir paquetes en tu conjunto puede ser mucho más fácil. Puertayá conecta residentes y operadores para que cada entrega tenga orden, seguimiento y tranquilidad.</p>
-        <div className="hero-actions">
-          <a className="button" href={`${APP_URL}/registro`}>Empieza con Puertayá <Icon name="arrow" size={18}/></a>
-          <a className="button button-ghost" href="#como-funciona">Ver demostración <Icon name="play" size={16}/></a>
-        </div>
-      </div>
-      <HeroVisual/>
+    <div className="hero-bg">
+      <img className="hero-bg-photo" src={heroPhoto} alt="Mensajero entregando un paquete a una residente en la puerta de su apartamento" />
+      <div className="hero-scrim" />
     </div>
+    <div className="hero-content">
+      <div className="hero-kicker"><span className="kicker-dot"/> LOGÍSTICA RESIDENCIAL, MÁS SIMPLE</div>
+      <h1>De la portería <span>a tu puerta.</span><br/>Sin perder el hilo.</h1>
+      <p className="hero-lead">Recibir paquetes en tu conjunto puede ser mucho más fácil. Puertayá conecta residentes y operadores para que cada entrega tenga orden, seguimiento y tranquilidad.</p>
+      <div className="hero-actions">
+        <a className="button" href={`${APP_URL}/registro`}>Empieza con Puertayá <Icon name="arrow" size={18}/></a>
+        <a className="button button-ghost" href="#como-funciona">Ver demostración <Icon name="play" size={16}/></a>
+      </div>
+    </div>
+    <div className="float-note hero-float"><span className="float-check"><Icon name="check" size={15}/></span><div><strong>¡Tu paquete ya está disponible!</strong><small>Recógelo cuando quieras</small></div></div>
     <FeatureBar/>
   </section>;
 }
