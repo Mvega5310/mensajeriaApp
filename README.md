@@ -25,6 +25,7 @@ Vercel, Resend) y cómo redesplegar o recuperar el ambiente desde cero.
 puertaya-ipanema/
 ├── backend/     # API Express + Prisma/PostgreSQL — auth, roles y PIN reales
 ├── frontend/    # SPA Vite + React — consume la API, sin lógica de negocio propia
+├── landing/     # Landing pública (marketing) — proyecto Vite+React independiente, ver landing/README.md
 └── docs/        # Prototipo original y modelo de datos, como referencia histórica
 ```
 
