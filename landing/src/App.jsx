@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import logoWhite from "./assets/brand/puertaya-lockup-dark-new.png";
+import heroPhoto from "./assets/hero-delivery.webp";
 
 const APP_URL = "https://mensajeria-app-iota.vercel.app";
 
@@ -82,30 +83,10 @@ function Header() {
   </header>;
 }
 
-function PackagePreview() {
-  return <div className="preview-shell" aria-label="Vista ilustrativa del seguimiento de paquetes">
-    <div className="preview-glow" />
-    <div className="preview-card">
-      <div className="preview-top"><div><span className="eyebrow">MI ESPACIO</span><h3>Hola, Andrea <span>✦</span></h3><p>Así va todo con tus paquetes.</p></div><div className="avatar">A</div></div>
-      <div className="preview-stats">
-        <div className="stat"><span className="stat-icon teal"><Icon name="package" size={18}/></span><strong>02</strong><small>En proceso</small></div>
-        <div className="stat"><span className="stat-icon blue"><Icon name="check" size={18}/></span><strong>05</strong><small>Entregados</small></div>
-      </div>
-      <div className="package-row">
-        <div className="parcel-icon"><Icon name="package" size={21}/></div>
-        <div className="parcel-info"><strong>Compra en línea</strong><small>Paquete recibido en portería</small></div>
-        <span className="status-pill"><i/> Recibido</span>
-      </div>
-      <div className="timeline">
-        <div className="timeline-line"/>
-        <div className="timeline-item done"><span><Icon name="check" size={12}/></span><div><strong>Pre-alerta registrada</strong><small>Hoy · 9:14 a. m.</small></div></div>
-        <div className="timeline-item done"><span><Icon name="check" size={12}/></span><div><strong>Paquete recibido</strong><small>Hoy · 11:32 a. m.</small></div></div>
-        <div className="timeline-item current"><span><Icon name="clock" size={12}/></span><div><strong>Entrega por programar</strong><small>Elige tu franja cuando quieras</small></div></div>
-      </div>
-      <div className="preview-bottom"><span><Icon name="shield" size={16}/> Tu entrega, bajo control</span><span className="preview-dots">•••</span></div>
-    </div>
-    <div className="float-note note-top"><span className="float-check"><Icon name="check" size={15}/></span><div><strong>¡Te avisamos!</strong><small>Tu paquete ya llegó</small></div></div>
-    <div className="float-note note-bottom"><span className="float-clock"><Icon name="calendar" size={16}/></span><div><strong>A tu ritmo</strong><small>Programa la entrega</small></div></div>
+function HeroVisual() {
+  return <div className="hero-visual">
+    <img className="hero-photo" src={heroPhoto} alt="Mensajero entregando un paquete a una residente en la puerta de su apartamento" />
+    <div className="float-note hero-float"><span className="float-check"><Icon name="check" size={15}/></span><div><strong>¡Tu paquete ya está disponible!</strong><small>Recógelo cuando quieras</small></div></div>
   </div>;
 }
 
@@ -127,7 +108,7 @@ function Hero() {
           <a className="button button-ghost" href="#como-funciona">Ver demostración <Icon name="play" size={16}/></a>
         </div>
       </div>
-      <PackagePreview/>
+      <HeroVisual/>
     </div>
     <FeatureBar/>
   </section>;
